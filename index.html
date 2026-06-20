@@ -205,8 +205,8 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .tx-cat{font-size:14.5px; font-weight:600; color:var(--text-1);}
 .tx-memo{font-size:12.5px; color:var(--text-3); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .tx-amt{font-size:15px; font-weight:700; flex-shrink:0;}
-.tx-amt.income{color:var(--income);}
-.tx-amt.expense{color:var(--text-1);}
+.tx-amt.income{color:var(--primary);}
+.tx-amt.expense{color:var(--expense);}
 
 .empty-state{
   display:flex; flex-direction:column; align-items:center;
@@ -330,7 +330,7 @@ input,textarea,select{font-family:inherit; color:inherit;}
   background:var(--bg); color:var(--text-2);
 }
 .typeswitch button.active.expense{background:var(--expense-light); color:var(--expense);}
-.typeswitch button.active.income{background:var(--income-light); color:var(--income);}
+.typeswitch button.active.income{background:var(--primary-light); color:var(--primary);}
 
 .catgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
 .catchip{
@@ -582,7 +582,7 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .cal-summary-label{font-size:12.5px; color:var(--text-3); font-weight:600; margin-bottom:5px;}
 .cal-summary-value{font-size:16px; font-weight:800;}
 .cal-summary-value.income{color:var(--primary);}
-.cal-summary-value.expense{color:var(--text-2);}
+.cal-summary-value.expense{color:var(--expense);}
 
 .cal-month-nav{
   display:flex; align-items:center; justify-content:center; gap:18px;
@@ -622,7 +622,7 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .cal-day.is-today .dnum{background:var(--text-1); color:#fff;}
 .cal-day .damt{font-size:10px; font-weight:700; margin-top:3px; line-height:1.3; text-align:center;}
 .cal-day .damt.income{color:var(--primary);}
-.cal-day .damt.expense{color:var(--text-3);}
+.cal-day .damt.expense{color:var(--expense);}
 .cal-day:active{background:var(--bg);}
 
 /* ===== Day detail page ===== */
@@ -635,14 +635,14 @@ input,textarea,select{font-family:inherit; color:inherit;}
   display:flex; gap:16px; font-size:13px; color:var(--text-2); margin-bottom:16px; padding:0 2px;
 }
 .daydetail-summary b.income{color:var(--primary); font-weight:700;}
-.daydetail-summary b.expense{color:var(--text-1); font-weight:700;}
+.daydetail-summary b.expense{color:var(--expense); font-weight:700;}
 .day-add-row{display:flex; gap:10px; margin-bottom:18px;}
 .day-add-btn{
   flex:1; padding:13px 0; border-radius:14px; font-size:14.5px; font-weight:800;
   display:flex; align-items:center; justify-content:center; gap:6px;
 }
 .day-add-btn.income{background:var(--primary-light); color:var(--primary);}
-.day-add-btn.expense{background:var(--bg); color:var(--text-2);}
+.day-add-btn.expense{background:var(--expense-light); color:var(--expense);}
 .day-add-btn svg{width:16px;height:16px;}
 </style>
 </head>

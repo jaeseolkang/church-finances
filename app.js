@@ -612,7 +612,7 @@ function renderHomeMonthly() {
         </div>
         <div style="display:flex; gap:14px; margin-top:6px;">
           <span style="font-size:12.5px; color:var(--primary); font-weight:600;">수입 <b class="tabular">${fmtMoney(inc)}</b></span>
-          <span style="font-size:12.5px; color:var(--text-2); font-weight:600;">지출 <b class="tabular">${fmtMoney(exp)}</b></span>
+          <span style="font-size:12.5px; color:var(--expense); font-weight:600;">지출 <b class="tabular">${fmtMoney(exp)}</b></span>
           <span style="font-size:12.5px; color:var(--text-3); font-weight:500;">${txs.length}건</span>
         </div>
       </div>
@@ -1820,7 +1820,7 @@ function renderTxStepItems(sheet) {
 
       <div class="card" style="background:var(--bg); box-shadow:none; display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
         <span style="font-size:13.5px; color:var(--text-2); font-weight:600;">합계</span>
-        <span class="tabular" style="font-size:19px; font-weight:800; color:${State.formType==='income'?'var(--income)':'var(--text-1)'};">${fmtMoney(total)}원</span>
+        <span class="tabular" style="font-size:19px; font-weight:800; color:${State.formType==='income'?'var(--primary)':'var(--expense)'};">${fmtMoney(total)}원</span>
       </div>
 
       <button class="btn-primary" id="txSave">${editing ? '수정 완료' : '저장'}</button>
