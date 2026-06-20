@@ -469,7 +469,7 @@ async function renderHome() {
 
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
-      <h1>가계부</h1>
+      <h1>주원교회 회계부</h1>
       <button class="icon-btn" id="goSettings">${ICONS.gear}</button>
     </div>
 
