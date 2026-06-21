@@ -1289,19 +1289,25 @@ function availableMonthsFromTx() {
   return Array.from(set).sort();
 }
 
+function availableDateRangeFromTx() {
+  if (State.transactions.length === 0) return null;
+  let min = State.transactions[0].date, max = State.transactions[0].date;
+  for (const t of State.transactions) {
+    if (t.date < min) min = t.date;
+    if (t.date > max) max = t.date;
+  }
+  return { min, max };
+}
+
 function openExcelRangeSheet() {
-  const months = availableMonthsFromTx();
-  if (months.length === 0) { showToast('내보낼 거래가 없어요'); return; }
-  renderExcelRangeSheet(months, months[0], months[months.length - 1]);
+  const range = availableDateRangeFromTx();
+  if (!range) { showToast('내보낼 거래가 없어요'); return; }
+  renderExcelRangeSheet(range, range.min, range.max);
   openSheet('excelRangeSheet');
 }
 
-function renderExcelRangeSheet(months, startYm, endYm) {
+function renderExcelRangeSheet(range, startDate, endDate) {
   const sheet = document.getElementById('excelRangeSheet');
-  const optionHTML = months.map(ym => {
-    const [y, m] = ym.split('-');
-    return `<option value="${ym}">${y}년 ${Number(m)}월</option>`;
-  }).join('');
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -1311,27 +1317,31 @@ function renderExcelRangeSheet(months, startYm, endYm) {
     </div>
     <div class="sheet-body">
       <div class="formrow">
-        <label>시작 월</label>
-        <select class="dateinput" id="excStart">${optionHTML}</select>
+        <label>시작 날짜</label>
+        <input type="date" class="dateinput" id="excStart" min="${range.min}" max="${range.max}">
       </div>
       <div class="formrow">
-        <label>종료 월</label>
-        <select class="dateinput" id="excEnd">${optionHTML}</select>
+        <label>종료 날짜</label>
+        <input type="date" class="dateinput" id="excEnd" min="${range.min}" max="${range.max}">
       </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">한 달만 내보내려면 시작 월과 종료 월을 같게 선택하세요. 달마다 시트가 따로 만들어집니다.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 날짜가 걸쳐있는 달 전체가 각각 시트로 만들어져요 (교회 회계부는 월 단위로 마감하는 양식이라, 달의 일부만 떼어서 내보낼 순 없어요). 한 달만 내보내려면 시작/종료 날짜를 같은 달 안에서 선택하세요.</div>
       <button class="btn-primary" id="excGo">엑셀 파일 만들기</button>
     </div>
   `;
-  sheet.querySelector('#excStart').value = startYm;
-  sheet.querySelector('#excEnd').value = endYm;
+  sheet.querySelector('#excStart').value = startDate;
+  sheet.querySelector('#excEnd').value = endDate;
 
   sheet.querySelector('#excClose').addEventListener('click', closeAllSheets);
   sheet.querySelector('#excGo').addEventListener('click', async () => {
-    const sYm = sheet.querySelector('#excStart').value;
-    const eYm = sheet.querySelector('#excEnd').value;
+    const sDate = sheet.querySelector('#excStart').value;
+    const eDate = sheet.querySelector('#excEnd').value;
+    if (!sDate || !eDate) { showToast('날짜를 선택해주세요'); return; }
+    if (sDate > eDate) { showToast('시작 날짜가 종료 날짜보다 늦어요'); return; }
+
+    const sYm = sDate.slice(0, 7);
+    const eYm = eDate.slice(0, 7);
     let [sy, sm] = sYm.split('-').map(Number);
     let [ey, em] = eYm.split('-').map(Number);
-    if (sy > ey || (sy === ey && sm > em)) { showToast('시작 월이 종료 월보다 늦어요'); return; }
 
     const monthsRange = buildMonthRange(sy, sm, ey, em);
     const yearsNeeded = Array.from(new Set(monthsRange.map(m => m.year)));
@@ -1343,7 +1353,7 @@ function renderExcelRangeSheet(months, startYm, endYm) {
     }
 
     const wb = generateChurchLedgerWorkbook(monthsRange, carryoverByYear);
-    const fname = (sYm === eYm) ? `회계부-${sYm}.xlsx` : `회계부-${sYm}_${eYm}.xlsx`;
+    const fname = (sDate === eDate) ? `회계부-${sDate}.xlsx` : `회계부-${sDate}_${eDate}.xlsx`;
     XLSX.writeFile(wb, fname);
     closeAllSheets();
     showToast('엑셀 내보내기 완료');
