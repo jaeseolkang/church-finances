@@ -1789,13 +1789,22 @@ function renderTxStepItems(sheet) {
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      ${!editing ? `<button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>` : `<div style="width:40px;"></div>`}
-      <div style="text-align:center;">
-        <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
-        <div style="font-size:12px; color:var(--text-3); font-weight:600;">${dayLabel(State.formDate)}</div>
+    <div class="sheet-head" style="flex-direction:column; align-items:stretch; gap:10px; padding-bottom:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        ${!editing ? `<button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>` : `<div style="width:40px;"></div>`}
+        <div style="text-align:center;">
+          <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
+          <div style="font-size:12px; color:var(--text-3); font-weight:600;">${dayLabel(State.formDate)}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <button id="txClose" style="color:var(--text-3);">${ICONS.close}</button>
+          <button id="txSave" style="color:var(--primary); font-weight:800; font-size:14.5px; white-space:nowrap;">${editing ? '수정 완료' : '저장'}</button>
+        </div>
       </div>
-      <button id="txClose">${ICONS.close}</button>
+      <div class="card" style="background:var(--bg); box-shadow:none; display:flex; justify-content:space-between; align-items:center; margin:0;">
+        <span style="font-size:13.5px; color:var(--text-2); font-weight:600;">합계</span>
+        <span class="tabular" style="font-size:19px; font-weight:800; color:${State.formType==='income'?'var(--primary)':'var(--expense)'};">${fmtMoney(total)}원</span>
+      </div>
     </div>
     <div class="sheet-body">
       <div class="formrow">
@@ -1818,12 +1827,6 @@ function renderTxStepItems(sheet) {
         ${items.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px 0;">세부항목이 없어요. 위에서 추가해주세요</div>` : ''}
       </div>
 
-      <div class="card" style="background:var(--bg); box-shadow:none; display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <span style="font-size:13.5px; color:var(--text-2); font-weight:600;">합계</span>
-        <span class="tabular" style="font-size:19px; font-weight:800; color:${State.formType==='income'?'var(--primary)':'var(--expense)'};">${fmtMoney(total)}원</span>
-      </div>
-
-      <button class="btn-primary" id="txSave">${editing ? '수정 완료' : '저장'}</button>
       ${editing ? `<button class="btn-secondary" id="txDelete" style="color:var(--expense);">삭제</button>` : ''}
     </div>
   `;
@@ -2096,9 +2099,11 @@ function renderSubStatDetail(key) {
    CATEGORY MANAGE SHEET (목록)
    ========================================================= */
 let catManageType = 'expense';
+let catManageExpanded = new Set();
 
 function openCatManageSheet() {
   catManageType = 'expense';
+  catManageExpanded = new Set();
   renderCatManageSheet();
   openSheet('catManageSheet');
 }
@@ -2118,14 +2123,36 @@ function renderCatManageSheet() {
         <button data-type="income" class="${catManageType==='income'?'active':''}">수입 항목</button>
       </div>
       <div class="card" style="padding:4px 14px;">
-        ${cats.map(c => `
-          <div class="catrow" data-id="${c.id}">
-            <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
-            <div class="nm">${c.name}${c.usePersonLevel ? ' <span style="font-size:11px; color:var(--primary); font-weight:700;">· 하위항목</span>' : ''}</div>
-            ${c.type === 'expense' ? `<div class="budgetval tabular">${c.budget > 0 ? fmtMoney(c.budget)+'원' : '예산 없음'}</div>` : ''}
-            <button class="grip" data-edit="${c.id}">${ICONS.edit}</button>
+        ${cats.map(c => {
+          const subs = subItemsOfCategory(c.id);
+          const persons = c.usePersonLevel ? personsOfCategory(c.id) : [];
+          const hasChildren = subs.length > 0 || persons.length > 0;
+          const expanded = catManageExpanded.has(c.id);
+          return `
+          <div class="cattree-group">
+            <div class="catrow" data-toggle="${c.id}">
+              <button class="treetoggle" style="visibility:${hasChildren?'visible':'hidden'}; transform:rotate(${expanded?90:0}deg);">${ICONS.chevR}</button>
+              <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
+              <div class="nm">${escapeHTML(c.name)}${c.usePersonLevel ? ' <span style="font-size:11px; color:var(--primary); font-weight:700;">· 하위항목</span>' : ''}</div>
+              ${c.type === 'expense' ? `<div class="budgetval tabular">${c.budget > 0 ? fmtMoney(c.budget)+'원' : '예산 없음'}</div>` : ''}
+              <button class="grip" data-edit="${c.id}">${ICONS.edit}</button>
+            </div>
+            ${expanded ? `
+              <div class="cattree-children">
+                ${persons.length ? `
+                  <div class="cattree-subhead">하위항목 (${persons.length}명)</div>
+                  ${persons.map(p => `<div class="cattree-leaf">${escapeHTML(p.name)}</div>`).join('')}
+                ` : ''}
+                ${subs.length ? `
+                  <div class="cattree-subhead">세부항목 (${subs.length}개)</div>
+                  ${subs.map(s => `<div class="cattree-leaf">${escapeHTML(s.name)}</div>`).join('')}
+                ` : ''}
+                ${!hasChildren ? `<div class="cattree-empty">등록된 세부항목/하위항목이 없어요</div>` : ''}
+              </div>
+            ` : ''}
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
       <button class="btn-secondary" id="catAddNew" style="color:var(--primary); font-weight:800;">+ 새 대분류 추가</button>
     </div>
@@ -2133,6 +2160,14 @@ function renderCatManageSheet() {
   sheet.querySelector('#catMClose').addEventListener('click', closeAllSheets);
   sheet.querySelectorAll('.segctrl button').forEach(b => {
     b.addEventListener('click', () => { catManageType = b.dataset.type; renderCatManageSheet(); });
+  });
+  sheet.querySelectorAll('[data-toggle]').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = row.dataset.toggle;
+      if (catManageExpanded.has(id)) catManageExpanded.delete(id);
+      else catManageExpanded.add(id);
+      renderCatManageSheet();
+    });
   });
   sheet.querySelectorAll('[data-edit]').forEach(b => {
     b.addEventListener('click', (e) => { e.stopPropagation(); openCatEditSheet(b.dataset.edit); });
@@ -2156,7 +2191,10 @@ function openCatEditSheet(catId) {
       <div class="sheet-handle"></div>
       <div class="sheet-head">
         <h3>${editing ? '대분류 수정' : '새 대분류'}</h3>
-        <button id="catEClose">${ICONS.close}</button>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <button id="catEClose" style="color:var(--text-3);">${ICONS.close}</button>
+          <button id="catSave" style="color:var(--primary); font-weight:800; font-size:14.5px; white-space:nowrap;">${editing ? '수정 완료' : '추가'}</button>
+        </div>
       </div>
       <div class="sheet-body">
         <div class="formrow">
@@ -2204,7 +2242,6 @@ function openCatEditSheet(catId) {
           ${draft.usePersonLevel ? `<button class="btn-secondary" id="managePersonsBtn" style="font-weight:700; color:var(--text-1);">하위항목 설정 (${personsOfCategory(editing.id).length}개)</button>` : ''}
         ` : `<div style="font-size:12.5px; color:var(--text-3); padding:2px 2px 0;">세부항목과 하위항목은 추가 후 관리할 수 있어요</div>`}
 
-        <button class="btn-primary" id="catSave">${editing ? '수정 완료' : '추가'}</button>
         ${editing ? `<button class="btn-secondary" id="catDelete" style="color:var(--expense);">대분류 삭제</button>` : ''}
       </div>
     `;

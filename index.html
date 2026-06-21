@@ -368,6 +368,17 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .catrow .grip{color:var(--text-3); padding:4px; flex-shrink:0;}
 .catrow .grip svg{width:18px;height:18px;}
 
+/* category tree (항목 관리 트리 구조) */
+.cattree-group{border-bottom:1px solid var(--border);}
+.cattree-group:last-child{border-bottom:none;}
+.cattree-group .catrow{border-bottom:none; cursor:pointer;}
+.treetoggle{color:var(--text-3); padding:4px; flex-shrink:0; transition:transform .15s ease; display:flex;}
+.treetoggle svg{width:16px;height:16px;}
+.cattree-children{padding:0 4px 14px 50px;}
+.cattree-subhead{font-size:11px; font-weight:700; color:var(--text-3); margin:6px 0 4px;}
+.cattree-leaf{display:flex; align-items:center; justify-content:space-between; font-size:13.5px; color:var(--text-1); padding:6px 0;}
+.cattree-empty{font-size:13px; color:var(--text-3); padding:6px 0;}
+
 .toast{
   position:absolute; bottom:calc(var(--tab-h) + var(--safe-bottom) + 18px); left:50%;
   transform:translate(-50%, 10px); background:#1A1D29; color:#fff; padding:12px 20px; border-radius:12px;
