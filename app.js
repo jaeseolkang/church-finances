@@ -238,10 +238,10 @@ function subItemById(id) {
   return State.subItems.find(s => s.id === id);
 }
 function subItemsOfCategory(catId) {
-  return State.subItems.filter(s => s.categoryId === catId).sort((a,b)=>(a.order??0)-(b.order??0));
+  return State.subItems.filter(s => s.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
 function personsOfCategory(catId) {
-  return State.persons.filter(p => p.categoryId === catId).sort((a,b)=>(a.order??0)-(b.order??0) || a.name.localeCompare(b.name));
+  return State.persons.filter(p => p.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
 
 async function reloadData() {
