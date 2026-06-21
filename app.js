@@ -1193,14 +1193,15 @@ function subItemDisplayName(catType, catName, subName) {
 // 인물단계 대분류: 대분류칸=인물이름, 소분류칸=세부항목명(헌금 표기)
 // 인물단계 없는 대분류: 대분류칸=대분류명, 소분류칸=세부항목명
 function explodeTxToRows(t) {
-  const cat  = cats.get(t['categoryId'], {'name': '삭제된 항목', 'usePersonLevel': false, 'type': t['type']});
+  const cat = catById(t.categoryId) || { name: '삭제된 항목', usePersonLevel: false, type: t.type };
+  const major = txDisplayTitle(t); // 인물단계 대분류면 인물 이름, 아니면 대분류명
   const lines = (t['lines'] && t['lines'].length > 0) ? t['lines'] : [{ subItemId: null, amount: t['amount'] }];
   return lines.map(l => {
     const si = l['subItemId'] ? subItemById(l['subItemId']) : null;
     const subName = si ? subItemDisplayName(cat['type'], cat['name'], si['name']) : '';
     return {
       date: t['date'],
-      major: cat['name'],   // 대분류명 = 인물이름 또는 카테고리명
+      major,   // 대분류명 = 인물이름 또는 카테고리명
       minor: subName,
       amount: l['amount'],
       type: t['type'],
