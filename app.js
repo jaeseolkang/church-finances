@@ -178,6 +178,8 @@ const State = {
   dayDetailDate: null, // 현재 열려있는 '일별 상세' 시트의 날짜 (null이면 닫힌 상태)
   catStatDetailId: null, // 현재 열려있는 '통계 항목 상세' 시트의 categoryId (null이면 닫힌 상태)
   subStatDetailKey: null, // 현재 열려있는 '내용 탭 집계 상세' 시트의 key (null이면 닫힌 상태)
+  statsSortKey: 'amount',   // '내용' 탭 정렬 기준: 'label' | 'count' | 'amount'
+  statsSortDir: 'desc',     // 'asc' | 'desc'
 };
 
 function fmtMoney(n) {
@@ -1004,6 +1006,19 @@ function renderStats() {
   page.querySelectorAll('.stats-agg-row').forEach(el => {
     el.addEventListener('click', () => openSubStatDetail(el.dataset.key));
   });
+
+  page.querySelectorAll('[data-sortkey]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.sortkey;
+      if (State.statsSortKey === key) {
+        State.statsSortDir = State.statsSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        State.statsSortKey = key;
+        State.statsSortDir = key === 'label' ? 'asc' : 'desc'; // 이름은 가나다순 기본, 숫자는 큰값 먼저 기본
+      }
+      renderStats();
+    });
+  });
 }
 
 // [통계] 탭: 막대 차트형 요약 (수입=개인별 헌금 합계 / 지출=대분류별 합계)
@@ -1068,12 +1083,17 @@ function buildStatsAggMap(detailTx, isIncome) {
 }
 
 function renderStatsTabDetail(detailTx, isIncome) {
+  const sortKey = State.statsSortKey;
+  const sortDir = State.statsSortDir;
+  const arrow = sortDir === 'desc' ? ' ▼' : ' ▲';
+  const hStyle = key => `cursor:pointer; ${sortKey===key ? 'color:var(--text-1);' : ''}`;
+
   const header = `
     <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-      <span>내용</span>
+      <span data-sortkey="label" style="${hStyle('label')}">내용${sortKey==='label'?arrow:''}</span>
       <div style="display:flex; gap:16px; font-size:11.5px; color:var(--text-3); font-weight:700; padding-right:2px;">
-        <span style="min-width:36px; text-align:right;">건수</span>
-        <span style="min-width:90px; text-align:right;">금액</span>
+        <span data-sortkey="count" style="min-width:36px; text-align:right; ${hStyle('count')}">건수${sortKey==='count'?arrow:''}</span>
+        <span data-sortkey="amount" style="min-width:90px; text-align:right; ${hStyle('amount')}">금액${sortKey==='amount'?arrow:''}</span>
       </div>
     </div>
   `;
@@ -1086,7 +1106,13 @@ function renderStatsTabDetail(detailTx, isIncome) {
 
   const aggRows = Object.entries(aggMap)
     .map(([key, r]) => ({ key, ...r }))
-    .sort((a,b) => b.amount - a.amount);
+    .sort((a, b) => {
+      let cmp;
+      if (sortKey === 'label') cmp = a.label.localeCompare(b.label, 'ko');
+      else if (sortKey === 'count') cmp = a.count - b.count;
+      else cmp = a.amount - b.amount;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
   const totalAmt = aggRows.reduce((s,r) => s+r.amount, 0);
 
   return header + `
