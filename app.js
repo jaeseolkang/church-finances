@@ -1300,9 +1300,12 @@ function availableDateRangeFromTx() {
   return { min, max };
 }
 
+let excelMode = 'monthly'; // 'monthly' | 'custom'
+
 function openExcelRangeSheet() {
   const range = availableDateRangeFromTx();
   if (!range) { showToast('내보낼 거래가 없어요'); return; }
+  excelMode = 'monthly';
   renderExcelRangeSheet(range, range.min, range.max);
   openSheet('excelRangeSheet');
 }
@@ -1313,10 +1316,14 @@ function renderExcelRangeSheet(range, startDate, endDate) {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>엑셀 내보내기 범위</h3>
+      <h3>엑셀 내보내기</h3>
       <button id="excClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
+      <div class="segctrl">
+        <button data-mode="monthly" class="${excelMode==='monthly'?'active':''}">월간</button>
+        <button data-mode="custom" class="${excelMode==='custom'?'active':''}">지정기간</button>
+      </div>
       <div class="formrow">
         <label>시작 날짜</label>
         <input type="date" class="dateinput" id="excStart" min="${range.min}" max="${range.max}">
@@ -1325,7 +1332,11 @@ function renderExcelRangeSheet(range, startDate, endDate) {
         <label>종료 날짜</label>
         <input type="date" class="dateinput" id="excEnd" min="${range.min}" max="${range.max}">
       </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 날짜가 걸쳐있는 달 전체가 각각 시트로 만들어져요 (교회 회계부는 월 단위로 마감하는 양식이라, 달의 일부만 떼어서 내보낼 순 없어요). 한 달만 내보내려면 시작/종료 날짜를 같은 달 안에서 선택하세요.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">
+        ${excelMode === 'monthly'
+          ? '선택한 날짜가 걸쳐있는 달 전체가 각각 시트로 만들어져요 (교회 회계부는 월 단위로 마감하는 양식이라, 달의 일부만 떼어서 내보낼 순 없어요). 한 달만 내보내려면 시작/종료 날짜를 같은 달 안에서 선택하세요.'
+          : '정확히 선택한 기간의 거래만, 날짜별 수입·지출·누계가 있는 간단한 표 1장으로 만들어요. 월계 같은 정식 결산 양식은 빠져요.'}
+      </div>
       <button class="btn-primary" id="excGo">엑셀 파일 만들기</button>
     </div>
   `;
@@ -1333,11 +1344,28 @@ function renderExcelRangeSheet(range, startDate, endDate) {
   sheet.querySelector('#excEnd').value = endDate;
 
   sheet.querySelector('#excClose').addEventListener('click', closeAllSheets);
+  sheet.querySelectorAll('.segctrl button').forEach(b => {
+    b.addEventListener('click', () => {
+      excelMode = b.dataset.mode;
+      const s = sheet.querySelector('#excStart').value;
+      const e = sheet.querySelector('#excEnd').value;
+      renderExcelRangeSheet(range, s, e);
+    });
+  });
   sheet.querySelector('#excGo').addEventListener('click', async () => {
     const sDate = sheet.querySelector('#excStart').value;
     const eDate = sheet.querySelector('#excEnd').value;
     if (!sDate || !eDate) { showToast('날짜를 선택해주세요'); return; }
     if (sDate > eDate) { showToast('시작 날짜가 종료 날짜보다 늦어요'); return; }
+
+    if (excelMode === 'custom') {
+      const wb = generateCustomRangeWorkbook(sDate, eDate);
+      const fname = `회계부-지정기간-${sDate}_${eDate}.xlsx`;
+      XLSX.writeFile(wb, fname);
+      closeAllSheets();
+      showToast('엑셀 내보내기 완료');
+      return;
+    }
 
     const sYm = sDate.slice(0, 7);
     const eYm = eDate.slice(0, 7);
@@ -1359,6 +1387,47 @@ function renderExcelRangeSheet(range, startDate, endDate) {
     closeAllSheets();
     showToast('엑셀 내보내기 완료');
   });
+}
+
+// 지정기간: 날짜 / 수입 / 지출 / 누계(기간 내 순증감 누적)만 있는 약식 표 1장
+function generateCustomRangeWorkbook(startDate, endDate) {
+  const txs = State.transactions
+    .filter(t => t.date >= startDate && t.date <= endDate);
+
+  const byDate = {};
+  for (const t of txs) {
+    const d = byDate[t.date] || (byDate[t.date] = { income: 0, expense: 0 });
+    if (t.type === 'income') d.income += t.amount; else d.expense += t.amount;
+  }
+  const dates = Object.keys(byDate).sort();
+
+  const aoa = [['날짜', '수입', '지출', '누계']];
+  let running = 0;
+  let totalIncome = 0, totalExpense = 0;
+  for (const d of dates) {
+    const { income, expense } = byDate[d];
+    running += income - expense;
+    totalIncome += income;
+    totalExpense += expense;
+    aoa.push([d, income, expense, running]);
+  }
+  aoa.push(['합계', totalIncome, totalExpense, running]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  const numFmtCols = [1, 2, 3]; // B, C, D
+  for (let r = 0; r < aoa.length; r++) {
+    for (const c of numFmtCols) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[addr];
+      if (cell && typeof cell.v === 'number') cell.z = '#,##0;-#,##0';
+    }
+  }
+  ws['!cols'] = [{ wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }];
+
+  XLSX.utils.book_append_sheet(wb, ws, '지정기간');
+  return wb;
 }
 
 // 실제 엑셀 생성: months = [{year, month}] (출력할 달), carryoverByYear = { year: amount }
