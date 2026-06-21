@@ -246,6 +246,20 @@ function personsOfCategory(catId) {
   return State.persons.filter(p => p.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
 
+// 거래입력 화면(세부항목별 금액 입력)에서만 쓰는 표시 순서.
+// 목록에 없는 항목(다른 대분류 세부항목 등)은 뒤에 가나다순으로 붙는다.
+const TX_ENTRY_ITEM_ORDER = ['주일헌금','십일조','감사헌금','선교헌금','건축헌금','후대헌금','맥추감사','부활주일','성탄감사','신년감사','추수감사','총회주일','헌신예배'];
+function sortItemsForEntry(items) {
+  return items.slice().sort((a, b) => {
+    const ia = TX_ENTRY_ITEM_ORDER.indexOf(a.name);
+    const ib = TX_ENTRY_ITEM_ORDER.indexOf(b.name);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.name.localeCompare(b.name, 'ko');
+  });
+}
+
 async function reloadData() {
   const [cats, persons, subItems, txs] = await Promise.all([
     DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('transactions')
@@ -1854,7 +1868,7 @@ function renderTxStepItems(sheet) {
   const editing = State.editingTx;
   const cat = catById(State.formCategoryId);
   const person = State.formPersonId ? personById(State.formPersonId) : null;
-  const items = subItemsOfCategory(cat.id);
+  const items = sortItemsForEntry(subItemsOfCategory(cat.id));
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
 
   sheet.innerHTML = `
@@ -1879,13 +1893,13 @@ function renderTxStepItems(sheet) {
     <div class="sheet-body">
       <div class="formrow">
         <label>세부항목별 금액 입력</label>
-        <div id="itemsList">
+        <div id="itemsList" style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px;">
           ${items.map(it => `
-            <div class="formrow" style="margin-bottom:12px;">
-              <label style="font-weight:600; color:var(--text-1); margin-bottom:6px;">${escapeHTML(it.name)}</label>
+            <div class="formrow" style="margin-bottom:8px;">
+              <label style="font-weight:600; color:var(--text-1); margin-bottom:6px; display:block; font-size:13.5px;">${escapeHTML(it.name)}</label>
               <div class="amt-input-wrap item-amt-wrap">
-                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
-                <span class="won">원</span>
+                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:21px;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
+                <span class="won" style="font-size:14px;">원</span>
               </div>
             </div>
           `).join('')}
