@@ -2128,6 +2128,19 @@ function renderCatManageSheet() {
           const persons = c.usePersonLevel ? personsOfCategory(c.id) : [];
           const hasChildren = subs.length > 0 || persons.length > 0;
           const expanded = catManageExpanded.has(c.id);
+          const leafRow = (item, store, isItems) => `
+            <div class="cattree-leaf">
+              <span>${escapeHTML(item.name)}</span>
+              <div style="display:flex; gap:2px;">
+                <button class="grip" data-tree-rename="${item.id}" data-tree-store="${store}">${ICONS.edit}</button>
+                <button class="grip" data-tree-del="${item.id}" data-tree-store="${store}" data-tree-isitems="${isItems}" style="color:var(--expense);">${ICONS.trash}</button>
+              </div>
+            </div>`;
+          const addRow = (mode, placeholder) => `
+            <div class="cattree-addrow">
+              <input type="text" class="textinput" data-tree-addinput="${c.id}" data-tree-addmode="${mode}" placeholder="${placeholder}">
+              <button class="btn-secondary" data-tree-addbtn="${c.id}" data-tree-addmode="${mode}">추가</button>
+            </div>`;
           return `
           <div class="cattree-group">
             <div class="catrow" data-toggle="${c.id}">
@@ -2139,15 +2152,14 @@ function renderCatManageSheet() {
             </div>
             ${expanded ? `
               <div class="cattree-children">
-                ${persons.length ? `
+                ${c.usePersonLevel ? `
                   <div class="cattree-subhead">하위항목 (${persons.length}명)</div>
-                  ${persons.map(p => `<div class="cattree-leaf">${escapeHTML(p.name)}</div>`).join('')}
+                  ${persons.map(p => leafRow(p, 'persons', false)).join('')}
+                  ${addRow('persons', '새 하위항목 이름')}
                 ` : ''}
-                ${subs.length ? `
-                  <div class="cattree-subhead">세부항목 (${subs.length}개)</div>
-                  ${subs.map(s => `<div class="cattree-leaf">${escapeHTML(s.name)}</div>`).join('')}
-                ` : ''}
-                ${!hasChildren ? `<div class="cattree-empty">등록된 세부항목/하위항목이 없어요</div>` : ''}
+                <div class="cattree-subhead">세부항목 (${subs.length}개)</div>
+                ${subs.map(s => leafRow(s, 'subItems', true)).join('')}
+                ${addRow('items', '새 세부항목 이름')}
               </div>
             ` : ''}
           </div>
@@ -2173,6 +2185,71 @@ function renderCatManageSheet() {
     b.addEventListener('click', (e) => { e.stopPropagation(); openCatEditSheet(b.dataset.edit); });
   });
   sheet.querySelector('#catAddNew').addEventListener('click', () => openCatEditSheet(null));
+
+  // 트리 안에서 바로 이름 수정
+  sheet.querySelectorAll('[data-tree-rename]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const store = b.dataset.treeStore;
+      const item = await DB.get(store, b.dataset.treeRename);
+      if (!item) return;
+      const newName = prompt('이름 수정', item.name);
+      if (newName === null) return;
+      const trimmed = newName.trim();
+      if (!trimmed) { showToast('이름을 입력해주세요'); return; }
+      item.name = trimmed;
+      await DB.put(store, item);
+      await reloadData();
+      renderCatManageSheet();
+      renderCurrentPage();
+    });
+  });
+
+  // 트리 안에서 바로 삭제
+  sheet.querySelectorAll('[data-tree-del]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const store = b.dataset.treeStore;
+      const isItems = b.dataset.treeIsitems === 'true';
+      const item = await DB.get(store, b.dataset.treeDel);
+      if (!item) return;
+      const used = isItems
+        ? State.transactions.filter(t => (t.lines||[]).some(l => l.subItemId === item.id)).length
+        : State.transactions.filter(t => t.personId === item.id).length;
+      const msg = used > 0
+        ? `이 ${isItems?'세부항목':'이름'}을 사용한 거래가 ${used}건 있습니다. 삭제해도 거래 기록은 남습니다. 계속할까요?`
+        : `'${item.name}'을 삭제할까요?`;
+      if (!confirm(msg)) return;
+      await DB.del(store, item.id);
+      await reloadData();
+      renderCatManageSheet();
+      renderCurrentPage();
+      showToast('삭제되었습니다');
+    });
+  });
+
+  // 트리 안에서 바로 추가
+  const doTreeAdd = async (catId, mode) => {
+    const input = sheet.querySelector(`[data-tree-addinput][data-tree-addmode="${mode}"][data-tree-addinput="${catId}"]`);
+    const name = input.value.trim();
+    if (!name) { showToast('이름을 입력해주세요'); return; }
+    const isItems = mode === 'items';
+    const store = isItems ? 'subItems' : 'persons';
+    const list = isItems ? subItemsOfCategory(catId) : personsOfCategory(catId);
+    if (list.find(x => x.name === name)) { showToast('이미 있는 항목이에요'); return; }
+    await DB.put(store, { id: uid(), categoryId: catId, name, order: list.length });
+    await reloadData();
+    renderCatManageSheet();
+  };
+  sheet.querySelectorAll('[data-tree-addbtn]').forEach(b => {
+    b.addEventListener('click', (e) => { e.stopPropagation(); doTreeAdd(b.dataset.treeAddbtn, b.dataset.treeAddmode); });
+  });
+  sheet.querySelectorAll('[data-tree-addinput]').forEach(inp => {
+    inp.addEventListener('click', (e) => e.stopPropagation());
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doTreeAdd(inp.dataset.treeAddinput, inp.dataset.treeAddmode);
+    });
+  });
 }
 
 /* =========================================================
