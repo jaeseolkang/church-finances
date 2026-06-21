@@ -1893,13 +1893,13 @@ function renderTxStepItems(sheet) {
     <div class="sheet-body">
       <div class="formrow">
         <label>세부항목별 금액 입력</label>
-        <div id="itemsList" style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px;">
+        <div id="itemsList" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px 10px;">
           ${items.map(it => `
-            <div class="formrow" style="margin-bottom:8px;">
+            <div class="formrow" style="margin-bottom:8px; min-width:0;">
               <label style="font-weight:600; color:var(--text-1); margin-bottom:6px; display:block; font-size:13.5px;">${escapeHTML(it.name)}</label>
               <div class="amt-input-wrap item-amt-wrap">
-                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:21px;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
-                <span class="won" style="font-size:14px;">원</span>
+                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:16px; font-weight:400;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
+                <span class="won" style="font-size:13px;">원</span>
               </div>
             </div>
           `).join('')}
