@@ -1297,7 +1297,7 @@ function renderExcelRangeSheet(months, startYm, endYm) {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3>엑셀 내보내기 범위</h3>
-      <button id="excClose">${ICONS.close}</button>
+      <button id="excClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="formrow">
@@ -1469,7 +1469,7 @@ function renderBackupRangeSheet(months, startYm, endYm) {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3>데이터 백업 범위</h3>
-      <button id="bkClose">${ICONS.close}</button>
+      <button id="bkClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="formrow">
@@ -1674,7 +1674,7 @@ function renderTxStepCategory(sheet) {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3>새 거래</h3>
-      <button id="txClose">${ICONS.close}</button>
+      <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
     </div>
     <div class="sheet-body">
       <div class="typeswitch">
@@ -1724,7 +1724,7 @@ function renderTxStepPerson(sheet) {
     <div class="sheet-head">
       <button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
       <h3>${cat.icon} ${cat.name}</h3>
-      <button id="txClose">${ICONS.close}</button>
+      <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
     </div>
     <div class="sheet-body">
       <div class="formrow">
@@ -1796,8 +1796,8 @@ function renderTxStepItems(sheet) {
           <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
           <div style="font-size:12px; color:var(--text-3); font-weight:600;">${dayLabel(State.formDate)}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <button id="txClose" style="color:var(--text-3);">${ICONS.close}</button>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
           <button id="txSave" style="color:var(--primary); font-weight:800; font-size:14.5px; white-space:nowrap;">${editing ? '수정 완료' : '저장'}</button>
         </div>
       </div>
@@ -1941,9 +1941,9 @@ function renderDayDetail(dateStr) {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <button id="ddClose" style="padding:4px;">${ICONS.close}</button>
+      <button id="ddClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>${dayLabel(dateStr)}</h3>
-      <div style="width:28px;"></div>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="daydetail-summary">
@@ -2000,9 +2000,9 @@ function renderCatStatDetail(categoryId) {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <button id="csdClose" style="padding:4px;">${ICONS.close}</button>
+      <button id="csdClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>${cat.icon} ${escapeHTML(cat.name)}</h3>
-      <div style="width:28px;"></div>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="daydetail-summary">
@@ -2059,9 +2059,9 @@ function renderSubStatDetail(key) {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <button id="ssdClose" style="padding:4px;">${ICONS.close}</button>
+      <button id="ssdClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>${escapeHTML(agg.label)}</h3>
-      <div style="width:28px;"></div>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="daydetail-summary">
@@ -2115,7 +2115,7 @@ function renderCatManageSheet() {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3>항목 관리</h3>
-      <button id="catMClose">${ICONS.close}</button>
+      <button id="catMClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="segctrl">
@@ -2268,8 +2268,8 @@ function openCatEditSheet(catId) {
       <div class="sheet-handle"></div>
       <div class="sheet-head">
         <h3>${editing ? '대분류 수정' : '새 대분류'}</h3>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <button id="catEClose" style="color:var(--text-3);">${ICONS.close}</button>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button id="catEClose" class="sheet-close-btn">${ICONS.close}취소</button>
           <button id="catSave" style="color:var(--primary); font-weight:800; font-size:14.5px; white-space:nowrap;">${editing ? '수정 완료' : '추가'}</button>
         </div>
       </div>
@@ -2406,7 +2406,7 @@ function renderCatSubSheet(categoryId, mode) {
     <div class="sheet-head">
       <button id="subBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
       <h3>${cat.icon} ${isItems ? '세부항목' : '하위항목'} 관리</h3>
-      <button id="subClose">${ICONS.close}</button>
+      <button id="subClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="card" style="padding:4px 14px;">
