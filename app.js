@@ -197,9 +197,10 @@ function formatDigitsWithComma(digits) {
 }
 // input[type=text][inputmode=numeric]에 천단위 콤마 자동입력을 붙인다.
 // onChange(numberValue)는 콤마 제거 후 숫자값이 바뀔 때마다 호출된다.
-function attachMoneyInputFormatter(input, onChange) {
+function attachMoneyInputFormatter(input, onChange, maxDigits) {
   input.addEventListener('input', () => {
-    const digits = rawDigits(input.value).replace(/^0+(?=\d)/, '');
+    let digits = rawDigits(input.value).replace(/^0+(?=\d)/, '');
+    if (maxDigits) digits = digits.slice(0, maxDigits);
     const formatted = formatDigitsWithComma(digits);
     const prevLen = input.value.length;
     input.value = formatted;
@@ -1932,7 +1933,7 @@ function renderTxStepItems(sheet) {
       const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
       const totalEl = sheet.querySelector('.card .tabular');
       if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
-    });
+    }, 9); // 억 단위까지 (9자리, 최대 999,999,999원)
     const wrap = input.closest('.amt-input-wrap');
     input.addEventListener('focus', () => wrap.classList.add('focus'));
     input.addEventListener('blur', () => wrap.classList.remove('focus'));
