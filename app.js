@@ -169,7 +169,7 @@ const State = {
   editingTx: null, // 편집 중인 거래 (null이면 신규)
   // 거래 입력 폼 진행 상태
   formType: 'expense',
-  formStep: 'category', // 'category' -> ('person') -> 'items'
+  formStep: 'pick', // 'pick'(중분류 선택) -> 'items'
   formCategoryId: null,
   formPersonId: null,
   formDate: null,
@@ -1623,7 +1623,7 @@ function closeTxSheet() {
    ========================================================= */
 function resetTxForm(type) {
   State.formType = type || 'expense';
-  State.formStep = 'category';
+  State.formStep = 'pick';
   State.formCategoryId = null;
   State.formPersonId = null;
   State.formDate = todayStr();
@@ -1643,9 +1643,7 @@ function openTxSheet(txId, presetDate, presetType) {
     State.formMemo = editing.memo || '';
     State.formAmounts = {};
     (editing.lines || []).forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
-    const cat = catById(editing.categoryId);
-    State.formStep = (cat && cat.usePersonLevel) ? 'person' : 'items';
-    // 수정 시에는 바로 항목 입력 단계로 진입 (대분류는 이미 확정된 상태로 보여줌)
+    // 수정 시에는 바로 항목 입력 단계로 진입 (대분류/이름은 이미 확정된 상태로 보여줌)
     State.formStep = 'items';
   } else {
     resetTxForm(presetType || 'expense');
@@ -1658,17 +1656,17 @@ function openTxSheet(txId, presetDate, presetType) {
 
 function renderTxSheet() {
   const sheet = document.getElementById('txSheet');
-  if (State.formStep === 'category') {
-    renderTxStepCategory(sheet);
-  } else if (State.formStep === 'person') {
-    renderTxStepPerson(sheet);
+  if (State.formStep === 'pick') {
+    renderTxStepPick(sheet);
   } else {
     renderTxStepItems(sheet);
   }
 }
 
-/* ---- STEP 1: 대분류 선택 ---- */
-function renderTxStepCategory(sheet) {
+/* ---- STEP 1: 중분류 선택 (대분류는 건너뛰고 바로 중분류부터) ----
+   하위항목(중분류)을 쓰는 대분류는 그 사람들/이름 목록을, 그렇지 않은 대분류는
+   대분류 자기 자신을 하나짜리 중분류처럼 보여준다. */
+function renderTxStepPick(sheet) {
   const cats = State.categories.filter(c => c.type === State.formType);
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -1681,18 +1679,33 @@ function renderTxStepCategory(sheet) {
         <button data-type="expense" class="${State.formType==='expense'?'active expense':''}">지출</button>
         <button data-type="income" class="${State.formType==='income'?'active income':''}">수입</button>
       </div>
-      <div class="formrow">
-        <label>대분류 선택</label>
-        <div class="catgrid">
-          ${cats.map(c => `
-            <button class="catchip" data-cat="${c.id}">
-              <span class="ic" style="background:${hexToLight(c.color)};">${c.icon}</span>
-              <span>${c.name}</span>
-            </button>
-          `).join('')}
-        </div>
-        ${cats.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">설정에서 대분류를 먼저 추가해주세요</div>` : ''}
-      </div>
+      ${cats.map(c => {
+        const persons = c.usePersonLevel ? personsOfCategory(c.id) : [];
+        const chips = c.usePersonLevel
+          ? persons.map(p => `
+              <button class="catchip" data-pick-cat="${c.id}" data-pick-person="${p.id}">
+                <span class="ic" style="background:${hexToLight(c.color)};">${c.icon}</span>
+                <span>${escapeHTML(p.name)}</span>
+              </button>`).join('')
+          : `
+              <button class="catchip" data-pick-cat="${c.id}" data-pick-person="">
+                <span class="ic" style="background:${hexToLight(c.color)};">${c.icon}</span>
+                <span>${escapeHTML(c.name)}</span>
+              </button>`;
+        return `
+          <div class="formrow">
+            <label>${c.icon} ${escapeHTML(c.name)}</label>
+            <div class="catgrid">${chips}</div>
+            ${c.usePersonLevel ? `
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <input type="text" class="textinput" data-pick-addinput="${c.id}" placeholder="새 이름 입력 후 추가" style="flex:1;">
+                <button class="btn-secondary" data-pick-addbtn="${c.id}" style="width:auto; padding:0 16px; margin-top:0; color:var(--primary); font-weight:700;">추가</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('')}
+      ${cats.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">설정에서 대분류를 먼저 추가해주세요</div>` : ''}
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
@@ -1700,83 +1713,50 @@ function renderTxStepCategory(sheet) {
     b.addEventListener('click', () => {
       State.formType = b.dataset.type;
       State.formCategoryId = null;
-      renderTxStepCategory(sheet);
+      renderTxStepPick(sheet);
     });
   });
-  sheet.querySelectorAll('.catchip[data-cat]').forEach(b => {
+  sheet.querySelectorAll('[data-pick-cat]').forEach(b => {
     b.addEventListener('click', () => {
-      const cat = catById(b.dataset.cat);
-      State.formCategoryId = cat.id;
-      State.formPersonId = null;
+      State.formCategoryId = b.dataset.pickCat;
+      State.formPersonId = b.dataset.pickPerson || null;
       State.formAmounts = {};
-      State.formStep = cat.usePersonLevel ? 'person' : 'items';
-      renderTxSheet();
-    });
-  });
-}
-
-/* ---- STEP 2: 하위항목(이름) 선택 (usePersonLevel 대분류에서만) ---- */
-function renderTxStepPerson(sheet) {
-  const cat = catById(State.formCategoryId);
-  const persons = personsOfCategory(cat.id);
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
-      <h3>${cat.icon} ${cat.name}</h3>
-      <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
-    </div>
-    <div class="sheet-body">
-      <div class="formrow">
-        <label>${cat.name} — 이름 선택</label>
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-          <input type="text" class="textinput" id="newPersonName" placeholder="새 이름 입력 후 추가" style="flex:1;">
-          <button class="btn-primary" id="addPersonBtn" style="width:auto; padding:0 18px; margin-top:0;">추가</button>
-        </div>
-        <div class="catgrid">
-          ${persons.map(p => `
-            <button class="catchip" data-person="${p.id}">
-              <span class="ic" style="background:${hexToLight(cat.color)};font-size:16px;">👤</span>
-              <span>${escapeHTML(p.name)}</span>
-            </button>
-          `).join('')}
-        </div>
-        ${persons.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">등록된 이름이 없어요. 위에서 새 이름을 추가해주세요</div>` : ''}
-      </div>
-    </div>
-  `;
-  sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
-  sheet.querySelector('#txBack').addEventListener('click', () => { State.formStep = 'category'; renderTxSheet(); });
-  sheet.querySelectorAll('.catchip[data-person]').forEach(b => {
-    b.addEventListener('click', () => {
-      State.formPersonId = b.dataset.person;
       State.formStep = 'items';
       renderTxSheet();
     });
   });
-  sheet.querySelector('#addPersonBtn').addEventListener('click', () => addPersonInline(sheet, cat.id));
-  sheet.querySelector('#newPersonName').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') addPersonInline(sheet, cat.id);
-  });
-}
 
-async function addPersonInline(sheet, categoryId) {
-  const input = sheet.querySelector('#newPersonName');
-  const name = input.value.trim();
-  if (!name) { showToast('이름을 입력해주세요'); return; }
-  const existing = personsOfCategory(categoryId).find(p => p.name === name);
-  if (existing) {
-    State.formPersonId = existing.id;
+  const doPickAdd = async (catId, inputEl) => {
+    const name = inputEl.value.trim();
+    if (!name) { showToast('이름을 입력해주세요'); return; }
+    const existing = personsOfCategory(catId).find(p => p.name === name);
+    let personId;
+    if (existing) {
+      personId = existing.id;
+    } else {
+      const person = { id: uid(), categoryId: catId, name, order: personsOfCategory(catId).length };
+      await DB.put('persons', person);
+      await reloadData();
+      personId = person.id;
+    }
+    State.formCategoryId = catId;
+    State.formPersonId = personId;
+    State.formAmounts = {};
     State.formStep = 'items';
     renderTxSheet();
-    return;
-  }
-  const person = { id: uid(), categoryId, name, order: personsOfCategory(categoryId).length };
-  await DB.put('persons', person);
-  await reloadData();
-  State.formPersonId = person.id;
-  State.formStep = 'items';
-  renderTxSheet();
+  };
+  sheet.querySelectorAll('[data-pick-addbtn]').forEach(b => {
+    b.addEventListener('click', () => {
+      const catId = b.dataset.pickAddbtn;
+      const inputEl = sheet.querySelector(`[data-pick-addinput="${catId}"]`);
+      doPickAdd(catId, inputEl);
+    });
+  });
+  sheet.querySelectorAll('[data-pick-addinput]').forEach(inp => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doPickAdd(inp.dataset.pickAddinput, inp);
+    });
+  });
 }
 
 /* ---- STEP 3: 세부항목 다중 입력 ---- */
@@ -1835,7 +1815,7 @@ function renderTxStepItems(sheet) {
   const backBtn = sheet.querySelector('#txBack');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      State.formStep = cat.usePersonLevel ? 'person' : 'category';
+      State.formStep = 'pick';
       renderTxSheet();
     });
   }
