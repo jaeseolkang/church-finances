@@ -631,20 +631,25 @@ function emptyStateHTML(msg, sub) {
 function txItemHTML(t) {
   const cat = catById(t.categoryId) || { icon: '📦', color: '#9CA3AF', name: '삭제된 항목' };
   const lines = t.lines || [];
+  const person = t.personId ? personById(t.personId) : null;
 
-  // 제목: 대분류명 (인물별 대분류라면 인물 이름, 지출이라면 카테고리명)
-  const title = cat.name;
+  // 제목: 하위항목(중분류)이 있으면 그 이름, 없으면 대분류명
+  const title = person ? person.name : cat.name;
 
-  // 부제: 세부항목 요약
+  // 부제: 메모가 있으면 메모, 아니면 (인물별 대분류일 땐 대분류명도 같이) 세부항목 요약
+  let itemsSummary;
+  if (lines.length > 0) {
+    const names = lines.map(l => (subItemById(l.subItemId) || {}).name || '항목').filter(Boolean);
+    itemsSummary = names.slice(0, 2).join(', ');
+    if (names.length > 2) itemsSummary += ` 외 ${names.length - 2}건`;
+  } else {
+    itemsSummary = t.date.slice(5).replace('-', '월 ') + '일';
+  }
   let sub;
   if (t.memo) {
     sub = escapeHTML(t.memo);
-  } else if (lines.length > 0) {
-    const names = lines.map(l => (subItemById(l.subItemId) || {}).name || '항목').filter(Boolean);
-    sub = names.slice(0, 2).join(', ');
-    if (names.length > 2) sub += ` 외 ${names.length - 2}건`;
   } else {
-    sub = t.date.slice(5).replace('-', '월 ') + '일';
+    sub = itemsSummary;
   }
 
   return `
