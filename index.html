@@ -35,8 +35,8 @@
   --radius-md:16px;
   --radius-lg:22px;
   --tab-h:64px;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: min(env(safe-area-inset-bottom, 0px), 40px);
+  --safe-top: min(env(safe-area-inset-top, 0px), 70px);
 }
 
 *{box-sizing:border-box; margin:0; padding:0;}
