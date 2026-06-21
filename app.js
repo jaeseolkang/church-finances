@@ -628,13 +628,18 @@ function emptyStateHTML(msg, sub) {
   return `<div class="empty-state"><div class="emoji">🧾</div><div class="msg">${msg}<br><span style="font-size:12.5px;">${sub}</span></div></div>`;
 }
 
+function txDisplayTitle(t) {
+  const cat = catById(t.categoryId) || { name: '삭제된 항목' };
+  const person = t.personId ? personById(t.personId) : null;
+  return person ? person.name : cat.name;
+}
+
 function txItemHTML(t) {
   const cat = catById(t.categoryId) || { icon: '📦', color: '#9CA3AF', name: '삭제된 항목' };
   const lines = t.lines || [];
-  const person = t.personId ? personById(t.personId) : null;
 
   // 제목: 하위항목(중분류)이 있으면 그 이름, 없으면 대분류명
-  const title = person ? person.name : cat.name;
+  const title = txDisplayTitle(t);
 
   // 부제: 메모가 있으면 메모, 아니면 (인물별 대분류일 땐 대분류명도 같이) 세부항목 요약
   let itemsSummary;
@@ -1886,7 +1891,12 @@ function openDayDetail(dateStr) {
 
 function renderDayDetail(dateStr) {
   const sheet = document.getElementById('dayDetailSheet');
-  const list = State.transactions.filter(t => t.date === dateStr);
+  const list = State.transactions
+    .filter(t => t.date === dateStr)
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'income' ? -1 : 1;
+      return txDisplayTitle(a).localeCompare(txDisplayTitle(b), 'ko');
+    });
   let income = 0, expense = 0;
   for (const t of list) { if (t.type === 'income') income += t.amount; else expense += t.amount; }
 
