@@ -1335,7 +1335,7 @@ function renderExcelRangeSheet(range, startDate, endDate) {
       <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">
         ${excelMode === 'monthly'
           ? '선택한 날짜가 걸쳐있는 달 전체가 각각 시트로 만들어져요 (교회 회계부는 월 단위로 마감하는 양식이라, 달의 일부만 떼어서 내보낼 순 없어요). 한 달만 내보내려면 시작/종료 날짜를 같은 달 안에서 선택하세요.'
-          : '정확히 선택한 기간의 거래만, 날짜별 수입·지출·누계가 있는 간단한 표 1장으로 만들어요. 월계 같은 정식 결산 양식은 빠져요.'}
+          : '정확히 선택한 기간의 거래만, 날짜·중분류·소분류·수입·지출·누계가 있는 줄 단위 표 1장으로 만들어요. 월계 같은 정식 결산 양식은 빠져요.'}
       </div>
       <button class="btn-primary" id="excGo">엑셀 파일 만들기</button>
     </div>
@@ -1389,34 +1389,34 @@ function renderExcelRangeSheet(range, startDate, endDate) {
   });
 }
 
-// 지정기간: 날짜 / 수입 / 지출 / 누계(기간 내 순증감 누적)만 있는 약식 표 1장
+// 지정기간: 날짜 / 중분류 / 소분류 / 수입 / 지출 / 누계 — 줄 단위 내역 + 정식 결산 없이 약식 1장
 function generateCustomRangeWorkbook(startDate, endDate) {
   const txs = State.transactions
-    .filter(t => t.date >= startDate && t.date <= endDate);
+    .filter(t => t.date >= startDate && t.date <= endDate)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
 
-  const byDate = {};
+  const aoa = [['날짜', '중분류', '소분류', '수입', '지출', '누계']];
+  let running = 0, totalIncome = 0, totalExpense = 0;
   for (const t of txs) {
-    const d = byDate[t.date] || (byDate[t.date] = { income: 0, expense: 0 });
-    if (t.type === 'income') d.income += t.amount; else d.expense += t.amount;
+    for (const r of explodeTxToRows(t)) {
+      if (r.type === 'income') { running += r.amount; totalIncome += r.amount; }
+      else { running -= r.amount; totalExpense += r.amount; }
+      aoa.push([
+        r.date,
+        r.major,
+        r.minor,
+        r.type === 'income' ? r.amount : '',
+        r.type === 'expense' ? r.amount : '',
+        running,
+      ]);
+    }
   }
-  const dates = Object.keys(byDate).sort();
-
-  const aoa = [['날짜', '수입', '지출', '누계']];
-  let running = 0;
-  let totalIncome = 0, totalExpense = 0;
-  for (const d of dates) {
-    const { income, expense } = byDate[d];
-    running += income - expense;
-    totalIncome += income;
-    totalExpense += expense;
-    aoa.push([d, income, expense, running]);
-  }
-  aoa.push(['합계', totalIncome, totalExpense, running]);
+  aoa.push(['합계', '', '', totalIncome, totalExpense, running]);
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  const numFmtCols = [1, 2, 3]; // B, C, D
+  const numFmtCols = [3, 4, 5]; // D, E, F (수입/지출/누계)
   for (let r = 0; r < aoa.length; r++) {
     for (const c of numFmtCols) {
       const addr = XLSX.utils.encode_cell({ r, c });
@@ -1424,7 +1424,14 @@ function generateCustomRangeWorkbook(startDate, endDate) {
       if (cell && typeof cell.v === 'number') cell.z = '#,##0;-#,##0';
     }
   }
-  ws['!cols'] = [{ wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }];
+  ws['!cols'] = [
+    { wch: 11 }, // 날짜
+    { wch: 11 }, // 중분류
+    { wch: 12 }, // 소분류
+    { wch: 12 }, // 수입
+    { wch: 12 }, // 지출
+    { wch: 13 }, // 누계
+  ];
 
   XLSX.utils.book_append_sheet(wb, ws, '지정기간');
   return wb;
