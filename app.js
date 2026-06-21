@@ -1664,10 +1664,24 @@ function renderTxSheet() {
 }
 
 /* ---- STEP 1: 중분류 선택 (대분류는 건너뛰고 바로 중분류부터) ----
-   하위항목(중분류)을 쓰는 대분류는 그 사람들/이름 목록을, 그렇지 않은 대분류는
-   대분류 자기 자신을 하나짜리 중분류처럼 보여준다. */
+   하위항목(중분류)을 쓰는 대분류는 그 사람들/이름을, 그렇지 않은 대분류는
+   대분류 자기 자신을 하나짜리 중분류처럼 만들어, 전부 하나의 목록으로 합쳐
+   이름순으로 정렬해서 보여준다. 고르면 다음 단계(소분류 금액 입력)로 넘어간다. */
 function renderTxStepPick(sheet) {
   const cats = State.categories.filter(c => c.type === State.formType);
+
+  const flat = [];
+  for (const c of cats) {
+    if (c.usePersonLevel) {
+      for (const p of personsOfCategory(c.id)) {
+        flat.push({ catId: c.id, personId: p.id, name: p.name, icon: c.icon, color: c.color });
+      }
+    } else {
+      flat.push({ catId: c.id, personId: null, name: c.name, icon: c.icon, color: c.color });
+    }
+  }
+  flat.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
@@ -1679,33 +1693,18 @@ function renderTxStepPick(sheet) {
         <button data-type="expense" class="${State.formType==='expense'?'active expense':''}">지출</button>
         <button data-type="income" class="${State.formType==='income'?'active income':''}">수입</button>
       </div>
-      ${cats.map(c => {
-        const persons = c.usePersonLevel ? personsOfCategory(c.id) : [];
-        const chips = c.usePersonLevel
-          ? persons.map(p => `
-              <button class="catchip" data-pick-cat="${c.id}" data-pick-person="${p.id}">
-                <span class="ic" style="background:${hexToLight(c.color)};">${c.icon}</span>
-                <span>${escapeHTML(p.name)}</span>
-              </button>`).join('')
-          : `
-              <button class="catchip" data-pick-cat="${c.id}" data-pick-person="">
-                <span class="ic" style="background:${hexToLight(c.color)};">${c.icon}</span>
-                <span>${escapeHTML(c.name)}</span>
-              </button>`;
-        return `
-          <div class="formrow">
-            <label>${c.icon} ${escapeHTML(c.name)}</label>
-            <div class="catgrid">${chips}</div>
-            ${c.usePersonLevel ? `
-              <div style="display:flex; gap:8px; margin-top:8px;">
-                <input type="text" class="textinput" data-pick-addinput="${c.id}" placeholder="새 이름 입력 후 추가" style="flex:1;">
-                <button class="btn-secondary" data-pick-addbtn="${c.id}" style="width:auto; padding:0 16px; margin-top:0; color:var(--primary); font-weight:700;">추가</button>
-              </div>
-            ` : ''}
-          </div>
-        `;
-      }).join('')}
-      ${cats.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">설정에서 대분류를 먼저 추가해주세요</div>` : ''}
+      <div class="formrow">
+        <label>항목 선택</label>
+        <div class="catgrid">
+          ${flat.map(item => `
+            <button class="catchip" data-pick-cat="${item.catId}" data-pick-person="${item.personId || ''}">
+              <span class="ic" style="background:${hexToLight(item.color)};">${item.icon}</span>
+              <span>${escapeHTML(item.name)}</span>
+            </button>
+          `).join('')}
+        </div>
+        ${flat.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">설정에서 대분류를 먼저 추가해주세요</div>` : ''}
+      </div>
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
@@ -1723,38 +1722,6 @@ function renderTxStepPick(sheet) {
       State.formAmounts = {};
       State.formStep = 'items';
       renderTxSheet();
-    });
-  });
-
-  const doPickAdd = async (catId, inputEl) => {
-    const name = inputEl.value.trim();
-    if (!name) { showToast('이름을 입력해주세요'); return; }
-    const existing = personsOfCategory(catId).find(p => p.name === name);
-    let personId;
-    if (existing) {
-      personId = existing.id;
-    } else {
-      const person = { id: uid(), categoryId: catId, name, order: personsOfCategory(catId).length };
-      await DB.put('persons', person);
-      await reloadData();
-      personId = person.id;
-    }
-    State.formCategoryId = catId;
-    State.formPersonId = personId;
-    State.formAmounts = {};
-    State.formStep = 'items';
-    renderTxSheet();
-  };
-  sheet.querySelectorAll('[data-pick-addbtn]').forEach(b => {
-    b.addEventListener('click', () => {
-      const catId = b.dataset.pickAddbtn;
-      const inputEl = sheet.querySelector(`[data-pick-addinput="${catId}"]`);
-      doPickAdd(catId, inputEl);
-    });
-  });
-  sheet.querySelectorAll('[data-pick-addinput]').forEach(inp => {
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doPickAdd(inp.dataset.pickAddinput, inp);
     });
   });
 }
