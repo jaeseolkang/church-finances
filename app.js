@@ -1,4 +1,4 @@
-// v1.34 | 2026-06-22 | 매주 일요일 자동 백업 기능 추가
+// v1.35 | 2026-06-22 | 날짜 변경 기능, 즐겨찾기 템플릿 기능 추가
 'use strict';
 
 /* =========================================================
@@ -11,7 +11,7 @@
    ========================================================= */
 const DB = (() => {
   const DB_NAME = 'budgetAppDB';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   let db = null;
 
   function open() {
@@ -40,6 +40,9 @@ const DB = (() => {
         }
         if (!_db.objectStoreNames.contains('settings')) {
           _db.createObjectStore('settings', { keyPath: 'key' });
+        }
+        if (!_db.objectStoreNames.contains('templates')) {
+          _db.createObjectStore('templates', { keyPath: 'id' });
         }
       };
       req.onsuccess = (e) => { db = e.target.result; resolve(db); };
@@ -1472,6 +1475,121 @@ function explodeTxToRows(t) {
   });
 }
 
+/* =========================================================
+   날짜 변경 시트
+   ========================================================= */
+function openDatePickerSheet(currentDate, onPick) {
+  let sheet = document.getElementById('datePickerSheet');
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = 'datePickerSheet';
+    sheet.className = 'sheet';
+    document.getElementById('app').appendChild(sheet);
+  }
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>날짜 변경</h3>
+      <button id="dpClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div class="formrow">
+        <input type="date" id="dpInput" class="dateinput" value="${currentDate}" style="font-size:16px; padding:12px 14px;">
+      </div>
+      <button class="btn-primary" id="dpConfirm">확인</button>
+    </div>
+  `;
+  openSheet('datePickerSheet');
+  sheet.querySelector('#dpClose').addEventListener('click', () => closeSubSheet('datePickerSheet'));
+  sheet.querySelector('#dpConfirm').addEventListener('click', () => {
+    const val = sheet.querySelector('#dpInput').value;
+    if (!val) { showToast('날짜를 선택해주세요'); return; }
+    closeSubSheet('datePickerSheet');
+    onPick(val);
+  });
+}
+
+function closeSubSheet(id) {
+  const s = document.getElementById(id);
+  if (s) s.classList.remove('open');
+}
+
+/* =========================================================
+   즐겨찾기 템플릿
+   ========================================================= */
+async function getTemplates() { return await DB.getAll('templates'); }
+async function saveTemplate(tpl) { await DB.put('templates', tpl); }
+async function deleteTemplate(id) { await DB.del('templates', id); }
+
+async function saveCurrentAsTemplate() {
+  const cat = catById(State.formCategoryId);
+  const person = State.formPersonId ? personById(State.formPersonId) : null;
+  const lines = Object.entries(State.formAmounts)
+    .filter(([, amt]) => Number(amt) > 0)
+    .map(([subItemId, amt]) => ({ subItemId, amount: Number(amt) }));
+  if (lines.length === 0) { showToast('금액을 입력한 후 저장해주세요'); return; }
+  const label = person ? person.name : cat.name;
+  const summary = lines.map(l => {
+    const si = subItemById(l.subItemId);
+    return `${si?.name || '항목'} ${fmtMoney(l.amount)}`;
+  }).join(', ');
+  const tpl = { id: uid(), name: `${label} (${summary})`, type: State.formType,
+    categoryId: State.formCategoryId, personId: State.formPersonId || null, lines, createdAt: Date.now() };
+  await saveTemplate(tpl);
+  showToast(`⭐ 템플릿 저장: ${tpl.name}`);
+}
+
+async function openTemplateSheet(type) {
+  const all = (await getTemplates()).filter(t => t.type === type);
+  let sheet = document.getElementById('templateSheet');
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = 'templateSheet';
+    sheet.className = 'sheet';
+    document.getElementById('app').appendChild(sheet);
+  }
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>즐겨찾기 템플릿</h3>
+      <button id="tplClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      ${all.length === 0 ? `<div style="text-align:center; padding:32px 0; color:var(--text-3); font-size:14px;">
+        저장된 템플릿이 없어요.<br>거래 입력 후 ⭐ 버튼으로 저장해보세요.</div>` :
+      all.map(tpl => `
+        <div class="settings-row" style="justify-content:space-between;">
+          <div class="tpl-apply" data-id="${tpl.id}" style="flex:1; cursor:pointer;">
+            <div class="settings-label">${escapeHTML(tpl.name)}</div>
+          </div>
+          <button class="tpl-del" data-id="${tpl.id}" style="color:var(--expense);font-size:12px;padding:4px 10px;flex-shrink:0;">삭제</button>
+        </div>`).join('')}
+    </div>
+  `;
+  openSheet('templateSheet');
+  sheet.querySelector('#tplClose').addEventListener('click', () => closeSubSheet('templateSheet'));
+  sheet.querySelectorAll('.tpl-apply').forEach(el => {
+    el.addEventListener('click', async () => {
+      const tpl = (await getTemplates()).find(t => t.id === el.dataset.id);
+      if (!tpl) return;
+      State.formCategoryId = tpl.categoryId;
+      State.formPersonId   = tpl.personId;
+      State.formAmounts    = {};
+      tpl.lines.forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
+      State.formStep = 'items';
+      closeSubSheet('templateSheet');
+      renderTxSheet();
+    });
+  });
+  sheet.querySelectorAll('.tpl-del').forEach(el => {
+    el.addEventListener('click', async () => {
+      await deleteTemplate(el.dataset.id);
+      showToast('템플릿 삭제됨');
+      openTemplateSheet(type);
+    });
+  });
+}
+
 // 지정 연/월 범위의 월 목록을 만든다. [{year, month}], month는 1~12
 function buildMonthRange(startYear, startMonth, endYear, endMonth) {
   const months = [];
@@ -2097,7 +2215,10 @@ function renderTxStepPick(sheet) {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3>새 거래</h3>
-      <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="txTplBtn" style="font-size:12px;color:var(--primary);font-weight:700;padding:4px 8px;border:1.5px solid var(--primary);border-radius:8px;">⭐ 템플릿</button>
+        <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
+      </div>
     </div>
     <div class="sheet-body">
       <div class="typeswitch">
@@ -2119,6 +2240,7 @@ function renderTxStepPick(sheet) {
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelector('#txTplBtn').addEventListener('click', () => openTemplateSheet(State.formType));
   sheet.querySelectorAll('.typeswitch button').forEach(b => {
     b.addEventListener('click', () => {
       State.formType = b.dataset.type;
@@ -2152,9 +2274,10 @@ function renderTxStepItems(sheet) {
         ${!editing ? `<button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>` : `<div style="width:40px;"></div>`}
         <div style="text-align:center;">
           <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
-          <div style="font-size:12px; color:var(--text-3); font-weight:600;">${dayLabel(State.formDate)}</div>
+          <button id="txDateBtn" style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px;">${dayLabel(State.formDate)}</button>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
+          <button id="txTplSave" title="템플릿으로 저장" style="font-size:18px; line-height:1;">⭐</button>
           <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
           <button id="txSave" style="color:var(--primary); font-weight:800; font-size:14.5px; white-space:nowrap;">${editing ? '수정 완료' : '저장'}</button>
         </div>
@@ -2190,6 +2313,13 @@ function renderTxStepItems(sheet) {
   `;
 
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelector('#txTplSave').addEventListener('click', saveCurrentAsTemplate);
+  sheet.querySelector('#txDateBtn').addEventListener('click', () => {
+    openDatePickerSheet(State.formDate, (newDate) => {
+      State.formDate = newDate;
+      renderTxSheet();
+    });
+  });
   const backBtn = sheet.querySelector('#txBack');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
