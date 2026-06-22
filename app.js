@@ -1,4 +1,4 @@
-// v1.29 | 2026-06-22 | 앱 이름 기본값 "주원교회"로 변경
+// v1.30 | 2026-06-22 | 앱 이름 편집 prompt→커스텀 시트로 교체 (iOS PWA 재시작 버그 수정)
 'use strict';
 
 /* =========================================================
@@ -273,6 +273,43 @@ async function reloadData() {
 }
 
 /* ---- 연도별 전년이월 금액 ---- */
+function openAppTitleSheet(current, onSave) {
+  // 임시 시트를 동적으로 생성
+  let sheet = document.getElementById('appTitleSheet');
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = 'appTitleSheet';
+    sheet.className = 'sheet';
+    document.getElementById('app').appendChild(sheet);
+  }
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>앱 이름 변경</h3>
+      <button id="atClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div class="formrow">
+        <label>앱 이름</label>
+        <input type="text" id="atInput" class="dateinput"
+          value="${escapeHTML(current)}" maxlength="30"
+          style="font-size:16px; padding:12px 14px;">
+      </div>
+      <button class="btn-primary" id="atSave">저장</button>
+    </div>
+  `;
+  openSheet('appTitleSheet');
+  setTimeout(() => sheet.querySelector('#atInput').focus(), 300);
+
+  sheet.querySelector('#atClose').addEventListener('click', closeAllSheets);
+  sheet.querySelector('#atSave').addEventListener('click', async () => {
+    const val = sheet.querySelector('#atInput').value.trim() || '주원교회';
+    await setAppTitle(val);
+    closeAllSheets();
+    onSave(val);
+  });
+}
+
 async function getAppTitle() {
   const rec = await DB.get('settings', 'appTitle');
   return rec ? rec.value : '주원교회';
@@ -1231,15 +1268,12 @@ function renderSettings() {
 
   page.querySelector('#rowAppTitle').addEventListener('click', async () => {
     const current = await getAppTitle();
-    const val = prompt('앱 이름을 입력해주세요', current);
-    if (val === null) return;
-    const trimmed = val.trim() || '주원교회';
-    await setAppTitle(trimmed);
-    page.querySelector('#appTitlePreview').textContent = trimmed;
-    // 홈 화면 제목도 즉시 반영
-    const el = document.getElementById('appTitleEl');
-    if (el) el.textContent = trimmed;
-    showToast('앱 이름이 변경됐어요');
+    openAppTitleSheet(current, (trimmed) => {
+      page.querySelector('#appTitlePreview').textContent = trimmed;
+      const el = document.getElementById('appTitleEl');
+      if (el) el.textContent = trimmed;
+      showToast('앱 이름이 변경됐어요');
+    });
   });
   page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
