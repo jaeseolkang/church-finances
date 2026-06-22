@@ -1,7 +1,7 @@
 // 2026-06-19 10:00 KST | PWA 서비스워커 추가: 오프라인 캐싱 + 설치 지원
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v44';
+const CACHE_NAME = 'gaegyebu-v45';
 const ASSETS = [
   './',
   './index.html',
@@ -10,12 +10,13 @@ const ASSETS = [
   './manifest.json'
 ];
 
-// 설치: 모든 에셋 캐싱
+// 설치: 모든 에셋 캐싱 후 즉시 활성화
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // 활성화: 구버전 캐시 삭제
