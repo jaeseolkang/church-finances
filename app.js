@@ -2277,7 +2277,7 @@ function renderTxStepItems(sheet) {
         <div style="text-align:center;">
           <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
           <div style="position:relative; display:inline-block;">
-            <span style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px; pointer-events:none; position:relative; z-index:1;">${dayLabel(State.formDate)}</span>
+            <span id="txDateLabel" style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px; pointer-events:none; position:relative; z-index:1;">${dayLabel(State.formDate)}</span>
             <input type="date" id="txDateInput" value="${State.formDate}" style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%;">
           </div>
         </div>
@@ -2319,12 +2319,18 @@ function renderTxStepItems(sheet) {
 
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
   sheet.querySelector('#txTplSave').addEventListener('click', saveCurrentAsTemplate);
-  sheet.querySelector('#txDateInput').addEventListener('change', (e) => {
-    if (e.target.value) {
+  const dateInput = sheet.querySelector('#txDateInput');
+  const updateDate = (e) => {
+    if (e.target.value && e.target.value !== State.formDate) {
       State.formDate = e.target.value;
-      renderTxSheet();
+      // 전체 리렌더 없이 날짜 텍스트만 갱신
+      const label = sheet.querySelector('#txDateLabel');
+      if (label) label.textContent = dayLabel(State.formDate);
+      dateInput.value = State.formDate;
     }
-  });
+  };
+  dateInput.addEventListener('change', updateDate);
+  dateInput.addEventListener('input', updateDate);
   const backBtn = sheet.querySelector('#txBack');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
