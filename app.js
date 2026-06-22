@@ -1,4 +1,4 @@
-// v1.33 | 2026-06-22 | 헌신예배 접미사 제거, subItemDisplayName 순서 수정, 십일조→십 일 조
+// v1.34 | 2026-06-22 | 매주 일요일 자동 백업 기능 추가
 'use strict';
 
 /* =========================================================
@@ -1224,6 +1224,31 @@ function renderSettings() {
     </div>
 
     <div class="settings-group">
+      <div class="settings-group-title">자동 백업</div>
+      <div class="settings-row" style="justify-content:space-between;">
+        <div>
+          <div class="settings-label">매주 일요일 자동 백업</div>
+          <div class="settings-sub">앱 실행 시 일요일이면 자동으로 백업해요</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoBackupToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row" id="rowAutoBackupFolder" style="display:none;">
+        <div>
+          <div class="settings-label">백업 폴더 지정</div>
+          <div class="settings-sub" id="autoBackupFolderSub">지정 안 됨 (자동 다운로드)</div>
+        </div>
+        ${ICONS.chevR}
+      </div>
+      <div class="settings-row" id="rowAutoBackupNow" style="display:none;">
+        <div><div class="settings-label">지금 바로 백업</div></div>
+        ${ICONS.download}
+      </div>
+    </div>
+
+    <div class="settings-group">
       <div class="settings-group-title">데이터</div>
       <div class="settings-row" id="rowExportExcel">
         <div>
@@ -1266,6 +1291,32 @@ function renderSettings() {
     if (el) el.textContent = t;
   });
 
+  // 자동 백업 토글 초기 상태
+  getAutoBackupEnabled().then(async enabled => {
+    const toggle = page.querySelector('#autoBackupToggle');
+    if (!toggle) return;
+    toggle.checked = enabled;
+    const folderRow = page.querySelector('#rowAutoBackupFolder');
+    const nowRow = page.querySelector('#rowAutoBackupNow');
+    if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
+
+    // 폴더 이름 표시
+    const dirHandle = await getAutoBackupDirHandle();
+    if (dirHandle) {
+      page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
+    }
+
+    toggle.addEventListener('change', async () => {
+      await setAutoBackupEnabled(toggle.checked);
+      folderRow.style.display = toggle.checked ? '' : 'none';
+      nowRow.style.display = toggle.checked ? '' : 'none';
+      showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
+    });
+  });
+
+  page.querySelector('#rowAutoBackupFolder').addEventListener('click', pickAutoBackupFolder);
+  page.querySelector('#rowAutoBackupNow').addEventListener('click', () => runAutoBackup(true));
+
   page.querySelector('#rowAppTitle').addEventListener('click', async () => {
     const current = await getAppTitle();
     openAppTitleSheet(current, (trimmed) => {
@@ -1284,9 +1335,109 @@ function renderSettings() {
 }
 
 /* =========================================================
-   엑셀 내보내기 — 교회 회계부 양식
-   컬럼: 일자 / 대분류 / 소분류 / 수입금액 / 지출금액 / 누계금액
+   자동 백업 (매주 일요일)
    ========================================================= */
+async function getAutoBackupEnabled() {
+  const rec = await DB.get('settings', 'autoBackup');
+  return rec ? rec.enabled : false;
+}
+async function setAutoBackupEnabled(v) {
+  const rec = (await DB.get('settings', 'autoBackup')) || { key: 'autoBackup' };
+  await DB.put('settings', { ...rec, enabled: v });
+}
+async function getLastAutoBackupDate() {
+  const rec = await DB.get('settings', 'autoBackup');
+  return rec ? rec.lastDate || null : null;
+}
+async function setLastAutoBackupDate(dateStr) {
+  const rec = (await DB.get('settings', 'autoBackup')) || { key: 'autoBackup' };
+  await DB.put('settings', { ...rec, lastDate: dateStr });
+}
+async function getAutoBackupDirHandle() {
+  const rec = await DB.get('settings', 'autoBackupDir');
+  return rec ? rec.handle : null;
+}
+async function setAutoBackupDirHandle(handle) {
+  await DB.put('settings', { key: 'autoBackupDir', handle });
+}
+
+// 오늘이 일요일인지 확인
+function isSunday() {
+  return new Date().getDay() === 0;
+}
+// 오늘 날짜 문자열 YYYY-MM-DD
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function checkAndRunAutoBackup() {
+  const enabled = await getAutoBackupEnabled();
+  if (!enabled) return;
+  if (!isSunday()) return;
+  const today = todayStr();
+  const last = await getLastAutoBackupDate();
+  if (last === today) return; // 이미 오늘 백업함
+
+  // 백업 실행
+  await runAutoBackup();
+}
+
+async function runAutoBackup(manual = false) {
+  if (State.transactions.length === 0) {
+    if (manual) showToast('백업할 거래가 없어요');
+    return;
+  }
+  const today = todayStr();
+  const months = availableMonthsFromTx();
+  const sYm = months[0], eYm = months[months.length - 1];
+  const appTitle = await getAppTitle();
+  const fname = `${appTitle}_자동백업_${today}.json`;
+
+  const payload = buildBackupPayload(sYm, eYm);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+
+  // PC Chrome/Edge: File System Access API로 폴더에 직접 저장
+  const dirHandle = await getAutoBackupDirHandle();
+  if (dirHandle && window.showDirectoryPicker) {
+    try {
+      const perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted' || (await dirHandle.requestPermission({ mode: 'readwrite' })) === 'granted') {
+        const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        await setLastAutoBackupDate(today);
+        showToast(`✅ 자동 백업 완료: ${fname}`);
+        return;
+      }
+    } catch (e) {
+      console.warn('폴더 저장 실패, 다운로드로 대체:', e);
+    }
+  }
+
+  // 폴더 미지정 또는 iOS: 일반 다운로드
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+  await setLastAutoBackupDate(today);
+  showToast(`✅ 자동 백업 완료: ${fname}`);
+}
+
+async function pickAutoBackupFolder() {
+  if (!window.showDirectoryPicker) {
+    showToast('이 기기에서는 폴더 지정이 지원되지 않아요 (iOS 미지원). 일요일에 자동 다운로드로 대신해요.');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await setAutoBackupDirHandle(handle);
+    showToast(`백업 폴더 설정 완료: ${handle.name}`);
+    renderSettings();
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('폴더 선택 취소');
+  }
+}
 
 // 세부항목 표시명: 수입 세부항목 중 헌금 종류는 '...헌금' 접미어 부착
 // (대분류가 인물이름으로 바뀌었으므로 세부항목 이름 자체로 판단)
@@ -2700,6 +2851,8 @@ async function initApp() {
   await reloadData();
   renderShell();
   switchTab('home');
+  // 앱 시작 시 자동 백업 체크 (일요일이면 실행)
+  setTimeout(checkAndRunAutoBackup, 2000);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
