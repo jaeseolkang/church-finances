@@ -1,4 +1,4 @@
-// v1.39 | 2026-06-23 | 명부 가족 그룹/세대/대표자 기능 추가 | cache:v47
+// v1.40 | 2026-06-23 | 명부 이름 줄바꿈 수정, 가족 구성원 목록 표시 | cache:v48
 'use strict';
 
 /* =========================================================
@@ -1379,11 +1379,14 @@ function renderMembers() {
     const op = m.hidden ? 'opacity:0.5;' : '';
     const genColor = genColors[m.generation] || 'var(--text-3)';
     const hasExtra = m.address || m.memo;
+    const headName = m.headId ? (allMembers.find(p => p.id === m.headId)?.name || '') : '';
     return `
       <tr style="border-top:1px solid var(--border); background:${bg}; ${op}">
-        <td style="padding:8px 10px 8px ${indent ? '24px' : '10px'}; font-weight:700;">
-          ${m.generation ? `<span style="font-size:10px; color:${genColor}; font-weight:700; margin-right:4px; border:1px solid ${genColor}; border-radius:4px; padding:1px 4px;">${m.generation}</span>` : ''}
-          ${escapeHTML(m.name)}${m.position ? `<br><span style="font-size:11px; color:var(--text-3); font-weight:500;">${escapeHTML(m.position)}</span>` : ''}
+        <td style="padding:8px 10px 8px ${indent ? '20px' : '10px'}; font-weight:700; min-width:80px;">
+          ${m.generation ? `<div style="font-size:10px; color:${genColor}; font-weight:700; border:1px solid ${genColor}; border-radius:4px; padding:1px 4px; display:inline-block; margin-bottom:2px;">${m.generation}</div>` : ''}
+          <div>${escapeHTML(m.name)}</div>
+          ${m.position ? `<div style="font-size:11px; color:var(--text-3); font-weight:500;">${escapeHTML(m.position)}</div>` : ''}
+          ${headName ? `<div style="font-size:10px; color:var(--primary);">↳ ${escapeHTML(headName)}</div>` : ''}
         </td>
         <td style="padding:8px 10px;">${escapeHTML(m.residentId || '')}</td>
         <td style="padding:8px 10px;">${escapeHTML(m.phone || '')}</td>
@@ -1399,21 +1402,23 @@ function renderMembers() {
       </tr>
       ${hasExtra ? `
       <tr style="background:${bg}; ${op}">
-        <td colspan="5" style="padding:2px 10px 8px ${indent ? '24px' : '10px'}; font-size:12px; color:var(--text-2);">
+        <td colspan="5" style="padding:2px 10px 8px ${indent ? '20px' : '10px'}; font-size:12px; color:var(--text-2);">
           ${m.address ? `📍 ${escapeHTML(m.address)}` : ''}${m.address && m.memo ? '　' : ''}${m.memo ? `📝 ${escapeHTML(m.memo)}` : ''}
         </td>
       </tr>` : ''}
     `;
   };
 
-  const groupRows = Object.entries(groups).sort(([a],[b]) => a.localeCompare(b,'ko')).map(([name, ms]) => `
+  const groupRows = Object.entries(groups).sort(([a],[b]) => a.localeCompare(b,'ko')).map(([name, ms]) => {
+    const nameList = ms.map(m => m.name).join(', ');
+    return `
     <tr style="background:var(--primary-light, #eef2ff);">
       <td colspan="5" style="padding:8px 10px; font-weight:800; font-size:13.5px; color:var(--primary);">
-        👨‍👩‍👧 ${escapeHTML(name)} <span style="font-size:11px; font-weight:500; color:var(--text-3);">${ms.length}명</span>
+        👨‍👩‍👧 ${escapeHTML(name)} <span style="font-size:11px; font-weight:500; color:var(--text-3);">${ms.length}명 · ${escapeHTML(nameList)}</span>
       </td>
     </tr>
     ${ms.map(m => memberRow(m, true)).join('')}
-  `).join('');
+  `;}).join('');
 
   const noGroupRows = noGroup.map(m => memberRow(m, false)).join('');
 
