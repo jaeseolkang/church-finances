@@ -1,4 +1,4 @@
-// v1.40 | 2026-06-23 | 명부 이름 줄바꿈 수정, 가족 구성원 목록 표시 | cache:v48
+// v1.41 | 2026-06-23 18:00 KST | 수정: 명부 이름 컬럼 너비 확장 및 이름 nowrap 처리 | cache:v48
 'use strict';
 
 /* =========================================================
@@ -1384,7 +1384,7 @@ function renderMembers() {
       <tr style="border-top:1px solid var(--border); background:${bg}; ${op}">
         <td style="padding:8px 10px 8px ${indent ? '20px' : '10px'}; font-weight:700; min-width:80px;">
           ${m.generation ? `<div style="font-size:10px; color:${genColor}; font-weight:700; border:1px solid ${genColor}; border-radius:4px; padding:1px 4px; display:inline-block; margin-bottom:2px;">${m.generation}</div>` : ''}
-          <div>${escapeHTML(m.name)}</div>
+          <div style="white-space:nowrap;">${escapeHTML(m.name)}</div>
           ${m.position ? `<div style="font-size:11px; color:var(--text-3); font-weight:500;">${escapeHTML(m.position)}</div>` : ''}
           ${headName ? `<div style="font-size:10px; color:var(--primary);">↳ ${escapeHTML(headName)}</div>` : ''}
         </td>
@@ -1431,10 +1431,10 @@ function renderMembers() {
       <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-sans, -apple-system, sans-serif);">
         <thead>
           <tr style="background:var(--primary); color:#fff; text-align:left;">
-            <th style="padding:9px 10px; width:22%;">이름 / 직분</th>
-            <th style="padding:9px 10px; width:26%;">주민번호</th>
-            <th style="padding:9px 10px; width:26%;">전화번호</th>
-            <th style="padding:9px 10px; width:18%; text-align:center;">숨김</th>
+            <th style="padding:9px 10px; width:28%;">이름 / 직분</th>
+            <th style="padding:9px 10px; width:24%;">주민번호</th>
+            <th style="padding:9px 10px; width:24%;">전화번호</th>
+            <th style="padding:9px 10px; width:16%; text-align:center;">숨김</th>
             <th style="padding:9px 4px; width:8%;"></th>
           </tr>
         </thead>
