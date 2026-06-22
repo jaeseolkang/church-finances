@@ -1,4 +1,4 @@
-// v1.36 | 2026-06-22 | 반복 거래 등록/적용 기능 추가
+// v1.37 | 2026-06-23 | 교인 명부 탭 추가, 숨김 기능 추가
 'use strict';
 
 /* =========================================================
@@ -246,8 +246,10 @@ function subItemById(id) {
 function subItemsOfCategory(catId) {
   return State.subItems.filter(s => s.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
-function personsOfCategory(catId) {
-  return State.persons.filter(p => p.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
+function personsOfCategory(catId, includeHidden = false) {
+  return State.persons
+    .filter(p => p.categoryId === catId && (includeHidden || !p.hidden))
+    .sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
 
 // 거래입력 화면(세부항목별 금액 입력)에서만 쓰는 표시 순서.
@@ -366,6 +368,7 @@ async function totalAssets() {
 const ICONS = {
   home: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>`,
   list: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><circle cx="3.5" cy="6" r="1.3" fill="${active?'var(--primary)':'currentColor'}" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="${active?'var(--primary)':'currentColor'}" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="${active?'var(--primary)':'currentColor'}" stroke="none"/></svg>`,
+  members: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>`,
   budget: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 14.5h4"/></svg>`,
   stats: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>`,
   settings: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l1.9-1.5-2-3.4-2.2.9a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.5a7.6 7.6 0 0 0-2.6 1.5l-2.2-.9-2 3.4L4.6 10a7.7 7.7 0 0 0 0 3l-1.9 1.5 2 3.4 2.2-.9c.77.65 1.65 1.16 2.6 1.5L10 22h4l.5-2.5a7.6 7.6 0 0 0 2.6-1.5l2.2.9 2-3.4z"/></svg>`,
@@ -382,9 +385,10 @@ const ICONS = {
 };
 
 const TABS = [
-  { key: 'home', label: '홈' },
-  { key: 'budget', label: '예산' },
-  { key: 'stats', label: '통계' },
+  { key: 'home',     label: '홈' },
+  { key: 'budget',   label: '예산' },
+  { key: 'stats',    label: '통계' },
+  { key: 'members',  label: '명부' },
   { key: 'settings', label: '설정' },
 ];
 
@@ -398,6 +402,7 @@ function renderShell() {
       <div class="page" id="page-home"></div>
       <div class="page" id="page-budget"></div>
       <div class="page" id="page-stats"></div>
+      <div class="page" id="page-members"></div>
       <div class="page" id="page-settings"></div>
     </div>
     <button class="fab" id="fabAdd">${ICONS.plus}</button>
@@ -438,7 +443,7 @@ function switchTab(key) {
   document.getElementById('page-' + key).classList.add('active');
   renderTabbar();
   renderCurrentPage();
-  document.getElementById('fabAdd').style.display = (key === 'settings') ? 'none' : 'flex';
+  document.getElementById('fabAdd').style.display = (key === 'settings' || key === 'members') ? 'none' : 'flex';
   // 홈 탭 보조 상태 초기화는 renderHome에서 처리
 }
 
@@ -446,6 +451,7 @@ function renderCurrentPage() {
   if (State.tab === 'home') renderHome();
   else if (State.tab === 'budget') renderBudget();
   else if (State.tab === 'stats') renderStats();
+  else if (State.tab === 'members') renderMembers();
   else if (State.tab === 'settings') renderSettings();
 }
 
@@ -1283,6 +1289,11 @@ function renderSettings() {
         <div class="settings-label">버전</div>
         <div class="settings-value">1.0.0 (로컬 저장)</div>
       </div>
+      <div class="settings-row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+        <div class="settings-label">개발</div>
+        <div class="settings-sub">JS Kang</div>
+        <div class="settings-sub" style="color:var(--primary);">✉ drimsw@gmail.com</div>
+      </div>
       <div class="settings-row" id="rowReset">
         <div class="settings-label" style="color:var(--expense);">모든 데이터 초기화</div>
       </div>
@@ -1338,8 +1349,148 @@ function renderSettings() {
 }
 
 /* =========================================================
-   자동 백업 (매주 일요일)
+   명부 페이지
    ========================================================= */
+function renderMembers() {
+  const page = document.getElementById('page-members');
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.usePersonLevel);
+  const members = heongCat ? personsOfCategory(heongCat.id, true) : [];
+
+  page.innerHTML = `
+    <div class="appbar" style="padding-left:0;padding-right:0;">
+      <h1>교인 명부</h1>
+      <button id="memberAdd" style="color:var(--primary);font-weight:800;font-size:14px;">+ 추가</button>
+    </div>
+    <div style="overflow-x:auto; padding:0 0 120px;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:700px;">
+        <thead>
+          <tr style="background:var(--primary); color:#fff; text-align:center;">
+            <th style="padding:10px 8px; white-space:nowrap;">이름</th>
+            <th style="padding:10px 8px; white-space:nowrap;">직분</th>
+            <th style="padding:10px 8px; white-space:nowrap;">주민번호</th>
+            <th style="padding:10px 8px; white-space:nowrap;">전화번호</th>
+            <th style="padding:10px 8px; white-space:nowrap;">주소</th>
+            <th style="padding:10px 8px; white-space:nowrap;">비고</th>
+            <th style="padding:10px 8px; white-space:nowrap;">숨김</th>
+            <th style="padding:10px 8px; white-space:nowrap;">최초등록일</th>
+            <th style="padding:10px 4px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${members.length === 0 ? `<tr><td colspan="9" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>` :
+            members.map((m, i) => `
+              <tr style="border-bottom:1px solid var(--border); background:${m.hidden ? 'rgba(0,0,0,0.04)' : (i%2===0 ? 'transparent' : 'var(--bg)')};${m.hidden ? 'opacity:0.55;' : ''}">
+                <td style="padding:8px; font-weight:700; white-space:nowrap;">${escapeHTML(m.name)}</td>
+                <td style="padding:8px; text-align:center; white-space:nowrap;">${escapeHTML(m.position || '')}</td>
+                <td style="padding:8px; text-align:center; font-family:monospace; font-size:12px;">${escapeHTML(m.residentId || '')}</td>
+                <td style="padding:8px; text-align:center; white-space:nowrap;">${escapeHTML(m.phone || '')}</td>
+                <td style="padding:8px; font-size:12px; max-width:160px;">${escapeHTML(m.address || '')}</td>
+                <td style="padding:8px; font-size:12px; max-width:120px;">${escapeHTML(m.memo || '')}</td>
+                <td style="padding:8px; text-align:center;">
+                  <label class="toggle-switch" style="transform:scale(0.85);">
+                    <input type="checkbox" class="member-hidden-toggle" data-id="${m.id}" ${m.hidden ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </td>
+                <td style="padding:8px; text-align:center; font-size:11px; color:var(--text-3); white-space:nowrap;">${m.createdAt ? new Date(m.createdAt).toLocaleDateString('ko') : '-'}</td>
+                <td style="padding:8px; text-align:center;">
+                  <button class="member-edit-btn" data-id="${m.id}" style="color:var(--primary); font-size:12px;">${ICONS.edit}</button>
+                </td>
+              </tr>
+            `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  page.querySelector('#memberAdd').addEventListener('click', () => openMemberEditSheet(null, heongCat));
+
+  page.querySelectorAll('.member-hidden-toggle').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const p = await DB.get('persons', cb.dataset.id);
+      if (!p) return;
+      p.hidden = cb.checked;
+      await DB.put('persons', p);
+      await reloadData();
+      renderMembers();
+    });
+  });
+
+  page.querySelectorAll('.member-edit-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const m = State.persons.find(p => p.id === b.dataset.id);
+      if (m) openMemberEditSheet(m, heongCat);
+    });
+  });
+}
+
+function openMemberEditSheet(member, heongCat) {
+  let sheet = document.getElementById('memberEditSheet');
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = 'memberEditSheet';
+    sheet.className = 'sheet';
+    sheet.style.zIndex = '95';
+    document.getElementById('app').appendChild(sheet);
+  }
+  const isNew = !member;
+  const m = member || { id: uid(), name: '', position: '', residentId: '', phone: '', address: '', memo: '', hidden: false, createdAt: Date.now() };
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>${isNew ? '교인 추가' : '교인 정보 수정'}</h3>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="mEditClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+        <button id="mEditSave" style="color:var(--primary);font-weight:800;font-size:14.5px;">저장</button>
+      </div>
+    </div>
+    <div class="sheet-body">
+      <div class="formrow"><label>이름 *</label><input type="text" id="mName" class="dateinput" value="${escapeHTML(m.name)}" placeholder="이름"></div>
+      <div class="formrow"><label>직분</label><input type="text" id="mPosition" class="dateinput" value="${escapeHTML(m.position||'')}" placeholder="예: 집사, 권사, 장로"></div>
+      <div class="formrow"><label>주민번호</label><input type="text" id="mResidentId" class="dateinput" value="${escapeHTML(m.residentId||'')}" placeholder="000000-0000000"></div>
+      <div class="formrow"><label>전화번호</label><input type="tel" id="mPhone" class="dateinput" value="${escapeHTML(m.phone||'')}" placeholder="010-0000-0000"></div>
+      <div class="formrow"><label>주소</label><input type="text" id="mAddress" class="dateinput" value="${escapeHTML(m.address||'')}" placeholder="주소"></div>
+      <div class="formrow"><label>비고</label><input type="text" id="mMemo" class="dateinput" value="${escapeHTML(m.memo||'')}" placeholder="메모"></div>
+      ${!isNew ? `<button id="mEditDel" style="color:var(--expense);font-size:13px;margin-top:8px;">이 교인 삭제</button>` : ''}
+    </div>
+  `;
+  openSheet('memberEditSheet');
+  sheet.querySelector('#mEditClose').addEventListener('click', () => closeSubSheet('memberEditSheet'));
+  sheet.querySelector('#mEditSave').addEventListener('click', async () => {
+    const name = sheet.querySelector('#mName').value.trim();
+    if (!name) { showToast('이름을 입력해주세요'); return; }
+    const updated = {
+      ...m,
+      categoryId: heongCat?.id || m.categoryId,
+      name,
+      position: sheet.querySelector('#mPosition').value.trim(),
+      residentId: sheet.querySelector('#mResidentId').value.trim(),
+      phone: sheet.querySelector('#mPhone').value.trim(),
+      address: sheet.querySelector('#mAddress').value.trim(),
+      memo: sheet.querySelector('#mMemo').value.trim(),
+      createdAt: m.createdAt || Date.now(),
+    };
+    await DB.put('persons', updated);
+    await reloadData();
+    closeSubSheet('memberEditSheet');
+    renderMembers();
+    showToast(isNew ? '교인이 추가됐어요' : '정보가 수정됐어요');
+  });
+  if (!isNew) {
+    sheet.querySelector('#mEditDel').addEventListener('click', async () => {
+      if (!confirm(`"${m.name}"을(를) 명부에서 삭제할까요?\n(기존 거래 데이터는 유지됩니다)`)) return;
+      await DB.del('persons', m.id);
+      await reloadData();
+      closeSubSheet('memberEditSheet');
+      renderMembers();
+      showToast('삭제됐어요');
+    });
+  }
+}
+
+/* =========================================================
+   자동 백업 (매주 일요일)
 async function getAutoBackupEnabled() {
   const rec = await DB.get('settings', 'autoBackup');
   return rec ? rec.enabled : false;
@@ -2615,13 +2766,14 @@ function renderCatManageSheet() {
       <div class="card" style="padding:4px 14px;">
         ${cats.map(c => {
           const subs = subItemsOfCategory(c.id);
-          const persons = c.usePersonLevel ? personsOfCategory(c.id) : [];
+          const persons = c.usePersonLevel ? personsOfCategory(c.id, true) : [];
           const hasChildren = subs.length > 0 || persons.length > 0;
           const expanded = catManageExpanded.has(c.id);
           const leafRow = (item, store, isItems) => `
-            <div class="cattree-leaf">
-              <span>${escapeHTML(item.name)}</span>
+            <div class="cattree-leaf" style="${item.hidden ? 'opacity:0.45;' : ''}">
+              <span>${item.hidden ? '🚫 ' : ''}${escapeHTML(item.name)}</span>
               <div style="display:flex; gap:2px;">
+                <button class="grip" data-tree-hide="${item.id}" data-tree-store="${store}" data-tree-hidden="${item.hidden ? '1' : '0'}" title="${item.hidden ? '숨김 해제' : '숨김'}" style="font-size:11px; color:${item.hidden ? 'var(--primary)' : 'var(--text-3)'};">${item.hidden ? '표시' : '숨김'}</button>
                 <button class="grip" data-tree-rename="${item.id}" data-tree-store="${store}">${ICONS.edit}</button>
                 <button class="grip" data-tree-del="${item.id}" data-tree-store="${store}" data-tree-isitems="${isItems}" style="color:var(--expense);">${ICONS.trash}</button>
               </div>
@@ -2677,6 +2829,19 @@ function renderCatManageSheet() {
   sheet.querySelector('#catAddNew').addEventListener('click', () => openCatEditSheet(null));
 
   // 트리 안에서 바로 이름 수정
+  // 숨김 토글
+  sheet.querySelectorAll('[data-tree-hide]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const store = b.dataset.treeStore;
+      const item = await DB.get(store, b.dataset.treeHide);
+      if (!item) return;
+      item.hidden = !item.hidden;
+      await DB.put(store, item);
+      await reloadData();
+      renderCatManageSheet();
+    });
+  });
   sheet.querySelectorAll('[data-tree-rename]').forEach(b => {
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
