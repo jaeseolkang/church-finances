@@ -249,7 +249,7 @@ function personsOfCategory(catId) {
 
 // 거래입력 화면(세부항목별 금액 입력)에서만 쓰는 표시 순서.
 // 목록에 없는 항목(다른 대분류 세부항목 등)은 뒤에 가나다순으로 붙는다.
-const TX_ENTRY_ITEM_ORDER = ['주일헌금','십일조','감사헌금','선교헌금','건축헌금','후대헌금','맥추감사','부활주일','성탄감사','신년감사','추수감사','총회주일','헌신예배'];
+const TX_ENTRY_ITEM_ORDER = ['주일헌금','십 일 조','감사헌금','선교헌금','건축헌금','후대헌금','맥추감사','부활주일','성탄감사','신년감사','추수감사','총회주일','헌신예배'];
 function sortItemsForEntry(items) {
   return items.slice().sort((a, b) => {
     const ia = TX_ENTRY_ITEM_ORDER.indexOf(a.name);
@@ -1290,7 +1290,7 @@ function renderSettings() {
 
 // 세부항목 표시명: 수입 세부항목 중 헌금 종류는 '...헌금' 접미어 부착
 // (대분류가 인물이름으로 바뀌었으므로 세부항목 이름 자체로 판단)
-const HEONG_SUBS_NO_SUFFIX = new Set(['십일조','통장이동','통장이동(퇴직)']);
+const HEONG_SUBS_NO_SUFFIX = new Set(['십 일 조','통장이동','통장이동(퇴직)']);
 function subItemDisplayName(catType, catName, subName) {
   // 이미 헌금으로 끝나면 그대로
   if (subName.endsWith('헌금')) return subName;
