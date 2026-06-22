@@ -1,4 +1,4 @@
-// 2026-06-19 10:00 KST | PWA 서비스워커 추가: 오프라인 캐싱 + 설치 지원
+// 2026-06-23 18:10 KST | 수정: fetch 캐싱을 ASSETS 목록 파일만으로 제한 (임의 fetch 캐시 오염 방지)
 'use strict';
 
 const CACHE_NAME = 'gaegyebu-v48';
@@ -38,8 +38,11 @@ self.addEventListener('fetch', (e) => {
     caches.match(e.request).then((cached) => {
       if (cached) return cached;
       return fetch(e.request).then((response) => {
-        // 유효한 응답만 캐싱
-        if (response && response.status === 200 && response.type === 'basic') {
+        // ASSETS 목록에 있는 파일만 캐싱 (임의 fetch 캐시 오염 방지)
+        const url = new URL(e.request.url);
+        const isAsset = ASSETS.some(a => url.pathname.endsWith(a.replace('./', '/'))) ||
+                        url.pathname === '/' || url.pathname.endsWith('/');
+        if (isAsset && response && response.status === 200 && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
         }
