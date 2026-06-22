@@ -1,4 +1,4 @@
-// v1.26 | 2026-06-22 | 엑셀내보내기 월간/지정기간 분리, 데이터백업 개별달/범위 분리
+// v1.27 | 2026-06-22 | 엑셀내보내기 월간 단일월 선택으로 변경
 'use strict';
 
 /* =========================================================
@@ -1374,14 +1374,10 @@ function renderExcelRangeSheet() {
 
       ${excelMode === 'monthly' ? `
       <div class="formrow">
-        <label>시작 월</label>
-        <select class="dateinput" id="excMStart">${optionHTML}</select>
+        <label>월 선택</label>
+        <select class="dateinput" id="excMSingle">${optionHTML}</select>
       </div>
-      <div class="formrow">
-        <label>종료 월</label>
-        <select class="dateinput" id="excMEnd">${optionHTML}</select>
-      </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">달마다 시트가 따로 만들어지는 정식 교회 결산 양식이에요. 한 달만 내보내려면 시작/종료 월을 같게 선택하세요.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 달의 정식 교회 결산 양식으로 만들어요.</div>
       ` : `
       <div class="formrow">
         <label>시작 날짜</label>
@@ -1400,8 +1396,7 @@ function renderExcelRangeSheet() {
 
   // 초기값 설정
   if (excelMode === 'monthly') {
-    sheet.querySelector('#excMStart').value = months[0];
-    sheet.querySelector('#excMEnd').value   = months[months.length - 1];
+    sheet.querySelector('#excMSingle').value = months[months.length - 1];
   } else {
     sheet.querySelector('#excCStart').value = range.min;
     sheet.querySelector('#excCEnd').value   = range.max;
@@ -1429,9 +1424,8 @@ function renderExcelRangeSheet() {
     }
 
     // 월간
-    const sYm = sheet.querySelector('#excMStart').value;
-    const eYm = sheet.querySelector('#excMEnd').value;
-    if (sYm > eYm) { showToast('시작 월이 종료 월보다 늦어요'); return; }
+    const sYm = sheet.querySelector('#excMSingle').value;
+    const eYm = sYm;
     let [sy, sm] = sYm.split('-').map(Number);
     let [ey, em] = eYm.split('-').map(Number);
 
