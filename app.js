@@ -1344,15 +1344,21 @@ function availableDateRangeFromTx() {
 let excelMode = 'monthly'; // 'monthly' | 'custom'
 
 function openExcelRangeSheet() {
-  const range = availableDateRangeFromTx();
-  if (!range) { showToast('내보낼 거래가 없어요'); return; }
+  if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
   excelMode = 'monthly';
-  renderExcelRangeSheet(range, range.min, range.max);
+  renderExcelRangeSheet();
   openSheet('excelRangeSheet');
 }
 
-function renderExcelRangeSheet(range, startDate, endDate) {
+function renderExcelRangeSheet() {
   const sheet = document.getElementById('excelRangeSheet');
+  const months = availableMonthsFromTx();
+  const range = availableDateRangeFromTx();
+
+  const optionHTML = months.map(ym => {
+    const [y, m] = ym.split('-');
+    return `<option value="${ym}">${y}년 ${Number(m)}월</option>`;
+  }).join('');
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -1363,53 +1369,69 @@ function renderExcelRangeSheet(range, startDate, endDate) {
     <div class="sheet-body">
       <div class="segctrl">
         <button data-mode="monthly" class="${excelMode==='monthly'?'active':''}">월간</button>
-        <button data-mode="custom" class="${excelMode==='custom'?'active':''}">지정기간</button>
+        <button data-mode="custom"  class="${excelMode==='custom' ?'active':''}">지정기간</button>
+      </div>
+
+      ${excelMode === 'monthly' ? `
+      <div class="formrow">
+        <label>시작 월</label>
+        <select class="dateinput" id="excMStart">${optionHTML}</select>
       </div>
       <div class="formrow">
+        <label>종료 월</label>
+        <select class="dateinput" id="excMEnd">${optionHTML}</select>
+      </div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">달마다 시트가 따로 만들어지는 정식 교회 결산 양식이에요. 한 달만 내보내려면 시작/종료 월을 같게 선택하세요.</div>
+      ` : `
+      <div class="formrow">
         <label>시작 날짜</label>
-        <input type="date" class="dateinput" id="excStart" min="${range.min}" max="${range.max}">
+        <input type="date" class="dateinput" id="excCStart" min="${range.min}" max="${range.max}">
       </div>
       <div class="formrow">
         <label>종료 날짜</label>
-        <input type="date" class="dateinput" id="excEnd" min="${range.min}" max="${range.max}">
+        <input type="date" class="dateinput" id="excCEnd" min="${range.min}" max="${range.max}">
       </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">
-        ${excelMode === 'monthly'
-          ? '선택한 날짜가 걸쳐있는 달 전체가 각각 시트로 만들어져요 (교회 회계부는 월 단위로 마감하는 양식이라, 달의 일부만 떼어서 내보낼 순 없어요). 한 달만 내보내려면 시작/종료 날짜를 같은 달 안에서 선택하세요.'
-          : '정확히 선택한 기간의 거래만, 날짜·중분류·소분류·수입·지출·누계가 있는 줄 단위 표 1장으로 만들어요. 월계 같은 정식 결산 양식은 빠져요.'}
-      </div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">정확히 선택한 기간의 거래만, 날짜·중분류·소분류·수입·지출·누계가 있는 줄 단위 표 1장으로 만들어요.</div>
+      `}
+
       <button class="btn-primary" id="excGo">엑셀 파일 만들기</button>
     </div>
   `;
-  sheet.querySelector('#excStart').value = startDate;
-  sheet.querySelector('#excEnd').value = endDate;
+
+  // 초기값 설정
+  if (excelMode === 'monthly') {
+    sheet.querySelector('#excMStart').value = months[0];
+    sheet.querySelector('#excMEnd').value   = months[months.length - 1];
+  } else {
+    sheet.querySelector('#excCStart').value = range.min;
+    sheet.querySelector('#excCEnd').value   = range.max;
+  }
 
   sheet.querySelector('#excClose').addEventListener('click', closeAllSheets);
   sheet.querySelectorAll('.segctrl button').forEach(b => {
     b.addEventListener('click', () => {
       excelMode = b.dataset.mode;
-      const s = sheet.querySelector('#excStart').value;
-      const e = sheet.querySelector('#excEnd').value;
-      renderExcelRangeSheet(range, s, e);
+      renderExcelRangeSheet();
     });
   });
-  sheet.querySelector('#excGo').addEventListener('click', async () => {
-    const sDate = sheet.querySelector('#excStart').value;
-    const eDate = sheet.querySelector('#excEnd').value;
-    if (!sDate || !eDate) { showToast('날짜를 선택해주세요'); return; }
-    if (sDate > eDate) { showToast('시작 날짜가 종료 날짜보다 늦어요'); return; }
 
+  sheet.querySelector('#excGo').addEventListener('click', async () => {
     if (excelMode === 'custom') {
+      const sDate = sheet.querySelector('#excCStart').value;
+      const eDate = sheet.querySelector('#excCEnd').value;
+      if (!sDate || !eDate) { showToast('날짜를 선택해주세요'); return; }
+      if (sDate > eDate) { showToast('시작 날짜가 종료 날짜보다 늦어요'); return; }
       const wb = generateCustomRangeWorkbook(sDate, eDate);
-      const fname = `회계부-지정기간-${sDate}_${eDate}.xlsx`;
-      XLSX.writeFile(wb, fname);
+      XLSX.writeFile(wb, `회계부-지정기간-${sDate}_${eDate}.xlsx`);
       closeAllSheets();
       showToast('엑셀 내보내기 완료');
       return;
     }
 
-    const sYm = sDate.slice(0, 7);
-    const eYm = eDate.slice(0, 7);
+    // 월간
+    const sYm = sheet.querySelector('#excMStart').value;
+    const eYm = sheet.querySelector('#excMEnd').value;
+    if (sYm > eYm) { showToast('시작 월이 종료 월보다 늦어요'); return; }
     let [sy, sm] = sYm.split('-').map(Number);
     let [ey, em] = eYm.split('-').map(Number);
 
@@ -1421,9 +1443,8 @@ function renderExcelRangeSheet(range, startDate, endDate) {
       if (amt === null) { showToast('취소되었습니다'); return; }
       carryoverByYear[y] = amt;
     }
-
     const wb = generateChurchLedgerWorkbook(monthsRange, carryoverByYear);
-    const fname = (sDate === eDate) ? `회계부-${sDate}.xlsx` : `회계부-${sDate}_${eDate}.xlsx`;
+    const fname = (sYm === eYm) ? `회계부-${sYm}.xlsx` : `회계부-${sYm}_${eYm}.xlsx`;
     XLSX.writeFile(wb, fname);
     closeAllSheets();
     showToast('엑셀 내보내기 완료');
@@ -1589,15 +1610,18 @@ function generateChurchLedgerWorkbook(months, carryoverByYear) {
   return wb;
 }
 
+let backupMode = 'single'; // 'single' | 'range'
+
 function openBackupRangeSheet() {
   if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
-  const months = availableMonthsFromTx();
-  renderBackupRangeSheet(months, months[0], months[months.length - 1]);
+  backupMode = 'single';
+  renderBackupRangeSheet();
   openSheet('backupRangeSheet');
 }
 
-function renderBackupRangeSheet(months, startYm, endYm) {
+function renderBackupRangeSheet() {
   const sheet = document.getElementById('backupRangeSheet');
+  const months = availableMonthsFromTx();
   const optionHTML = months.map(ym => {
     const [y, m] = ym.split('-');
     return `<option value="${ym}">${y}년 ${Number(m)}월</option>`;
@@ -1606,10 +1630,22 @@ function renderBackupRangeSheet(months, startYm, endYm) {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>데이터 백업 범위</h3>
+      <h3>데이터 백업</h3>
       <button id="bkClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
+      <div class="segctrl">
+        <button data-mode="single" class="${backupMode==='single'?'active':''}">개별 달</button>
+        <button data-mode="range"  class="${backupMode==='range' ?'active':''}">범위 설정</button>
+      </div>
+
+      ${backupMode === 'single' ? `
+      <div class="formrow">
+        <label>백업할 달</label>
+        <select class="dateinput" id="bkSingle">${optionHTML}</select>
+      </div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 달의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
+      ` : `
       <div class="formrow">
         <label>시작 월</label>
         <select class="dateinput" id="bkStart">${optionHTML}</select>
@@ -1619,17 +1655,38 @@ function renderBackupRangeSheet(months, startYm, endYm) {
         <select class="dateinput" id="bkEnd">${optionHTML}</select>
       </div>
       <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 기간의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
+      `}
+
       <button class="btn-primary" id="bkGo">JSON 백업 파일 만들기</button>
     </div>
   `;
-  sheet.querySelector('#bkStart').value = startYm;
-  sheet.querySelector('#bkEnd').value = endYm;
+
+  // 초기값 설정
+  if (backupMode === 'single') {
+    sheet.querySelector('#bkSingle').value = months[months.length - 1];
+  } else {
+    sheet.querySelector('#bkStart').value = months[0];
+    sheet.querySelector('#bkEnd').value   = months[months.length - 1];
+  }
+
+  // 탭 전환
+  sheet.querySelectorAll('.segctrl button').forEach(b => {
+    b.addEventListener('click', () => {
+      backupMode = b.dataset.mode;
+      renderBackupRangeSheet();
+    });
+  });
 
   sheet.querySelector('#bkClose').addEventListener('click', closeAllSheets);
   sheet.querySelector('#bkGo').addEventListener('click', () => {
-    const sYm = sheet.querySelector('#bkStart').value;
-    const eYm = sheet.querySelector('#bkEnd').value;
-    if (sYm > eYm) { showToast('시작 월이 종료 월보다 늦어요'); return; }
+    let sYm, eYm;
+    if (backupMode === 'single') {
+      sYm = eYm = sheet.querySelector('#bkSingle').value;
+    } else {
+      sYm = sheet.querySelector('#bkStart').value;
+      eYm = sheet.querySelector('#bkEnd').value;
+      if (sYm > eYm) { showToast('시작 월이 종료 월보다 늦어요'); return; }
+    }
     exportData(sYm, eYm);
     closeAllSheets();
   });
