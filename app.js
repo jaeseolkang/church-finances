@@ -1292,10 +1292,10 @@ function renderSettings() {
 // (대분류가 인물이름으로 바뀌었으므로 세부항목 이름 자체로 판단)
 const HEONG_SUBS_NO_SUFFIX = new Set(['십 일 조','헌신예배','통장이동','통장이동(퇴직)']);
 function subItemDisplayName(catType, catName, subName) {
+  // 예외 목록은 그대로 (헌금 접미사 안 붙임)
+  if (HEONG_SUBS_NO_SUFFIX.has(subName)) return subName;
   // 이미 헌금으로 끝나면 그대로
   if (subName.endsWith('헌금')) return subName;
-  // 예외 목록은 그대로
-  if (HEONG_SUBS_NO_SUFFIX.has(subName)) return subName;
   // 수입 거래 세부항목이면 헌금 접미어 부착
   if (catType === 'income') return subName + '헌금';
   return subName;
