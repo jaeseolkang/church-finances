@@ -2276,7 +2276,10 @@ function renderTxStepItems(sheet) {
         ${!editing ? `<button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>` : `<div style="width:40px;"></div>`}
         <div style="text-align:center;">
           <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
-          <button id="txDateBtn" style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px;">${dayLabel(State.formDate)}</button>
+          <div style="position:relative; display:inline-block;">
+            <span style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px; pointer-events:none; position:relative; z-index:1;">${dayLabel(State.formDate)}</span>
+            <input type="date" id="txDateInput" value="${State.formDate}" style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%;">
+          </div>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
           <button id="txTplSave" title="템플릿으로 저장" style="font-size:18px; line-height:1;">⭐</button>
@@ -2316,11 +2319,11 @@ function renderTxStepItems(sheet) {
 
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
   sheet.querySelector('#txTplSave').addEventListener('click', saveCurrentAsTemplate);
-  sheet.querySelector('#txDateBtn').addEventListener('click', () => {
-    openDatePickerSheet(State.formDate, (newDate) => {
-      State.formDate = newDate;
+  sheet.querySelector('#txDateInput').addEventListener('change', (e) => {
+    if (e.target.value) {
+      State.formDate = e.target.value;
       renderTxSheet();
-    });
+    }
   });
   const backBtn = sheet.querySelector('#txBack');
   if (backBtn) {
