@@ -1,4 +1,4 @@
-// v1.27 | 2026-06-22 | 엑셀내보내기 월간 단일월 선택으로 변경
+// v1.29 | 2026-06-22 | 앱 이름 기본값 "주원교회"로 변경
 'use strict';
 
 /* =========================================================
@@ -273,6 +273,14 @@ async function reloadData() {
 }
 
 /* ---- 연도별 전년이월 금액 ---- */
+async function getAppTitle() {
+  const rec = await DB.get('settings', 'appTitle');
+  return rec ? rec.value : '주원교회';
+}
+async function setAppTitle(value) {
+  await DB.put('settings', { key: 'appTitle', value });
+}
+
 async function getYearCarryover(year) {
   const rec = await DB.get('settings', `yearCarryover:${year}`);
   return rec ? rec.amount : null; // null이면 아직 입력되지 않음
@@ -486,7 +494,7 @@ async function renderHome() {
 
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
-      <h1>주원교회 회계부</h1>
+      <h1 id="appTitleEl">${await getAppTitle()}</h1>
       <button class="icon-btn" id="goSettings">${ICONS.gear}</button>
     </div>
 
@@ -1160,6 +1168,17 @@ function renderSettings() {
     </div>
 
     <div class="settings-group">
+      <div class="settings-group-title">일반</div>
+      <div class="settings-row" id="rowAppTitle">
+        <div>
+          <div class="settings-label">앱 이름</div>
+          <div class="settings-sub" id="appTitlePreview">로딩 중...</div>
+        </div>
+        ${ICONS.chevR}
+      </div>
+    </div>
+
+    <div class="settings-group">
       <div class="settings-group-title">관리</div>
       <div class="settings-row" id="rowCats">
         <div><div class="settings-label">수입/지출 항목 관리</div></div>
@@ -1204,6 +1223,24 @@ function renderSettings() {
       </div>
     </div>
   `;
+  // 앱 이름 미리보기 로드
+  getAppTitle().then(t => {
+    const el = page.querySelector('#appTitlePreview');
+    if (el) el.textContent = t;
+  });
+
+  page.querySelector('#rowAppTitle').addEventListener('click', async () => {
+    const current = await getAppTitle();
+    const val = prompt('앱 이름을 입력해주세요', current);
+    if (val === null) return;
+    const trimmed = val.trim() || '주원교회';
+    await setAppTitle(trimmed);
+    page.querySelector('#appTitlePreview').textContent = trimmed;
+    // 홈 화면 제목도 즉시 반영
+    const el = document.getElementById('appTitleEl');
+    if (el) el.textContent = trimmed;
+    showToast('앱 이름이 변경됐어요');
+  });
   page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
