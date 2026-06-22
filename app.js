@@ -1,4 +1,4 @@
-// v1.37 | 2026-06-23 | 교인 명부 탭 추가, 숨김 기능 추가 | cache:v45
+// v1.38 | 2026-06-23 | 명부 레이아웃 2행 구조로 변경, 폰트 통일 | cache:v46
 'use strict';
 
 /* =========================================================
@@ -1361,43 +1361,46 @@ function renderMembers() {
       <h1>교인 명부</h1>
       <button id="memberAdd" style="color:var(--primary);font-weight:800;font-size:14px;">+ 추가</button>
     </div>
-    <div style="overflow-x:auto; padding:0 0 120px;">
-      <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:700px;">
+    <div style="padding:0 0 120px;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-sans, -apple-system, sans-serif);">
         <thead>
-          <tr style="background:var(--primary); color:#fff; text-align:center;">
-            <th style="padding:10px 8px; white-space:nowrap;">이름</th>
-            <th style="padding:10px 8px; white-space:nowrap;">직분</th>
-            <th style="padding:10px 8px; white-space:nowrap;">주민번호</th>
-            <th style="padding:10px 8px; white-space:nowrap;">전화번호</th>
-            <th style="padding:10px 8px; white-space:nowrap;">주소</th>
-            <th style="padding:10px 8px; white-space:nowrap;">비고</th>
-            <th style="padding:10px 8px; white-space:nowrap;">숨김</th>
-            <th style="padding:10px 8px; white-space:nowrap;">최초등록일</th>
-            <th style="padding:10px 4px;"></th>
+          <tr style="background:var(--primary); color:#fff; text-align:left;">
+            <th style="padding:9px 10px; width:22%;">이름 / 직분</th>
+            <th style="padding:9px 10px; width:26%;">주민번호</th>
+            <th style="padding:9px 10px; width:26%;">전화번호</th>
+            <th style="padding:9px 10px; width:18%; text-align:center;">숨김</th>
+            <th style="padding:9px 4px; width:8%;"></th>
           </tr>
         </thead>
         <tbody>
-          ${members.length === 0 ? `<tr><td colspan="9" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>` :
-            members.map((m, i) => `
-              <tr style="border-bottom:1px solid var(--border); background:${m.hidden ? 'rgba(0,0,0,0.04)' : (i%2===0 ? 'transparent' : 'var(--bg)')};${m.hidden ? 'opacity:0.55;' : ''}">
-                <td style="padding:8px; font-weight:700; white-space:nowrap;">${escapeHTML(m.name)}</td>
-                <td style="padding:8px; text-align:center; white-space:nowrap;">${escapeHTML(m.position || '')}</td>
-                <td style="padding:8px; text-align:center; font-family:monospace; font-size:12px;">${escapeHTML(m.residentId || '')}</td>
-                <td style="padding:8px; text-align:center; white-space:nowrap;">${escapeHTML(m.phone || '')}</td>
-                <td style="padding:8px; font-size:12px; max-width:160px;">${escapeHTML(m.address || '')}</td>
-                <td style="padding:8px; font-size:12px; max-width:120px;">${escapeHTML(m.memo || '')}</td>
-                <td style="padding:8px; text-align:center;">
-                  <label class="toggle-switch" style="transform:scale(0.85);">
-                    <input type="checkbox" class="member-hidden-toggle" data-id="${m.id}" ${m.hidden ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                  </label>
-                </td>
-                <td style="padding:8px; text-align:center; font-size:11px; color:var(--text-3); white-space:nowrap;">${m.createdAt ? new Date(m.createdAt).toLocaleDateString('ko') : '-'}</td>
-                <td style="padding:8px; text-align:center;">
-                  <button class="member-edit-btn" data-id="${m.id}" style="color:var(--primary); font-size:12px;">${ICONS.edit}</button>
-                </td>
-              </tr>
-            `).join('')}
+          ${members.length === 0 ? `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>` :
+            members.map((m, i) => {
+              const bg = m.hidden ? 'rgba(0,0,0,0.04)' : (i%2===0 ? 'transparent' : 'var(--bg)');
+              const op = m.hidden ? 'opacity:0.5;' : '';
+              const hasExtra = m.address || m.memo;
+              return `
+                <tr style="border-top:1px solid var(--border); background:${bg}; ${op}">
+                  <td style="padding:8px 10px; font-weight:700;">${escapeHTML(m.name)}${m.position ? `<br><span style="font-size:11px; color:var(--text-3); font-weight:500;">${escapeHTML(m.position)}</span>` : ''}</td>
+                  <td style="padding:8px 10px;">${escapeHTML(m.residentId || '')}</td>
+                  <td style="padding:8px 10px;">${escapeHTML(m.phone || '')}</td>
+                  <td style="padding:8px 10px; text-align:center;">
+                    <label class="toggle-switch" style="transform:scale(0.8);">
+                      <input type="checkbox" class="member-hidden-toggle" data-id="${m.id}" ${m.hidden ? 'checked' : ''}>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </td>
+                  <td style="padding:8px 4px; text-align:center;">
+                    <button class="member-edit-btn" data-id="${m.id}" style="color:var(--primary);">${ICONS.edit}</button>
+                  </td>
+                </tr>
+                ${hasExtra ? `
+                <tr style="background:${bg}; ${op} border-bottom:1px solid var(--border);">
+                  <td colspan="5" style="padding:2px 10px 8px; font-size:12px; color:var(--text-2);">
+                    ${m.address ? `📍 ${escapeHTML(m.address)}` : ''}${m.address && m.memo ? '　' : ''}${m.memo ? `📝 ${escapeHTML(m.memo)}` : ''}
+                  </td>
+                </tr>` : ''}
+              `;
+            }).join('')}
         </tbody>
       </table>
     </div>
