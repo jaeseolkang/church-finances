@@ -1,4 +1,4 @@
-// v1.35 | 2026-06-22 | 날짜 변경 기능, 즐겨찾기 템플릿 기능 추가
+// v1.36 | 2026-06-22 | 반복 거래 등록/적용 기능 추가
 'use strict';
 
 /* =========================================================
@@ -1522,74 +1522,18 @@ async function getTemplates() { return await DB.getAll('templates'); }
 async function saveTemplate(tpl) { await DB.put('templates', tpl); }
 async function deleteTemplate(id) { await DB.del('templates', id); }
 
-async function saveCurrentAsTemplate() {
-  const cat = catById(State.formCategoryId);
-  const person = State.formPersonId ? personById(State.formPersonId) : null;
-  const lines = Object.entries(State.formAmounts)
-    .filter(([, amt]) => Number(amt) > 0)
-    .map(([subItemId, amt]) => ({ subItemId, amount: Number(amt) }));
-  if (lines.length === 0) { showToast('금액을 입력한 후 저장해주세요'); return; }
-  const label = person ? person.name : cat.name;
-  const summary = lines.map(l => {
-    const si = subItemById(l.subItemId);
-    return `${si?.name || '항목'} ${fmtMoney(l.amount)}`;
-  }).join(', ');
-  const tpl = { id: uid(), name: `${label} (${summary})`, type: State.formType,
-    categoryId: State.formCategoryId, personId: State.formPersonId || null, lines, createdAt: Date.now() };
-  await saveTemplate(tpl);
-  showToast(`⭐ 템플릿 저장: ${tpl.name}`);
+// 반복 템플릿 키: 대분류+이름 조합마다 1개
+function tplKey(categoryId, personId) {
+  return `${categoryId}:${personId || ''}`;
 }
-
-async function openTemplateSheet(type) {
-  const all = (await getTemplates()).filter(t => t.type === type);
-  let sheet = document.getElementById('templateSheet');
-  if (!sheet) {
-    sheet = document.createElement('div');
-    sheet.id = 'templateSheet';
-    sheet.className = 'sheet';
-    sheet.style.zIndex = '97';
-    document.getElementById('app').appendChild(sheet);
-  }
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>즐겨찾기 템플릿</h3>
-      <button id="tplClose" class="sheet-close-btn">${ICONS.close}닫기</button>
-    </div>
-    <div class="sheet-body">
-      ${all.length === 0 ? `<div style="text-align:center; padding:32px 0; color:var(--text-3); font-size:14px;">
-        저장된 템플릿이 없어요.<br>거래 입력 후 ⭐ 버튼으로 저장해보세요.</div>` :
-      all.map(tpl => `
-        <div class="settings-row" style="justify-content:space-between;">
-          <div class="tpl-apply" data-id="${tpl.id}" style="flex:1; cursor:pointer;">
-            <div class="settings-label">${escapeHTML(tpl.name)}</div>
-          </div>
-          <button class="tpl-del" data-id="${tpl.id}" style="color:var(--expense);font-size:12px;padding:4px 10px;flex-shrink:0;">삭제</button>
-        </div>`).join('')}
-    </div>
-  `;
-  openSheet('templateSheet');
-  sheet.querySelector('#tplClose').addEventListener('click', () => closeSubSheet('templateSheet'));
-  sheet.querySelectorAll('.tpl-apply').forEach(el => {
-    el.addEventListener('click', async () => {
-      const tpl = (await getTemplates()).find(t => t.id === el.dataset.id);
-      if (!tpl) return;
-      State.formCategoryId = tpl.categoryId;
-      State.formPersonId   = tpl.personId;
-      State.formAmounts    = {};
-      tpl.lines.forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
-      State.formStep = 'items';
-      closeSubSheet('templateSheet');
-      renderTxSheet();
-    });
-  });
-  sheet.querySelectorAll('.tpl-del').forEach(el => {
-    el.addEventListener('click', async () => {
-      await deleteTemplate(el.dataset.id);
-      showToast('템플릿 삭제됨');
-      openTemplateSheet(type);
-    });
-  });
+async function getRepeatTpl(categoryId, personId) {
+  return await DB.get('templates', tplKey(categoryId, personId));
+}
+async function saveRepeatTpl(categoryId, personId, lines) {
+  await DB.put('templates', { id: tplKey(categoryId, personId), categoryId, personId: personId || null, lines });
+}
+async function deleteRepeatTpl(categoryId, personId) {
+  await DB.del('templates', tplKey(categoryId, personId));
 }
 
 // 지정 연/월 범위의 월 목록을 만든다. [{year, month}], month는 1~12
@@ -2217,10 +2161,7 @@ function renderTxStepPick(sheet) {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3>새 거래</h3>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button id="txTplBtn" style="font-size:12px;color:var(--primary);font-weight:700;padding:4px 8px;border:1.5px solid var(--primary);border-radius:8px;">⭐ 템플릿</button>
-        <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
-      </div>
+      <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
     </div>
     <div class="sheet-body">
       <div class="typeswitch">
@@ -2242,7 +2183,6 @@ function renderTxStepPick(sheet) {
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
-  sheet.querySelector('#txTplBtn').addEventListener('click', () => openTemplateSheet(State.formType));
   sheet.querySelectorAll('.typeswitch button').forEach(b => {
     b.addEventListener('click', () => {
       State.formType = b.dataset.type;
@@ -2251,10 +2191,15 @@ function renderTxStepPick(sheet) {
     });
   });
   sheet.querySelectorAll('[data-pick-cat]').forEach(b => {
-    b.addEventListener('click', () => {
+    b.addEventListener('click', async () => {
       State.formCategoryId = b.dataset.pickCat;
       State.formPersonId = b.dataset.pickPerson || null;
       State.formAmounts = {};
+      // 반복 등록된 항목이면 금액 자동 적용
+      const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
+      if (tpl) {
+        tpl.lines.forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
+      }
       State.formStep = 'items';
       renderTxSheet();
     });
@@ -2262,12 +2207,14 @@ function renderTxStepPick(sheet) {
 }
 
 /* ---- STEP 3: 세부항목 다중 입력 ---- */
-function renderTxStepItems(sheet) {
+async function renderTxStepItems(sheet) {
   const editing = State.editingTx;
   const cat = catById(State.formCategoryId);
   const person = State.formPersonId ? personById(State.formPersonId) : null;
   const items = sortItemsForEntry(subItemsOfCategory(cat.id));
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
+  const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
+  const hasTpl = !!tpl;
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -2282,10 +2229,18 @@ function renderTxStepItems(sheet) {
           </div>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button id="txTplSave" title="템플릿으로 저장" style="font-size:18px; line-height:1;">⭐</button>
           <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
           <button id="txSave" style="color:var(--primary); font-weight:800; font-size:14.5px; white-space:nowrap;">${editing ? '수정 완료' : '저장'}</button>
         </div>
+      </div>
+      <!-- 반복 버튼 영역 -->
+      <div style="display:flex; gap:8px;">
+        ${hasTpl ? `
+          <button id="txRepeatApply" style="flex:1; padding:8px 0; border-radius:10px; background:var(--primary); color:#fff; font-weight:700; font-size:13.5px;">🔄 반복 적용</button>
+          <button id="txRepeatDel" style="padding:8px 12px; border-radius:10px; border:1.5px solid var(--expense); color:var(--expense); font-size:12px;">반복 해제</button>
+        ` : `
+          <button id="txRepeatSave" style="flex:1; padding:8px 0; border-radius:10px; border:1.5px solid var(--border); color:var(--text-2); font-size:13.5px;">🔄 반복 등록</button>
+        `}
       </div>
       <div class="card" style="background:var(--bg); box-shadow:none; display:flex; justify-content:space-between; align-items:center; margin:0;">
         <span style="font-size:13.5px; color:var(--text-2); font-weight:600;">합계</span>
@@ -2318,7 +2273,38 @@ function renderTxStepItems(sheet) {
   `;
 
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
-  sheet.querySelector('#txTplSave').addEventListener('click', saveCurrentAsTemplate);
+  // 반복 버튼
+  const repeatApplyBtn = sheet.querySelector('#txRepeatApply');
+  const repeatSaveBtn  = sheet.querySelector('#txRepeatSave');
+  const repeatDelBtn   = sheet.querySelector('#txRepeatDel');
+  if (repeatApplyBtn) {
+    repeatApplyBtn.addEventListener('click', async () => {
+      const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
+      if (!tpl) return;
+      State.formAmounts = {};
+      tpl.lines.forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
+      await renderTxStepItems(sheet);
+      showToast('반복 금액이 적용됐어요');
+    });
+  }
+  if (repeatSaveBtn) {
+    repeatSaveBtn.addEventListener('click', async () => {
+      const lines = Object.entries(State.formAmounts)
+        .filter(([, v]) => Number(v) > 0)
+        .map(([subItemId, amount]) => ({ subItemId, amount: Number(amount) }));
+      if (lines.length === 0) { showToast('금액을 먼저 입력해주세요'); return; }
+      await saveRepeatTpl(State.formCategoryId, State.formPersonId, lines);
+      showToast('🔄 반복 등록됐어요');
+      await renderTxStepItems(sheet);
+    });
+  }
+  if (repeatDelBtn) {
+    repeatDelBtn.addEventListener('click', async () => {
+      await deleteRepeatTpl(State.formCategoryId, State.formPersonId);
+      showToast('반복 해제됐어요');
+      await renderTxStepItems(sheet);
+    });
+  }
   const dateInput = sheet.querySelector('#txDateInput');
   const updateDate = (e) => {
     if (e.target.value && e.target.value !== State.formDate) {
