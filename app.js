@@ -1290,7 +1290,7 @@ function renderSettings() {
 
 // 세부항목 표시명: 수입 세부항목 중 헌금 종류는 '...헌금' 접미어 부착
 // (대분류가 인물이름으로 바뀌었으므로 세부항목 이름 자체로 판단)
-const HEONG_SUBS_NO_SUFFIX = new Set(['십 일 조','통장이동','통장이동(퇴직)']);
+const HEONG_SUBS_NO_SUFFIX = new Set(['십 일 조','헌신예배','통장이동','통장이동(퇴직)']);
 function subItemDisplayName(catType, catName, subName) {
   // 이미 헌금으로 끝나면 그대로
   if (subName.endsWith('헌금')) return subName;
