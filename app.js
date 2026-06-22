@@ -1,4 +1,4 @@
-// v1.41 | 2026-06-23 18:00 KST | 수정: 명부 이름 컬럼 너비 확장 및 이름 nowrap 처리 | cache:v48
+// v1.41 | 2026-06-23 18:20 KST | 수정: memberRow allMembers→members 스코프 오류 수정, 이름 nowrap, 컬럼 너비 조정 | cache:v48
 'use strict';
 
 /* =========================================================
@@ -1379,7 +1379,7 @@ function renderMembers() {
     const op = m.hidden ? 'opacity:0.5;' : '';
     const genColor = genColors[m.generation] || 'var(--text-3)';
     const hasExtra = m.address || m.memo;
-    const headName = m.headId ? (allMembers.find(p => p.id === m.headId)?.name || '') : '';
+    const headName = m.headId ? (members.find(p => p.id === m.headId)?.name || '') : '';
     return `
       <tr style="border-top:1px solid var(--border); background:${bg}; ${op}">
         <td style="padding:8px 10px 8px ${indent ? '20px' : '10px'}; font-weight:700; min-width:80px;">
