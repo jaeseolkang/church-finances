@@ -1484,6 +1484,7 @@ function openDatePickerSheet(currentDate, onPick) {
     sheet = document.createElement('div');
     sheet.id = 'datePickerSheet';
     sheet.className = 'sheet';
+    sheet.style.zIndex = '97';
     document.getElementById('app').appendChild(sheet);
   }
   sheet.innerHTML = `
@@ -1511,7 +1512,7 @@ function openDatePickerSheet(currentDate, onPick) {
 
 function closeSubSheet(id) {
   const s = document.getElementById(id);
-  if (s) s.classList.remove('open');
+  if (s) s.classList.remove('show');
 }
 
 /* =========================================================
@@ -1546,6 +1547,7 @@ async function openTemplateSheet(type) {
     sheet = document.createElement('div');
     sheet.id = 'templateSheet';
     sheet.className = 'sheet';
+    sheet.style.zIndex = '97';
     document.getElementById('app').appendChild(sheet);
   }
   sheet.innerHTML = `
