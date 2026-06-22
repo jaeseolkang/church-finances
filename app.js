@@ -1,4 +1,4 @@
-// v1.41 | 2026-06-23 18:20 KST | 수정: memberRow allMembers→members 스코프 오류 수정, 이름 nowrap, 컬럼 너비 조정 | cache:v48
+// v1.42 | 2026-06-23 18:40 KST | 수정: 설정 데이터 항목 먹통 수정(autoBackup 에러 시 이벤트 등록 실패 방지) | cache:v49
 'use strict';
 
 /* =========================================================
@@ -1305,28 +1305,32 @@ function renderSettings() {
     if (el) el.textContent = t;
   });
 
-  // 자동 백업 토글 초기 상태
-  getAutoBackupEnabled().then(async enabled => {
-    const toggle = page.querySelector('#autoBackupToggle');
-    if (!toggle) return;
-    toggle.checked = enabled;
-    const folderRow = page.querySelector('#rowAutoBackupFolder');
-    const nowRow = page.querySelector('#rowAutoBackupNow');
-    if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
+  // 자동 백업 토글 초기 상태 (에러가 나도 아래 이벤트 등록에 영향 없도록 독립 실행)
+  (async () => {
+    try {
+      const enabled = await getAutoBackupEnabled();
+      const toggle = page.querySelector('#autoBackupToggle');
+      if (!toggle) return;
+      toggle.checked = enabled;
+      const folderRow = page.querySelector('#rowAutoBackupFolder');
+      const nowRow = page.querySelector('#rowAutoBackupNow');
+      if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
 
-    // 폴더 이름 표시
-    const dirHandle = await getAutoBackupDirHandle();
-    if (dirHandle) {
-      page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
-    }
+      try {
+        const dirHandle = await getAutoBackupDirHandle();
+        if (dirHandle) {
+          page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
+        }
+      } catch (_) { /* iOS 등 미지원 환경 무시 */ }
 
-    toggle.addEventListener('change', async () => {
-      await setAutoBackupEnabled(toggle.checked);
-      folderRow.style.display = toggle.checked ? '' : 'none';
-      nowRow.style.display = toggle.checked ? '' : 'none';
-      showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
-    });
-  });
+      toggle.addEventListener('change', async () => {
+        await setAutoBackupEnabled(toggle.checked);
+        folderRow.style.display = toggle.checked ? '' : 'none';
+        nowRow.style.display = toggle.checked ? '' : 'none';
+        showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
+      });
+    } catch (_) { /* autoBackup 초기화 실패 무시 */ }
+  })();
 
   page.querySelector('#rowAutoBackupFolder').addEventListener('click', pickAutoBackupFolder);
   page.querySelector('#rowAutoBackupNow').addEventListener('click', () => runAutoBackup(true));
