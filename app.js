@@ -1,4 +1,4 @@
-// v1.38 | 2026-06-23 | 명부 레이아웃 2행 구조로 변경, 폰트 통일 | cache:v46
+// v1.39 | 2026-06-23 | 명부 가족 그룹/세대/대표자 기능 추가 | cache:v47
 'use strict';
 
 /* =========================================================
@@ -1356,6 +1356,67 @@ function renderMembers() {
   const heongCat = State.categories.find(c => c.name === '헌금' && c.usePersonLevel);
   const members = heongCat ? personsOfCategory(heongCat.id, true) : [];
 
+  // 가족 그룹 묶기
+  const groups = {};   // { groupName: [member, ...] }
+  const noGroup = [];
+  for (const m of members) {
+    if (m.family) {
+      (groups[m.family] = groups[m.family] || []).push(m);
+    } else {
+      noGroup.push(m);
+    }
+  }
+  // 그룹 안에서 세대 순 정렬
+  const genOrder = { '1세대': 1, '2세대': 2, '3세대': 3 };
+  for (const g of Object.values(groups)) {
+    g.sort((a, b) => (genOrder[a.generation] || 9) - (genOrder[b.generation] || 9) || a.name.localeCompare(b.name, 'ko'));
+  }
+
+  const genColors = { '1세대': '#1a56db', '2세대': '#057a55', '3세대': '#c27803' };
+
+  const memberRow = (m, indent = false) => {
+    const bg = m.hidden ? 'rgba(0,0,0,0.04)' : 'transparent';
+    const op = m.hidden ? 'opacity:0.5;' : '';
+    const genColor = genColors[m.generation] || 'var(--text-3)';
+    const hasExtra = m.address || m.memo;
+    return `
+      <tr style="border-top:1px solid var(--border); background:${bg}; ${op}">
+        <td style="padding:8px 10px 8px ${indent ? '24px' : '10px'}; font-weight:700;">
+          ${m.generation ? `<span style="font-size:10px; color:${genColor}; font-weight:700; margin-right:4px; border:1px solid ${genColor}; border-radius:4px; padding:1px 4px;">${m.generation}</span>` : ''}
+          ${escapeHTML(m.name)}${m.position ? `<br><span style="font-size:11px; color:var(--text-3); font-weight:500;">${escapeHTML(m.position)}</span>` : ''}
+        </td>
+        <td style="padding:8px 10px;">${escapeHTML(m.residentId || '')}</td>
+        <td style="padding:8px 10px;">${escapeHTML(m.phone || '')}</td>
+        <td style="padding:8px 10px; text-align:center;">
+          <label class="toggle-switch" style="transform:scale(0.8);">
+            <input type="checkbox" class="member-hidden-toggle" data-id="${m.id}" ${m.hidden ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+        </td>
+        <td style="padding:8px 4px; text-align:center;">
+          <button class="member-edit-btn" data-id="${m.id}" style="color:var(--primary);">${ICONS.edit}</button>
+        </td>
+      </tr>
+      ${hasExtra ? `
+      <tr style="background:${bg}; ${op}">
+        <td colspan="5" style="padding:2px 10px 8px ${indent ? '24px' : '10px'}; font-size:12px; color:var(--text-2);">
+          ${m.address ? `📍 ${escapeHTML(m.address)}` : ''}${m.address && m.memo ? '　' : ''}${m.memo ? `📝 ${escapeHTML(m.memo)}` : ''}
+        </td>
+      </tr>` : ''}
+    `;
+  };
+
+  const groupRows = Object.entries(groups).sort(([a],[b]) => a.localeCompare(b,'ko')).map(([name, ms]) => `
+    <tr style="background:var(--primary-light, #eef2ff);">
+      <td colspan="5" style="padding:8px 10px; font-weight:800; font-size:13.5px; color:var(--primary);">
+        👨‍👩‍👧 ${escapeHTML(name)} <span style="font-size:11px; font-weight:500; color:var(--text-3);">${ms.length}명</span>
+      </td>
+    </tr>
+    ${ms.map(m => memberRow(m, true)).join('')}
+  `).join('');
+
+  const noGroupRows = noGroup.map(m => memberRow(m, false)).join('');
+
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>교인 명부</h1>
@@ -1373,41 +1434,16 @@ function renderMembers() {
           </tr>
         </thead>
         <tbody>
-          ${members.length === 0 ? `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>` :
-            members.map((m, i) => {
-              const bg = m.hidden ? 'rgba(0,0,0,0.04)' : (i%2===0 ? 'transparent' : 'var(--bg)');
-              const op = m.hidden ? 'opacity:0.5;' : '';
-              const hasExtra = m.address || m.memo;
-              return `
-                <tr style="border-top:1px solid var(--border); background:${bg}; ${op}">
-                  <td style="padding:8px 10px; font-weight:700;">${escapeHTML(m.name)}${m.position ? `<br><span style="font-size:11px; color:var(--text-3); font-weight:500;">${escapeHTML(m.position)}</span>` : ''}</td>
-                  <td style="padding:8px 10px;">${escapeHTML(m.residentId || '')}</td>
-                  <td style="padding:8px 10px;">${escapeHTML(m.phone || '')}</td>
-                  <td style="padding:8px 10px; text-align:center;">
-                    <label class="toggle-switch" style="transform:scale(0.8);">
-                      <input type="checkbox" class="member-hidden-toggle" data-id="${m.id}" ${m.hidden ? 'checked' : ''}>
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </td>
-                  <td style="padding:8px 4px; text-align:center;">
-                    <button class="member-edit-btn" data-id="${m.id}" style="color:var(--primary);">${ICONS.edit}</button>
-                  </td>
-                </tr>
-                ${hasExtra ? `
-                <tr style="background:${bg}; ${op} border-bottom:1px solid var(--border);">
-                  <td colspan="5" style="padding:2px 10px 8px; font-size:12px; color:var(--text-2);">
-                    ${m.address ? `📍 ${escapeHTML(m.address)}` : ''}${m.address && m.memo ? '　' : ''}${m.memo ? `📝 ${escapeHTML(m.memo)}` : ''}
-                  </td>
-                </tr>` : ''}
-              `;
-            }).join('')}
+          ${members.length === 0 ? `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>` : groupRows + (noGroup.length > 0 ? `
+            ${Object.keys(groups).length > 0 ? `<tr style="background:var(--bg);"><td colspan="5" style="padding:8px 10px; font-weight:800; font-size:13px; color:var(--text-2);">개인</td></tr>` : ''}
+            ${noGroupRows}
+          ` : '')}
         </tbody>
       </table>
     </div>
   `;
 
   page.querySelector('#memberAdd').addEventListener('click', () => openMemberEditSheet(null, heongCat));
-
   page.querySelectorAll('.member-hidden-toggle').forEach(cb => {
     cb.addEventListener('change', async () => {
       const p = await DB.get('persons', cb.dataset.id);
@@ -1418,7 +1454,6 @@ function renderMembers() {
       renderMembers();
     });
   });
-
   page.querySelectorAll('.member-edit-btn').forEach(b => {
     b.addEventListener('click', () => {
       const m = State.persons.find(p => p.id === b.dataset.id);
@@ -1437,7 +1472,16 @@ function openMemberEditSheet(member, heongCat) {
     document.getElementById('app').appendChild(sheet);
   }
   const isNew = !member;
-  const m = member || { id: uid(), name: '', position: '', residentId: '', phone: '', address: '', memo: '', hidden: false, createdAt: Date.now() };
+  const m = member || { id: uid(), name: '', position: '', residentId: '', phone: '', address: '', memo: '', hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '' };
+
+  // 가족 그룹 목록 (기존 그룹 + 새로 입력 가능)
+  const allMembers = heongCat ? personsOfCategory(heongCat.id, true) : [];
+  const familyGroups = [...new Set(allMembers.map(p => p.family).filter(Boolean))].sort((a,b) => a.localeCompare(b,'ko'));
+  const familyOptions = familyGroups.map(f => `<option value="${escapeHTML(f)}" ${m.family===f?'selected':''}>${escapeHTML(f)}</option>`).join('');
+  const headOptions = allMembers
+    .filter(p => p.id !== m.id)
+    .map(p => `<option value="${p.id}" ${m.headId===p.id?'selected':''}>${escapeHTML(p.name)}</option>`)
+    .join('');
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -1449,12 +1493,36 @@ function openMemberEditSheet(member, heongCat) {
       </div>
     </div>
     <div class="sheet-body">
+      <div style="font-size:12px; color:var(--text-3); font-weight:700; margin-bottom:4px; margin-top:4px;">기본 정보</div>
       <div class="formrow"><label>이름 *</label><input type="text" id="mName" class="dateinput" value="${escapeHTML(m.name)}" placeholder="이름"></div>
       <div class="formrow"><label>직분</label><input type="text" id="mPosition" class="dateinput" value="${escapeHTML(m.position||'')}" placeholder="예: 집사, 권사, 장로"></div>
       <div class="formrow"><label>주민번호</label><input type="text" id="mResidentId" class="dateinput" value="${escapeHTML(m.residentId||'')}" placeholder="000000-0000000"></div>
       <div class="formrow"><label>전화번호</label><input type="tel" id="mPhone" class="dateinput" value="${escapeHTML(m.phone||'')}" placeholder="010-0000-0000"></div>
       <div class="formrow"><label>주소</label><input type="text" id="mAddress" class="dateinput" value="${escapeHTML(m.address||'')}" placeholder="주소"></div>
       <div class="formrow"><label>비고</label><input type="text" id="mMemo" class="dateinput" value="${escapeHTML(m.memo||'')}" placeholder="메모"></div>
+
+      <div style="font-size:12px; color:var(--text-3); font-weight:700; margin:12px 0 4px;">가족 정보</div>
+      <div class="formrow">
+        <label>가족 그룹</label>
+        <input type="text" id="mFamily" class="dateinput" list="familyList" value="${escapeHTML(m.family||'')}" placeholder="예: 강재설 가족">
+        <datalist id="familyList">${familyOptions}</datalist>
+      </div>
+      <div class="formrow">
+        <label>세대</label>
+        <select id="mGeneration" class="dateinput">
+          <option value="">선택 안 함</option>
+          <option value="1세대" ${m.generation==='1세대'?'selected':''}>1세대 (조부모)</option>
+          <option value="2세대" ${m.generation==='2세대'?'selected':''}>2세대 (부모)</option>
+          <option value="3세대" ${m.generation==='3세대'?'selected':''}>3세대 (자녀)</option>
+        </select>
+      </div>
+      <div class="formrow">
+        <label>가족 대표자</label>
+        <select id="mHeadId" class="dateinput">
+          <option value="">없음 (본인이 대표)</option>
+          ${headOptions}
+        </select>
+      </div>
       ${!isNew ? `<button id="mEditDel" style="color:var(--expense);font-size:13px;margin-top:8px;">이 교인 삭제</button>` : ''}
     </div>
   `;
@@ -1467,12 +1535,15 @@ function openMemberEditSheet(member, heongCat) {
       ...m,
       categoryId: heongCat?.id || m.categoryId,
       name,
-      position: sheet.querySelector('#mPosition').value.trim(),
+      position:   sheet.querySelector('#mPosition').value.trim(),
       residentId: sheet.querySelector('#mResidentId').value.trim(),
-      phone: sheet.querySelector('#mPhone').value.trim(),
-      address: sheet.querySelector('#mAddress').value.trim(),
-      memo: sheet.querySelector('#mMemo').value.trim(),
-      createdAt: m.createdAt || Date.now(),
+      phone:      sheet.querySelector('#mPhone').value.trim(),
+      address:    sheet.querySelector('#mAddress').value.trim(),
+      memo:       sheet.querySelector('#mMemo').value.trim(),
+      family:     sheet.querySelector('#mFamily').value.trim(),
+      generation: sheet.querySelector('#mGeneration').value,
+      headId:     sheet.querySelector('#mHeadId').value || null,
+      createdAt:  m.createdAt || Date.now(),
     };
     await DB.put('persons', updated);
     await reloadData();
