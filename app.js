@@ -1,4 +1,4 @@
-// v1.62 | 2026-06-24 02:00 KST | 수정: 삭제시 거래 일자별 리스트+대중소 선택 이동 시트 | cache:v69
+// v1.63 | 2026-06-24 02:20 KST | 수정: 대/중/소 각 단계에서 예산 직접 입력, 하위→상위 자동합산 | cache:v70
 'use strict';
 
 /* =========================================================
@@ -3188,12 +3188,18 @@ function renderCatLevel1(sheet) {
       <div class="card" style="padding:4px 14px;">
         ${cats.length === 0 ? '<div style="padding:16px 2px;color:var(--text-3);font-size:13px;">등록된 항목이 없어요</div>' :
           cats.map(c => `
-          <div class="catrow" style="cursor:pointer;" data-go-cat="${c.id}">
-            <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
-            <div class="nm">${escapeHTML(c.name)}${c.usePersonLevel ? ' <span style="font-size:11px;color:var(--primary);font-weight:700;">· 하위항목</span>' : ''}</div>
-            <div class="budgetval tabular" style="font-size:12px;">${c.budget > 0 ? fmtMoney(c.budget)+'원' : ''}</div>
-            <button class="grip" data-edit-cat="${c.id}" style="margin-left:2px;">${ICONS.edit}</button>
-            <button class="grip" data-del-cat="${c.id}" style="color:var(--expense);">${ICONS.trash}</button>
+          <div style="border-bottom:1px solid var(--border);padding:4px 0;">
+            <div class="catrow" style="cursor:pointer;border:none;padding:4px 0;" data-go-cat="${c.id}">
+              <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
+              <div class="nm">${escapeHTML(c.name)}${c.usePersonLevel ? ' <span style="font-size:11px;color:var(--primary);font-weight:700;">· 하위항목</span>' : ''}</div>
+              <button class="grip" data-edit-cat="${c.id}" style="margin-left:2px;">${ICONS.edit}</button>
+              <button class="grip" data-del-cat="${c.id}" style="color:var(--expense);">${ICONS.trash}</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;padding:2px 0 4px 44px;">
+              <span style="font-size:11px;color:var(--text-3);">대분류 예산:</span>
+              <input type="text" inputmode="numeric" data-cat-budget="${c.id}" value="${c.budget?fmtMoney(c.budget):''}" placeholder="연간예산" style="width:100px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
+              <span style="font-size:11px;color:var(--text-3);">원</span>
+            </div>
           </div>`).join('')}
       </div>
       <button class="btn-secondary" id="catAddNew" style="color:var(--primary);font-weight:800;">+ 새 대분류 추가</button>
@@ -3212,6 +3218,25 @@ function renderCatLevel1(sheet) {
       renderCatManageSheet();
     });
   });
+  // 대분류 예산 입력 저장
+  sheet.querySelectorAll('[data-cat-budget]').forEach(input => {
+    attachMoneyInputFormatter(input, () => {});
+    const save = async () => {
+      const catId = input.dataset.catBudget;
+      const cat = catById(catId);
+      if (!cat) return;
+      const newVal = Number(rawDigits(input.value)) || 0;
+      if (cat.budget === newVal) return;
+      cat.budget = newVal;
+      await DB.put('categories', cat);
+      await reloadData(); renderCurrentPage();
+      showToast('대분류 예산 저장됐어요');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
+  });
+
   sheet.querySelectorAll('[data-edit-cat]').forEach(b => {
     b.addEventListener('click', (e) => { e.stopPropagation(); openCatEditSheet(b.dataset.editCat); });
   });
@@ -3265,12 +3290,20 @@ function renderCatLevel2(sheet) {
           groups.map(g => {
             const gSubs = subItemsOfGroup(g.id);
             const gBudget = gSubs.reduce((s,x) => s+(x.budget||0), 0);
-            return `<div class="catrow" style="cursor:pointer;" data-go-group="${g.id}">
-              <span style="font-size:16px;">📂</span>
-              <div class="nm">${escapeHTML(g.name)}</div>
-              <div style="font-size:11px;color:var(--text-3);">${gSubs.length}개${gBudget>0?' · '+fmtMoney(gBudget)+'원':''}</div>
-              <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
-              <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
+            return `<div style="border-bottom:1px solid var(--border);padding:6px 0;">
+              <div class="catrow" style="cursor:pointer;border:none;padding:0;" data-go-group="${g.id}">
+                <span style="font-size:16px;">📂</span>
+                <div class="nm">${escapeHTML(g.name)}</div>
+                <div style="font-size:11px;color:var(--text-3);">${gSubs.length}개</div>
+                <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
+                <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;padding:2px 0 4px 28px;">
+                <span style="font-size:11px;color:var(--text-3);">중분류 예산:</span>
+                <input type="text" inputmode="numeric" data-group-budget="${g.id}" data-cat-id="${cat.id}" value="${g.budget?fmtMoney(g.budget):''}" placeholder="연간예산" style="width:100px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
+                <span style="font-size:11px;color:var(--text-3);">원</span>
+                <span style="font-size:10px;color:var(--text-3);">(소분류 합산: ${gBudget>0?fmtMoney(gBudget)+'원':'없음'})</span>
+              </div>
             </div>`;
           }).join('')}
         <div class="cattree-addrow">
@@ -3338,6 +3371,28 @@ function renderCatLevel2(sheet) {
       e.stopPropagation();
       await deleteGroupWithConfirm(b.dataset.delGroup, cat.id);
     });
+  });
+
+  // 중분류 예산 입력 저장
+  sheet.querySelectorAll('[data-group-budget]').forEach(input => {
+    attachMoneyInputFormatter(input, () => {});
+    const save = async () => {
+      const gId = input.dataset.groupBudget;
+      const catId = input.dataset.catId;
+      const g = (State.subGroups||[]).find(x => x.id === gId);
+      if (!g) return;
+      const newVal = Number(rawDigits(input.value)) || 0;
+      if (g.budget === newVal) return;
+      g.budget = newVal;
+      await DB.put('subGroups', g);
+      // 대분류 예산 재합산 (소분류합 + 중분류직접입력합)
+      await recalcCatBudget(catId);
+      await reloadData(); renderCurrentPage();
+      showToast('중분류 예산 저장됐어요');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
   });
 
   // 소분류 직접 추가 (중분류 없는 경우)
@@ -3440,6 +3495,28 @@ function renderSubRow(s, catId) {
   </div>`;
 }
 
+// ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선) ──
+async function recalcCatBudget(catId) {
+  const cat = catById(catId);
+  if (!cat) return;
+  const groups = subGroupsOfCategory(catId);
+  const ungroupedSubs = subItemsOfCategory(catId).filter(s => !s.subGroupId);
+
+  let total = 0;
+  for (const g of groups) {
+    const gSubs = subItemsOfGroup(g.id);
+    const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
+    // 소분류 예산 합이 있으면 소분류 합 사용, 없으면 중분류 직접 입력값 사용
+    total += subTotal > 0 ? subTotal : (g.budget||0);
+  }
+  total += ungroupedSubs.reduce((s, x) => s + (x.budget||0), 0);
+
+  if (cat.budget !== total) {
+    cat.budget = total;
+    await DB.put('categories', cat);
+  }
+}
+
 // ── 소분류 이벤트 (수정/삭제/예산) ──
 function attachSubItemEvents(sheet, catId, groupId) {
   sheet.querySelectorAll('[data-budget-id]').forEach(input => {
@@ -3452,11 +3529,16 @@ function attachSubItemEvents(sheet, catId, groupId) {
       if (item.budget === newVal) return;
       item.budget = newVal;
       await DB.put('subItems', item);
-      // 대분류 예산 자동 합산
-      const allSubs = subItemsOfCategory(catId);
-      const catTotal = allSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
-      const catObj = catById(catId);
-      if (catObj) { catObj.budget = catTotal; await DB.put('categories', catObj); }
+      // 중분류 예산 재합산 (있는 경우)
+      if (item.subGroupId) {
+        const g = (State.subGroups||[]).find(x => x.id === item.subGroupId);
+        if (g) {
+          const gSubs = subItemsOfGroup(g.id);
+          const gTotal = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
+          if (g.budget !== gTotal) { g.budget = gTotal; await DB.put('subGroups', g); }
+        }
+      }
+      await recalcCatBudget(catId);
       await reloadData(); renderCurrentPage();
       showToast('예산 저장됐어요');
     };
