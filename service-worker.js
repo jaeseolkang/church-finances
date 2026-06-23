@@ -1,7 +1,7 @@
-// 2026-06-24 00:30 KST | 수정: CACHE_NAME v66
+// 2026-06-24 01:10 KST | 수정: CACHE_NAME v67, skipWaiting 메시지 핸들러 추가
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v66';
+const CACHE_NAME = 'gaegyebu-v67';
 const ASSETS = [
   './',
   './index.html',

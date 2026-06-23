@@ -1,4 +1,4 @@
-// v1.41 | 2026-06-23 18:20 KST | 수정: memberRow allMembers→members 스코프 오류 수정, 이름 nowrap, 컬럼 너비 조정 | cache:v48
+// v1.60 | 2026-06-24 01:00 KST | 수정: 3단계구조+예산연간화+명부보기전환+날짜클릭+4세대+autoBackup격리 | cache:v67
 'use strict';
 
 /* =========================================================
@@ -43,6 +43,10 @@ const DB = (() => {
         }
         if (!_db.objectStoreNames.contains('templates')) {
           _db.createObjectStore('templates', { keyPath: 'id' });
+        }
+        if (!_db.objectStoreNames.contains('subGroups')) {
+          const sg = _db.createObjectStore('subGroups', { keyPath: 'id' });
+          sg.createIndex('byCategory', 'categoryId');
         }
         if (!_db.objectStoreNames.contains('subGroups')) {
           const sg = _db.createObjectStore('subGroups', { keyPath: 'id' });
@@ -1442,28 +1446,28 @@ function renderSettings() {
     if (el) el.textContent = t;
   });
 
-  // 자동 백업 토글 초기 상태
-  getAutoBackupEnabled().then(async enabled => {
-    const toggle = page.querySelector('#autoBackupToggle');
-    if (!toggle) return;
-    toggle.checked = enabled;
-    const folderRow = page.querySelector('#rowAutoBackupFolder');
-    const nowRow = page.querySelector('#rowAutoBackupNow');
-    if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
-
-    // 폴더 이름 표시
-    const dirHandle = await getAutoBackupDirHandle();
-    if (dirHandle) {
-      page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
-    }
-
-    toggle.addEventListener('change', async () => {
-      await setAutoBackupEnabled(toggle.checked);
-      folderRow.style.display = toggle.checked ? '' : 'none';
-      nowRow.style.display = toggle.checked ? '' : 'none';
-      showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
-    });
-  });
+  // 자동 백업 토글 초기 상태 (에러가 나도 이벤트 등록에 영향 없도록 독립 실행)
+  (async () => {
+    try {
+      const enabled = await getAutoBackupEnabled();
+      const toggle = page.querySelector('#autoBackupToggle');
+      if (!toggle) return;
+      toggle.checked = enabled;
+      const folderRow = page.querySelector('#rowAutoBackupFolder');
+      const nowRow = page.querySelector('#rowAutoBackupNow');
+      if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
+      try {
+        const dirHandle = await getAutoBackupDirHandle();
+        if (dirHandle) page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
+      } catch (_) {}
+      toggle.addEventListener('change', async () => {
+        await setAutoBackupEnabled(toggle.checked);
+        folderRow.style.display = toggle.checked ? '' : 'none';
+        nowRow.style.display = toggle.checked ? '' : 'none';
+        showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
+      });
+    } catch (_) {}
+  })();
 
   page.querySelector('#rowAutoBackupFolder').addEventListener('click', pickAutoBackupFolder);
   page.querySelector('#rowAutoBackupNow').addEventListener('click', () => runAutoBackup(true));
@@ -2658,6 +2662,13 @@ function renderTxStepPick(sheet) {
     openCatEditSheet(null);
     catManageType = prevType;
   });
+  // 새 대분류 버튼 (항상 등록)
+  sheet.querySelector('#txAddNewCat')?.addEventListener('click', () => {
+    const prevType = catManageType;
+    catManageType = State.formType;
+    openCatEditSheet(null);
+    catManageType = prevType;
+  });
   sheet.querySelectorAll('.typeswitch button').forEach(b => {
     b.addEventListener('click', () => {
       State.formType = b.dataset.type;
@@ -2862,6 +2873,7 @@ async function renderTxStepItems(sheet) {
   };
   dateInput.addEventListener('change', updateDate);
   dateInput.addEventListener('input', updateDate);
+  sheet.querySelector('#txDateLabel')?.addEventListener('click', () => dateInput.showPicker?.() || dateInput.click());
   // 날짜 레이블 클릭 시 input 열기
   sheet.querySelector('#txDateLabel')?.addEventListener('click', () => dateInput.showPicker?.() || dateInput.click());
   const backBtn = sheet.querySelector('#txBack');
@@ -3466,7 +3478,7 @@ function openCatEditSheet(catId) {
         </div>
         ${draft.type === 'expense' ? `
           <div class="formrow">
-            <label>월 예산 (선택, 0이면 미설정)</label>
+            <label>연간 예산 (선택, 0이면 미설정)</label>
             <div class="amt-input-wrap" id="budgetWrap">
               <input type="text" inputmode="numeric" id="catBudget" placeholder="0" value="${draft.budget ? fmtMoney(draft.budget) : ''}">
               <span class="won">원</span>
