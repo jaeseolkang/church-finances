@@ -1,4 +1,4 @@
-// v1.68 | 2026-06-24 12:30 KST | 수정: 항목관리 시트 상단에 수입/지출 예산 총합계 표시 | cache:v73
+// v1.70 | 2026-06-24 15:00 KST | 수정: 예산탭 수입을 헌금종류별(소분류) 예산/실적으로 표시 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -287,6 +287,67 @@ function sortItemsForEntry(items) {
     if (ib !== -1) return 1;
     return a.name.localeCompare(b.name, 'ko');
   });
+}
+
+/* =========================================================
+   MIGRATION: persons → subGroups (v1.69)
+   헌금 대분류의 usePersonLevel persons 데이터를
+   subGroups로 전환하고 transactions.personId → subGroupId로 교체.
+   이미 마이그레이션된 경우 멱등성(idempotent) 보장.
+   ========================================================= */
+async function migratePersonsToSubGroups() {
+  const cats = await DB.getAll('categories');
+  const personLevelCats = cats.filter(c => c.usePersonLevel);
+  if (personLevelCats.length === 0) return; // 이미 완료 또는 해당 없음
+
+  const allPersons   = await DB.getAll('persons');
+  const allSubGroups = await DB.getAll('subGroups');
+  const allTxs       = await DB.getAll('transactions');
+
+  for (const cat of personLevelCats) {
+    const catPersons = allPersons.filter(p => p.categoryId === cat.id);
+    if (catPersons.length === 0) {
+      // persons 없으면 그냥 플래그만 내림
+      cat.usePersonLevel = false;
+      await DB.put('categories', cat);
+      continue;
+    }
+
+    // persons → subGroups 변환
+    // 이미 같은 이름의 subGroup이 있으면 재사용
+    const personIdToGroupId = {};
+    for (const p of catPersons) {
+      let existing = allSubGroups.find(g => g.categoryId === cat.id && g.name === p.name);
+      if (!existing) {
+        const newGroup = { id: uid(), categoryId: cat.id, name: p.name, order: p.order ?? 0 };
+        await DB.put('subGroups', newGroup);
+        existing = newGroup;
+        allSubGroups.push(newGroup); // 로컬 캐시에도 추가
+      }
+      personIdToGroupId[p.id] = existing.id;
+    }
+
+    // transactions.personId → subGroupId 교체
+    for (const t of allTxs) {
+      if (t.categoryId === cat.id && t.personId) {
+        const newGroupId = personIdToGroupId[t.personId];
+        if (newGroupId) {
+          t.subGroupId = newGroupId;
+          delete t.personId;
+          await DB.put('transactions', t);
+        }
+      }
+    }
+
+    // 대분류 플래그 내리기
+    cat.usePersonLevel = false;
+    await DB.put('categories', cat);
+
+    // persons 레코드 삭제 (헌금 카테고리 것만)
+    for (const p of catPersons) {
+      await DB.del('persons', p.id);
+    }
+  }
 }
 
 async function reloadData() {
@@ -725,8 +786,16 @@ function emptyStateHTML(msg, sub) {
 
 function txDisplayTitle(t) {
   const cat = catById(t.categoryId) || { name: '삭제된 항목' };
-  const person = t.personId ? personById(t.personId) : null;
-  return person ? person.name : cat.name;
+  // 신 구조: subGroupId, 구 구조(마이그레이션 전 잔존): personId
+  const sgId = t.subGroupId || t.personId;
+  if (sgId) {
+    const sg = (State.subGroups || []).find(g => g.id === sgId);
+    if (sg) return sg.name;
+    // personId 구버전 fallback
+    const p = personById(sgId);
+    if (p) return p.name;
+  }
+  return cat.name;
 }
 
 function txItemHTML(t) {
@@ -930,6 +999,61 @@ function renderBudget() {
     return html;
   };
 
+  // 수입 전용: subGroups 있는 대분류(헌금)는 공통 소분류(헌금종류)별 예산/실적 표시
+  const renderIncomeCatSection = (budgetCats) => {
+    if (budgetCats.length === 0) return `<div style="font-size:13px;color:var(--text-3);padding:12px 2px;">설정된 예산이 없어요</div>`;
+    return budgetCats.map(c => {
+      const hasGroups = subGroupsOfCategory(c.id).length > 0;
+      if (hasGroups) {
+        // 헌금 대분류: 공통 소분류(헌금종류)별 예산/실적
+        const commonSubs = subItemsOfCategory(c.id).filter(s => !s.subGroupId);
+        const budSubs = commonSubs.filter(s => s.budget > 0);
+        // 실적: 이 대분류 전체 거래의 line별 subItem 합산
+        const catSpent = incByCat[c.id] || 0;
+        const catBudget = c.budget || budSubs.reduce((s,x) => s + (x.budget||0), 0);
+        const catPct = catBudget > 0 ? Math.min(100, Math.round(catSpent / catBudget * 100)) : 0;
+        return `<div class="budget-item" style="margin-bottom:14px;">
+          <div class="budget-top">
+            <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}</div>
+            <div class="budget-nums tabular"><b>${fmtMoney(catSpent)}</b> / ${fmtMoney(catBudget)}원</div>
+          </div>
+          <div class="budget-track"><div class="budget-fill" style="width:${catPct}%; background:${budgetColor(catPct)};"></div></div>
+          <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${catPct}%</div>
+          ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
+            ${budSubs.map(s => {
+              const ss = incBySub[s.id] || 0;
+              const sp = s.budget > 0 ? Math.min(100, Math.round(ss / s.budget * 100)) : 0;
+              return `<div style="margin-bottom:5px;">
+                <div class="budget-top" style="font-size:12px;">
+                  <div style="font-weight:600;color:var(--text-1);">${escapeHTML(s.name)}</div>
+                  <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+                </div>
+                <div class="budget-track" style="height:5px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
+              </div>`;
+            }).join('')}
+          </div>` : `<div style="font-size:11px;color:var(--text-3);padding:4px 0 0 10px;">헌금종류별 예산은 항목 관리에서 소분류 예산을 설정하세요</div>`}
+        </div>`;
+      } else {
+        // 이자/기타: 기존 방식 (대분류 + 소분류)
+        const spent = incByCat[c.id] || 0;
+        const pct = c.budget > 0 ? Math.min(100, Math.round(spent / c.budget * 100)) : 0;
+        const budSubs = subItemsOfCategory(c.id).filter(s => s.budget > 0);
+        return `<div class="budget-item" style="margin-bottom:14px;">
+          <div class="budget-top">
+            <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}</div>
+            <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+          </div>
+          <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
+          <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
+          ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
+            ${renderSubsWithGroup(c, budSubs, incBySub)}
+          </div>` : ''}
+        </div>`;
+      }
+    }).join('');
+  };
+
+  // 지출 전용: 기존 방식 유지
   const renderCatSection = (budgetCats, spentByC, spentByS, type) => {
     if (budgetCats.length === 0) return `<div style="font-size:13px;color:var(--text-3);padding:12px 2px;">설정된 예산이 없어요</div>`;
     return budgetCats.map(c => {
@@ -981,7 +1105,7 @@ function renderBudget() {
     <!-- 수입 -->
     <div style="font-size:13px;font-weight:800;color:var(--income);margin:14px 0 8px;">📥 수입</div>
     <div class="card" style="margin-bottom:14px;">
-      ${renderCatSection(incomeBudgetCats, incByCat, incBySub, 'income')}
+      ${renderIncomeCatSection(incomeBudgetCats)}
       ${incomeBudgetCats.length === 0 ? '' : `<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
         <span>수입 합계</span><span>${fmtMoney(totalIncomeSpent)} / ${fmtMoney(totalIncomeBudget)}원</span>
       </div>`}
@@ -1847,7 +1971,7 @@ function subItemDisplayName(catType, catName, subName) {
 // 인물단계 없는 대분류: 대분류칸=대분류명, 소분류칸=세부항목명
 function explodeTxToRows(t) {
   const cat = catById(t.categoryId) || { name: '삭제된 항목', usePersonLevel: false, type: t.type };
-  const major = txDisplayTitle(t); // 인물단계 대분류면 인물 이름, 아니면 대분류명
+  const major = txDisplayTitle(t); // subGroup 이름(중분류) 또는 대분류명
   const lines = (t['lines'] && t['lines'].length > 0) ? t['lines'] : [{ subItemId: null, amount: t['amount'] }];
   return lines.map(l => {
     const si = l['subItemId'] ? subItemById(l['subItemId']) : null;
@@ -2509,7 +2633,8 @@ function openTxSheet(txId, presetDate, presetType) {
   if (editing) {
     State.formType = editing.type;
     State.formCategoryId = editing.categoryId;
-    State.formPersonId = editing.personId || null;
+    State.formPersonId = null; // persons 구조 사용 안 함 (마이그레이션 완료 후)
+    State.formSubGroupId = editing.subGroupId || editing.personId || null; // 구버전 호환
     State.formDate = editing.date;
     State.formMemo = editing.memo || '';
     State.formAmounts = {};
@@ -2545,18 +2670,13 @@ function renderTxStepPick(sheet) {
 
   const flat = [];
   for (const c of cats) {
-    if (c.usePersonLevel) {
-      for (const p of personsOfCategory(c.id)) {
-        flat.push({ catId: c.id, personId: p.id, subGroupId: null, name: p.name, icon: c.icon, color: c.color });
-      }
+    // usePersonLevel 구조 폐기 — subGroups 기반으로 통일
+    const groups = subGroupsOfCategory(c.id);
+    if (groups.length > 0) {
+      // 중분류(이름) 있는 대분류 → 대분류 자체를 선택 항목으로 (다음 단계에서 중분류 선택)
+      flat.push({ catId: c.id, personId: null, subGroupId: '__has_groups__', name: c.name, icon: c.icon, color: c.color });
     } else {
-      const groups = subGroupsOfCategory(c.id);
-      if (groups.length > 0) {
-        // 중분류 있는 대분류 → 대분류 자체를 선택 항목으로 (다음 단계에서 중분류 선택)
-        flat.push({ catId: c.id, personId: null, subGroupId: '__has_groups__', name: c.name, icon: c.icon, color: c.color });
-      } else {
-        flat.push({ catId: c.id, personId: null, subGroupId: null, name: c.name, icon: c.icon, color: c.color });
-      }
+      flat.push({ catId: c.id, personId: null, subGroupId: null, name: c.name, icon: c.icon, color: c.color });
     }
   }
   flat.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
@@ -2584,38 +2704,27 @@ function renderTxStepPick(sheet) {
         </div>
         ${flat.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">설정에서 대분류를 먼저 추가해주세요</div>` : ''}
       </div>
-      ${(() => {
-        // 헌금처럼 usePersonLevel인 대분류가 있으면 이름 추가 버튼 표시
-        const personCats = cats.filter(c => c.usePersonLevel);
-        if (!personCats.length) return '';
-        const opts = personCats.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
-        // 모든 수입 대분류를 대상으로 선택 가능하게
-        const allIncomeCats = cats; // 이미 수입 대분류만 필터된 상태
-        const catOpts = allIncomeCats.map(c =>
-          `<option value="${c.id}" data-person="${c.usePersonLevel?'1':'0'}">${escapeHTML(c.name)} ${c.usePersonLevel ? '(이름 선택)' : '(소분류 직접)' }</option>`
-        ).join('');
-        return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-            <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 항목 추가</button>
-            <span style="color:var(--border);">|</span>
-            <button id="txAddNewCat" style="font-size:13px;color:var(--text-2);font-weight:700;padding:6px 0;">+ 새 대분류</button>
-          </div>
-          <div id="txAddPersonForm" style="display:none;margin-top:2px;padding-bottom:60px;">
-            <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">대분류를 선택한 후 이름 또는 소분류를 추가합니다</div>
-            <select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
-              <option value="">-- 대분류 선택 --</option>
-              ${catOpts}
-            </select>
-            <div id="txAddPersonNameWrap" style="display:none;flex-direction:column;gap:6px;">
-              <div id="txAddPersonDesc" style="font-size:11px;color:var(--text-3);"></div>
-              <div style="display:flex;gap:6px;">
-                <input type="text" id="txAddPersonName" placeholder="이름 입력" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
-                <button id="txAddPersonSave" style="background:var(--primary);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;">추가</button>
-              </div>
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 항목 추가</button>
+          <span style="color:var(--border);">|</span>
+          <button id="txAddNewCat" style="font-size:13px;color:var(--text-2);font-weight:700;padding:6px 0;">+ 새 대분류</button>
+        </div>
+        <div id="txAddPersonForm" style="display:none;margin-top:2px;padding-bottom:60px;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">대분류를 선택한 후 중분류(이름) 또는 소분류를 추가합니다</div>
+          <select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+            <option value="">-- 대분류 선택 --</option>
+            ${cats.map(c => `<option value="${c.id}" data-hasgroups="${subGroupsOfCategory(c.id).length>0?'1':'0'}">${escapeHTML(c.name)}</option>`).join('')}
+          </select>
+          <div id="txAddPersonNameWrap" style="display:none;flex-direction:column;gap:6px;">
+            <div id="txAddPersonDesc" style="font-size:11px;color:var(--text-3);"></div>
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="txAddPersonName" placeholder="이름 입력" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+              <button id="txAddPersonSave" style="background:var(--primary);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;">추가</button>
             </div>
           </div>
-        </div>`;
-      })()}
+        </div>
+      </div>
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
@@ -2632,11 +2741,11 @@ function renderTxStepPick(sheet) {
     const desc = sheet.querySelector('#txAddPersonDesc');
     catSel?.addEventListener('change', () => {
       const opt = catSel.selectedOptions[0];
-      const isPersonLevel = opt?.dataset.person === '1';
+      const hasGroups = opt?.dataset.hasgroups === '1';
       if (catSel.value) {
         nameWrap.style.display = 'flex';
-        desc.textContent = isPersonLevel ? '이름(중분류) 추가' : '소분류 추가';
-        sheet.querySelector('#txAddPersonName').placeholder = isPersonLevel ? '교인 이름 입력' : '소분류 이름 입력';
+        desc.textContent = hasGroups ? '중분류(이름) 추가' : '소분류 추가';
+        sheet.querySelector('#txAddPersonName').placeholder = hasGroups ? '이름 입력 (예: 홍길동)' : '소분류 이름 입력';
         sheet.querySelector('#txAddPersonName').focus();
       } else {
         nameWrap.style.display = 'none';
@@ -2646,13 +2755,14 @@ function renderTxStepPick(sheet) {
       const catId = catSel.value;
       if (!catId) { showToast('대분류를 선택해주세요'); return; }
       const opt = catSel.selectedOptions[0];
-      const isPersonLevel = opt?.dataset.person === '1';
+      const hasGroups = opt?.dataset.hasgroups === '1';
       const name = sheet.querySelector('#txAddPersonName').value.trim();
       if (!name) { showToast('이름을 입력해주세요'); return; }
-      if (isPersonLevel) {
-        const list = personsOfCategory(catId);
-        if (list.find(p => p.name === name)) { showToast('이미 있는 이름이에요'); return; }
-        await DB.put('persons', { id: uid(), categoryId: catId, name, order: list.length });
+      if (hasGroups) {
+        // 중분류(이름) 추가
+        const list = subGroupsOfCategory(catId);
+        if (list.find(g => g.name === name)) { showToast('이미 있는 이름이에요'); return; }
+        await DB.put('subGroups', { id: uid(), categoryId: catId, name, order: list.length });
       } else {
         const list = subItemsOfCategory(catId);
         if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
@@ -2723,7 +2833,7 @@ function renderTxStepPickGroup(sheet) {
     </div>
     <div class="sheet-body">
       <div class="formrow">
-        <label>중분류 선택</label>
+        <label>이름 선택</label>
         <div class="catgrid">
           ${groups.map(g => `
             <button class="catchip" data-pick-group="${g.id}">
@@ -2771,13 +2881,20 @@ function renderTxStepPickGroup(sheet) {
 async function renderTxStepItems(sheet) {
   const editing = State.editingTx;
   const cat = catById(State.formCategoryId);
-  const person = State.formPersonId ? personById(State.formPersonId) : null;
-  // 중분류 있으면 해당 그룹 소분류만, 없으면 전체
+  // subGroupId 기반으로 표시 (persons 구조 폐기)
+  const subGroup = State.formSubGroupId ? (State.subGroups||[]).find(g => g.id === State.formSubGroupId) : null;
+  // 중분류(이름)가 선택된 경우:
+  //   해당 subGroup 전용 소분류 있으면 그것만, 없으면 subGroupId 없는 공통 소분류 표시
+  // 중분류 선택 안 된 경우: subGroupId 없는 소분류 전체
   const allCatItems = subItemsOfCategory(cat.id);
-  const groupedItems = State.formSubGroupId
-    ? allCatItems.filter(s => s.subGroupId === State.formSubGroupId)
-    : allCatItems.filter(s => !s.subGroupId);
-  const items = sortItemsForEntry(State.formSubGroupId ? groupedItems : allCatItems);
+  let items;
+  if (State.formSubGroupId) {
+    const dedicated = allCatItems.filter(s => s.subGroupId === State.formSubGroupId);
+    const common    = allCatItems.filter(s => !s.subGroupId);
+    items = sortItemsForEntry(dedicated.length > 0 ? dedicated : common);
+  } else {
+    items = sortItemsForEntry(allCatItems.filter(s => !s.subGroupId));
+  }
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
   const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
   const hasTpl = !!tpl;
@@ -2788,7 +2905,7 @@ async function renderTxStepItems(sheet) {
       <div style="display:flex; align-items:center; justify-content:space-between;">
         ${!editing ? `<button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>` : `<div style="width:40px;"></div>`}
         <div style="text-align:center;">
-          <h3 style="line-height:1.3;">${cat.icon} ${person ? escapeHTML(person.name) : cat.name}</h3>
+          <h3 style="line-height:1.3;">${cat.icon} ${subGroup ? escapeHTML(subGroup.name) : cat.name}</h3>
           <span id="txDateLabel" style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px; cursor:pointer;">${dayLabel(State.formDate)}</span>
             <input type="date" id="txDateInput" value="${State.formDate}" style="width:0;height:0;opacity:0;position:absolute;">
         </div>
@@ -2946,7 +3063,7 @@ async function saveTx() {
     .map(([subItemId, amt]) => ({ subItemId, amount: Number(amt) }));
 
   if (lines.length === 0) { showToast('금액을 1개 이상 입력해주세요'); return; }
-  if (cat.usePersonLevel && !State.formPersonId) { showToast('이름을 선택해주세요'); return; }
+  // usePersonLevel 구조 사용 안 함 — subGroupId 필수 여부는 subGroups 여부로 판단
   if (!date) { showToast('날짜를 선택해주세요'); return; }
 
   const total = lines.reduce((s, l) => s + l.amount, 0);
@@ -2955,7 +3072,7 @@ async function saveTx() {
     id: State.editingTx ? State.editingTx.id : uid(),
     type: State.formType,
     categoryId: State.formCategoryId,
-    personId: State.formPersonId || null,
+    subGroupId: State.formSubGroupId || null,
     lines,
     amount: total,
     date,
@@ -3283,7 +3400,7 @@ function renderCatLevel2(sheet) {
   if (!cat) { catManageLevel = 1; renderCatManageSheet(); return; }
   const groups = subGroupsOfCategory(cat.id);
   const subs = subItemsOfCategory(cat.id).filter(s => !s.subGroupId);
-  const persons = cat.usePersonLevel ? personsOfCategory(cat.id, true) : [];
+  // persons 구조 폐기
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -3293,24 +3410,7 @@ function renderCatLevel2(sheet) {
       <button id="catMClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
-      ${cat.usePersonLevel ? `
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">하위항목 (교인 이름)</div>
-        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-          ${persons.length === 0 ? '<div style="padding:12px 2px;color:var(--text-3);font-size:12px;">등록된 하위항목이 없어요</div>' :
-            persons.map(p => `
-            <div class="cattree-leaf" style="${p.hidden?'opacity:0.45;':''}">
-              <span style="flex:1;">${p.hidden?'🚫 ':''}${escapeHTML(p.name)}</span>
-              <div style="display:flex;gap:2px;">
-                <button class="grip" data-rename-person="${p.id}">${ICONS.edit}</button>
-                <button class="grip" data-del-person="${p.id}" style="color:var(--expense);">${ICONS.trash}</button>
-              </div>
-            </div>`).join('')}
-          <div class="cattree-addrow">
-            <input type="text" class="textinput" id="newPersonName" placeholder="새 하위항목 이름">
-            <button class="btn-secondary" id="addPersonBtn">추가</button>
-          </div>
-        </div>
-      ` : ''}
+      <!-- persons 구조 폐기: subGroups으로 완전 전환 -->
 
       <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">중분류</div>
       <div class="card" style="padding:4px 14px;margin-bottom:12px;">
@@ -3340,7 +3440,7 @@ function renderCatLevel2(sheet) {
         </div>
       </div>
 
-      ${!cat.usePersonLevel ? `
+      ${true ? `   // 소분류 섹션 항상 표시
         <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류 (중분류 없음)</div>
         <div class="card" style="padding:4px 14px;">
           ${subs.length === 0 ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">없음</div>' :
@@ -3437,32 +3537,7 @@ function renderCatLevel2(sheet) {
   // 소분류 수정/삭제
   attachSubItemEvents(sheet, cat.id, null);
 
-  // 하위항목(persons) 이벤트
-  sheet.querySelectorAll('[data-rename-person]').forEach(b => {
-    b.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const p = State.persons.find(x => x.id === b.dataset.renamePerson);
-      if (!p) return;
-      const name = prompt('이름 수정', p.name);
-      if (!name?.trim()) return;
-      p.name = name.trim();
-      await DB.put('persons', p); await reloadData(); renderCatManageSheet();
-    });
-  });
-  sheet.querySelectorAll('[data-del-person]').forEach(b => {
-    b.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await deletePersonWithConfirm(b.dataset.delPerson, cat.id);
-    });
-  });
-  sheet.querySelector('#addPersonBtn')?.addEventListener('click', async () => {
-    const name = sheet.querySelector('#newPersonName').value.trim();
-    if (!name) { showToast('이름을 입력해주세요'); return; }
-    const list = personsOfCategory(cat.id);
-    if (list.find(p => p.name === name)) { showToast('이미 있는 이름이에요'); return; }
-    await DB.put('persons', { id: uid(), categoryId: cat.id, name, order: list.length });
-    await reloadData(); renderCatManageSheet();
-  });
+  // persons 구조 폐기: 이벤트 핸들러 제거됨
 }
 
 // ── 레벨3: 소분류 목록 ──
@@ -3659,9 +3734,7 @@ function renderMoveSheet(sheet, step, selCatId, selGroupId) {
       b.addEventListener('click', () => {
         const cId = b.dataset.moveCat;
         const groups = subGroupsOfCategory(cId);
-        const hasPersonLevel = catById(cId)?.usePersonLevel;
         if (groups.length > 0) renderMoveSheet(sheet, 2, cId, null);
-        else if (hasPersonLevel) renderMoveSheet(sheet, 2, cId, null);
         else renderMoveSheet(sheet, 3, cId, null);
       });
     });
@@ -3673,7 +3746,7 @@ function renderMoveSheet(sheet, step, selCatId, selGroupId) {
     // 중분류 선택
     const cat = catById(selCatId);
     const groups = subGroupsOfCategory(selCatId);
-    const persons = cat?.usePersonLevel ? personsOfCategory(selCatId) : [];
+    const persons = []; // persons 구조 폐기
     sheet.innerHTML = `
       <div class="sheet-handle"></div>
       <div class="sheet-head">
@@ -3791,9 +3864,11 @@ async function doDeleteItem(doMove, targetCatId, targetGroupId, targetSubId, tar
         await DB.put('transactions', t);
       }
     } else if (d.type === 'person') {
+      // persons 구조 폐기 — subGroupId 기반으로 교체
       for (const t of d.txs) {
-        if (targetPersonId) t.personId = targetPersonId;
+        if (targetPersonId) t.subGroupId = targetPersonId; // 이동 대상이 subGroup id
         else if (targetCatId) t.categoryId = targetCatId;
+        delete t.personId;
         await DB.put('transactions', t);
       }
     }
@@ -4173,6 +4248,7 @@ async function addSubOrPerson(sheet, categoryId, mode) {
 async function initApp() {
   await DB.open();
   await seedIfEmpty();
+  await migratePersonsToSubGroups();
   await reloadData();
   renderShell();
   switchTab('home');
