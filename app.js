@@ -1,4 +1,4 @@
-// v1.63 | 2026-06-24 02:20 KST | 수정: 대/중/소 각 단계에서 예산 직접 입력, 하위→상위 자동합산 | cache:v70
+// v1.64 | 2026-06-24 02:40 KST | 수정: 이동 시트 소분류 없을때 확인 버튼 표시 | cache:v71
 'use strict';
 
 /* =========================================================
@@ -3701,18 +3701,27 @@ function renderMoveSheet(sheet, step, selCatId, selGroupId) {
       </div>
       <div class="sheet-body">
         ${txListHtml}
-        <div style="font-size:13px;font-weight:800;margin-bottom:8px;">소분류 선택</div>
-        <div class="catgrid">
-          ${subs.map(s => `
-            <button class="catchip" data-move-sub="${s.id}">
-              <span class="ic" style="background:${hexToLight(cat?.color||'#eee')};">${cat?.icon}</span>
-              <span>${escapeHTML(s.name)}</span>
-            </button>`).join('')}
-          ${subs.length === 0 ? `<div style="font-size:12px;color:var(--text-3);padding:8px;">소분류가 없습니다</div>` : ''}
-        </div>
-        <div style="margin-top:8px;">
-          <button id="moveToCatOnly" style="font-size:12px;color:var(--text-2);">소분류 없이 "${escapeHTML(cat?.name||'')}"로 이동</button>
-        </div>
+        ${subs.length > 0 ? `
+          <div style="font-size:13px;font-weight:800;margin-bottom:8px;">소분류 선택</div>
+          <div class="catgrid">
+            ${subs.map(s => `
+              <button class="catchip" data-move-sub="${s.id}">
+                <span class="ic" style="background:${hexToLight(cat?.color||'#eee')};">${cat?.icon}</span>
+                <span>${escapeHTML(s.name)}</span>
+              </button>`).join('')}
+          </div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+            <button id="moveToCatOnly" style="font-size:12px;color:var(--text-3);">소분류 없이 "${escapeHTML(groupName||cat?.name||'')}"로 이동</button>
+          </div>
+        ` : `
+          <div style="background:var(--income-light,#f0fdf4);border-radius:10px;padding:16px;text-align:center;margin-bottom:12px;">
+            <div style="font-size:13px;color:var(--text-2);margin-bottom:4px;">소분류가 없습니다</div>
+            <div style="font-size:12px;color:var(--text-3);">"${escapeHTML(groupName||cat?.name||'')}"(으)로 바로 이동합니다</div>
+          </div>
+          <button id="moveToCatOnly" style="width:100%;padding:12px;background:var(--primary);color:#fff;border-radius:10px;font-size:14px;font-weight:800;">
+            거래 ${d.txs.length}건 이동 후 삭제 확인
+          </button>
+        `}
       </div>`;
     sheet.querySelector('#moveBack').addEventListener('click', () => {
       if (selGroupId) renderMoveSheet(sheet, 2, selCatId, null);
