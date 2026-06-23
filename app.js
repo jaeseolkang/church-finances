@@ -807,9 +807,18 @@ function dateGroupLabel(dateStr) {
    ========================================================= */
 function renderBudget() {
   const page = document.getElementById('page-budget');
-  const list = txInCursorMonth().filter(t => t.type === 'expense');
+  const year = new Date(State.cursorDate + '-01').getFullYear();
+
+  // 해당 연도 지출 거래 집계
+  const yearTxs = State.transactions.filter(t => t.type === 'expense' && t.date.startsWith(String(year)));
   const spentByCat = {};
-  for (const t of list) spentByCat[t.categoryId] = (spentByCat[t.categoryId] || 0) + t.amount;
+  const spentBySub = {};
+  for (const t of yearTxs) {
+    spentByCat[t.categoryId] = (spentByCat[t.categoryId] || 0) + t.amount;
+    for (const l of (t.lines || [])) {
+      spentBySub[l.subItemId] = (spentBySub[l.subItemId] || 0) + l.amount;
+    }
+  }
 
   const budgetCats = State.categories.filter(c => c.type === 'expense' && c.budget > 0);
   const totalBudget = budgetCats.reduce((s,c) => s + c.budget, 0);
@@ -822,42 +831,57 @@ function renderBudget() {
       <button class="icon-btn" id="manageCatsBtn" style="width:auto;padding:0 14px;font-size:13px;font-weight:700;color:var(--primary);">항목 관리</button>
     </div>
     <div class="summary-month" style="justify-content:center; background:var(--card); border-radius:var(--radius-sm); padding:10px; box-shadow:var(--shadow); color:var(--text-1); margin-bottom:14px;">
-      <button id="prevMonth3" style="color:var(--text-2);">${ICONS.chevLeft}</button>
-      <span style="font-weight:700;">${monthLabel(State.cursorDate)}</span>
-      <button id="nextMonth3" style="color:var(--text-2);">${ICONS.chevRight}</button>
+      <button id="prevYear" style="color:var(--text-2);">${ICONS.chevLeft}</button>
+      <span style="font-weight:700;">${year}년 연간 예산</span>
+      <button id="nextYear" style="color:var(--text-2);">${ICONS.chevRight}</button>
     </div>
 
     ${budgetCats.length === 0 ? `
       <div class="card" style="text-align:center; padding:36px 20px;">
-        <div style="font-size:14px; color:var(--text-2); line-height:1.6;">설정된 예산이 없어요<br>항목 관리에서 카테고리별 예산을 설정해보세요</div>
+        <div style="font-size:14px; color:var(--text-2); line-height:1.6;">설정된 예산이 없어요<br>항목 관리 → 세부항목에서 연간 예산을 설정해보세요</div>
       </div>
     ` : `
       <div class="card" style="margin-bottom:16px;">
         <div class="budget-top">
-          <div class="budget-name">전체 예산</div>
+          <div class="budget-name">전체 연간 예산</div>
           <div class="budget-nums tabular"><b>${fmtMoney(totalSpent)}</b> / ${fmtMoney(totalBudget)}원</div>
         </div>
         <div class="budget-track"><div class="budget-fill" style="width:${totalPct}%; background:${budgetColor(totalPct)};"></div></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;text-align:right;">잔액 ${fmtMoney(Math.max(0, totalBudget-totalSpent))}원 (${totalPct}% 사용)</div>
       </div>
       <div class="card">
         ${budgetCats.map(c => {
           const spent = spentByCat[c.id] || 0;
           const pct = Math.min(100, Math.round(spent / c.budget * 100));
+          const subs = subItemsOfCategory(c.id).filter(s => s.budget > 0);
           return `
-            <div class="budget-item">
+            <div class="budget-item" style="margin-bottom:12px;">
               <div class="budget-top">
                 <div class="budget-name"><span style="font-size:16px;">${c.icon}</span>${c.name}</div>
                 <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
               </div>
               <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
+              ${subs.length > 0 ? `<div style="margin-top:8px;padding-left:8px;border-left:2px solid var(--border);">
+                ${subs.map(s => {
+                  const ss = spentBySub[s.id] || 0;
+                  const sp = Math.min(100, Math.round(ss / s.budget * 100));
+                  return `<div style="margin-bottom:6px;">
+                    <div class="budget-top" style="font-size:12px;">
+                      <div class="budget-name" style="font-size:12px;font-weight:600;">${escapeHTML(s.name)}</div>
+                      <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+                    </div>
+                    <div class="budget-track" style="height:6px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
+                  </div>`;
+                }).join('')}
+              </div>` : ''}
             </div>
           `;
         }).join('')}
       </div>
     `}
   `;
-  page.querySelector('#prevMonth3').addEventListener('click', () => changeMonth(-1));
-  page.querySelector('#nextMonth3').addEventListener('click', () => changeMonth(1));
+  page.querySelector('#prevYear').addEventListener('click', () => changeMonth(-12));
+  page.querySelector('#nextYear').addEventListener('click', () => changeMonth(12));
   page.querySelector('#manageCatsBtn').addEventListener('click', () => openCatManageSheet());
 }
 
@@ -3245,9 +3269,13 @@ function renderCatSubSheet(categoryId, mode) {
     <div class="sheet-body">
       <div class="card" style="padding:4px 14px;">
         ${list.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:16px 2px;">등록된 ${isItems?'세부항목이':'하위항목이'} 없어요</div>` : list.map(item => `
-          <div class="catrow" data-id="${item.id}">
+          <div class="catrow" data-id="${item.id}" style="flex-wrap:wrap;gap:4px;">
             ${!isItems ? `<div class="ic" style="background:${hexToLight(cat.color)};font-size:16px;">👤</div>` : ''}
-            <div class="nm" style="${isItems?'margin-left:2px;':''}">${escapeHTML(item.name)}</div>
+            <div class="nm" style="${isItems?'margin-left:2px;':''}flex:1;">${escapeHTML(item.name)}</div>
+            ${isItems && cat.type==='expense' ? `<div style="display:flex;align-items:center;gap:4px;font-size:12px;">
+              <input type="text" inputmode="numeric" data-budget-id="${item.id}" value="${item.budget ? fmtMoney(item.budget) : ''}" placeholder="연간예산" style="width:90px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;">
+              <span style="color:var(--text-3);">원</span>
+            </div>` : ''}
             <button class="grip" data-rename="${item.id}">${ICONS.edit}</button>
             <button class="grip" data-del="${item.id}" style="color:var(--expense);">${ICONS.trash}</button>
           </div>
@@ -3261,6 +3289,31 @@ function renderCatSubSheet(categoryId, mode) {
   `;
 
   sheet.querySelector('#subClose').addEventListener('click', closeAllSheets);
+
+  // 소분류 연간 예산 입력 → 저장 + 대분류 자동 합산
+  if (isItems && cat.type === 'expense') {
+    sheet.querySelectorAll('[data-budget-id]').forEach(input => {
+      attachMoneyInputFormatter(input, () => {});
+      input.addEventListener('change', async () => {
+        const item = list.find(x => x.id === input.dataset.budgetId);
+        if (!item) return;
+        item.budget = Number(rawDigits(input.value)) || 0;
+        await DB.put('subItems', item);
+        // 대분류 예산 = 소분류 예산 합산
+        const allSubs = subItemsOfCategory(categoryId);
+        // 방금 수정한 item도 반영
+        const updatedSubs = allSubs.map(s => s.id === item.id ? item : s);
+        const catTotal = updatedSubs.reduce((s, sub) => s + (sub.budget || 0), 0);
+        const catObj = catById(categoryId);
+        if (catObj) {
+          catObj.budget = catTotal;
+          await DB.put('categories', catObj);
+        }
+        await reloadData();
+        renderCurrentPage();
+      });
+    });
+  }
   sheet.querySelector('#subBack').addEventListener('click', () => { closeAllSheets(); openCatEditSheet(categoryId); });
 
   sheet.querySelectorAll('[data-rename]').forEach(b => {
