@@ -2484,12 +2484,6 @@ function renderTxStepPick(sheet) {
         nameWrap.style.display = 'none';
       }
     });
-    sheet.querySelector('#txAddNewCat')?.addEventListener('click', () => {
-      const prevType = catManageType;
-      catManageType = State.formType;
-      openCatEditSheet(null);
-      catManageType = prevType;
-    });
     sheet.querySelector('#txAddPersonSave')?.addEventListener('click', async () => {
       const catId = catSel.value;
       if (!catId) { showToast('대분류를 선택해주세요'); return; }
@@ -2511,6 +2505,13 @@ function renderTxStepPick(sheet) {
       renderTxStepPick(sheet);
     });
   }
+  // 새 대분류 추가 버튼 (항상 등록)
+  sheet.querySelector('#txAddNewCat')?.addEventListener('click', () => {
+    const prevType = catManageType;
+    catManageType = State.formType;
+    openCatEditSheet(null);
+    catManageType = prevType;
+  });
   sheet.querySelectorAll('.typeswitch button').forEach(b => {
     b.addEventListener('click', () => {
       State.formType = b.dataset.type;
