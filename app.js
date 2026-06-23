@@ -1,4 +1,4 @@
-// v1.64 | 2026-06-24 02:40 KST | 수정: 이동 시트 소분류 없을때 확인 버튼 표시 | cache:v71
+// v1.65 | 2026-06-24 02:50 KST | 수정: 이동 완료 후 삭제 전 위치로 자동 복귀 | cache:v72
 'use strict';
 
 /* =========================================================
@@ -3787,9 +3787,27 @@ async function doDeleteItem(doMove, targetCatId, targetGroupId, targetSubId, tar
     await DB.del('persons', d.id);
   }
 
+  // moveItemSheet 닫고 삭제 전 위치로 복귀
+  const returnLevel = d.returnLevel || 1;
+  const returnCatId = d.returnCatId || null;
+  const returnGroupId = d.returnGroupId || null;
+
   closeSheet('moveItemSheet');
   _deletingItem = null;
-  await reloadData(); renderCatManageSheet(); renderCurrentPage();
+  await reloadData();
+
+  // 삭제 후 상위 레벨로 복귀 (삭제된 항목이 있던 레벨의 부모)
+  if (returnLevel === 3) {
+    catManageLevel = 2;
+    catManageSelCatId = returnCatId;
+    catManageSelGroupId = null;
+  } else if (returnLevel === 2) {
+    catManageLevel = 1;
+  } else {
+    catManageLevel = 1;
+  }
+  renderCatManageSheet();
+  renderCurrentPage();
   showToast('삭제됐어요');
 }
 
@@ -3807,7 +3825,8 @@ async function deleteSubWithConfirm(subId, catId, groupId) {
   }
   // 거래 있으면 이동 시트 열기
   const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
-  openMoveSheet({ type: 'sub', id: subId, catId, groupId, name: item.name, txs: enriched });
+  openMoveSheet({ type: 'sub', id: subId, catId, groupId, name: item.name, txs: enriched,
+    returnLevel: groupId ? 3 : 2, returnCatId: catId, returnGroupId: groupId });
 }
 
 async function deleteGroupWithConfirm(groupId, catId) {
@@ -3824,7 +3843,8 @@ async function deleteGroupWithConfirm(groupId, catId) {
     return;
   }
   const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
-  openMoveSheet({ type: 'group', id: groupId, catId, name: group.name, txs: enriched, groupSubs: gSubs });
+  openMoveSheet({ type: 'group', id: groupId, catId, name: group.name, txs: enriched, groupSubs: gSubs,
+    returnLevel: 2, returnCatId: catId });
 }
 
 async function deleteCatWithConfirm(catId) {
@@ -3842,7 +3862,7 @@ async function deleteCatWithConfirm(catId) {
     return;
   }
   const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
-  openMoveSheet({ type: 'cat', id: catId, name: cat.name, txs: enriched });
+  openMoveSheet({ type: 'cat', id: catId, name: cat.name, txs: enriched, returnLevel: 1 });
 }
 
 async function deletePersonWithConfirm(personId, catId) {
@@ -3857,7 +3877,8 @@ async function deletePersonWithConfirm(personId, catId) {
     return;
   }
   const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
-  openMoveSheet({ type: 'person', id: personId, catId, name: p.name, txs: enriched });
+  openMoveSheet({ type: 'person', id: personId, catId, name: p.name, txs: enriched,
+    returnLevel: 2, returnCatId: catId });
 }
 
 
