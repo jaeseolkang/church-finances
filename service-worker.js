@@ -19,6 +19,11 @@ self.addEventListener('install', (e) => {
   );
 });
 
+// skipWaiting 메시지 처리
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 // 활성화: 구버전 캐시 삭제
 self.addEventListener('activate', (e) => {
   e.waitUntil(
