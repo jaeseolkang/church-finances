@@ -3325,14 +3325,15 @@ function renderCatSubSheet(categoryId, mode) {
   if (isItems) {
     sheet.querySelectorAll('[data-budget-id]').forEach(input => {
       attachMoneyInputFormatter(input, () => {});
-      input.addEventListener('change', async () => {
+      const saveBudget = async () => {
         const item = list.find(x => x.id === input.dataset.budgetId);
         if (!item) return;
-        item.budget = Number(rawDigits(input.value)) || 0;
+        const newVal = Number(rawDigits(input.value)) || 0;
+        if (item.budget === newVal) return;
+        item.budget = newVal;
         await DB.put('subItems', item);
         // 대분류 예산 = 소분류 예산 합산
         const allSubs = subItemsOfCategory(categoryId);
-        // 방금 수정한 item도 반영
         const updatedSubs = allSubs.map(s => s.id === item.id ? item : s);
         const catTotal = updatedSubs.reduce((s, sub) => s + (sub.budget || 0), 0);
         const catObj = catById(categoryId);
@@ -3342,7 +3343,10 @@ function renderCatSubSheet(categoryId, mode) {
         }
         await reloadData();
         renderCurrentPage();
-      });
+        showToast('예산 저장됐어요');
+      };
+      input.addEventListener('blur', saveBudget);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { input.blur(); } });
     });
   }
   sheet.querySelector('#subBack').addEventListener('click', () => { closeAllSheets(); openCatEditSheet(categoryId); });
