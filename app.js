@@ -3411,7 +3411,7 @@ function renderCatManageSheet() {
       e.stopPropagation();
       const gId = b.dataset.delGroup;
       const gSubs = subItemsOfGroup(gId);
-      if (!confirm(\`이 중분류를 삭제할까요? 하위 세부항목 \${gSubs.length}개도 함께 삭제됩니다.\`)) return;
+      if (!confirm(`이 중분류를 삭제할까요? 하위 세부항목 ${gSubs.length}개도 함께 삭제됩니다.`)) return;
       for (const s of gSubs) await DB.del('subItems', s.id);
       await DB.del('subGroups', gId);
       await reloadData();
