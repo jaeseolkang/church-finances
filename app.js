@@ -1,4 +1,4 @@
-// v1.74 | 2026-06-24 18:00 KST | 수정: 교인명부 persons↔subGroups 동기화, usePersonLevel 조건 제거 | cache:v73
+// v1.75 | 2026-06-24 19:00 KST | 수정: 엑셀 내보내기 헌금 중분류=이름 보장, 이름없으면 (이름없음) 표시 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -1987,14 +1987,29 @@ function subItemDisplayName(catType, catName, subName) {
 // 인물단계 없는 대분류: 대분류칸=대분류명, 소분류칸=세부항목명
 function explodeTxToRows(t) {
   const cat = catById(t.categoryId) || { name: '삭제된 항목', usePersonLevel: false, type: t.type };
-  const major = txDisplayTitle(t); // subGroup 이름(중분류) 또는 대분류명
+  const sgId = t.subGroupId || t.personId;
+  const sg = sgId ? (State.subGroups || []).find(g => g.id === sgId) : null;
+  const hasGroupStructure = subGroupsOfCategory(cat.id).length > 0;
+
+  // 중분류/소분류 결정
+  // - subGroups 있는 대분류(헌금): major=이름(subGroup), minor=헌금종류(subItem)
+  // - subGroups 없는 대분류:       major=대분류명,       minor=소분류명
+  let major, minor_prefix;
+  if (hasGroupStructure) {
+    major = sg ? sg.name : (cat.name + ' (이름없음)'); // 이름 필수
+    minor_prefix = '';  // 소분류명 그대로
+  } else {
+    major = cat.name;
+    minor_prefix = '';
+  }
+
   const lines = (t['lines'] && t['lines'].length > 0) ? t['lines'] : [{ subItemId: null, amount: t['amount'] }];
   return lines.map(l => {
     const si = l['subItemId'] ? subItemById(l['subItemId']) : null;
     const subName = si ? subItemDisplayName(cat['type'], cat['name'], si['name']) : '';
     return {
       date: t['date'],
-      major,   // 대분류명 = 인물이름 또는 카테고리명
+      major,
       minor: subName,
       amount: l['amount'],
       type: t['type'],
