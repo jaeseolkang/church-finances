@@ -1,4 +1,4 @@
-// v1.67 | 2026-06-24 12:00 KST | 수정: 거래 입력 비고(메모) 입력란 추가 | cache:v73
+// v1.68 | 2026-06-24 12:30 KST | 수정: 항목관리 시트 상단에 수입/지출 예산 총합계 표시 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -3190,6 +3190,14 @@ function renderCatManageSheet() {
 // ── 레벨1: 대분류 목록 ──
 function renderCatLevel1(sheet) {
   const cats = State.categories.filter(c => c.type === catManageType);
+
+  // 현재 탭(수입/지출) 예산 합계
+  const totalBudget = cats.reduce((s, c) => s + (c.budget || 0), 0);
+  const isIncomeCat = catManageType === 'income';
+  const budgetAccentColor = isIncomeCat ? 'var(--income)' : 'var(--expense)';
+  const budgetBgColor = isIncomeCat ? 'var(--income-light, #f0fdf4)' : 'var(--expense-light, #fff5f5)';
+  const budgetLabel = isIncomeCat ? '수입' : '지출';
+
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
@@ -3200,6 +3208,10 @@ function renderCatLevel1(sheet) {
       <div class="segctrl">
         <button data-type="expense" class="${catManageType==='expense'?'active':''}">지출 항목</button>
         <button data-type="income" class="${catManageType==='income'?'active':''}">수입 항목</button>
+      </div>
+      <div style="background:${budgetBgColor};border-radius:10px;padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;font-weight:800;color:${budgetAccentColor};">${budgetLabel} 연간 예산 합계</div>
+        <div style="font-size:17px;font-weight:900;color:${budgetAccentColor};" class="tabular">${totalBudget > 0 ? fmtMoney(totalBudget) + '원' : '미설정'}</div>
       </div>
       <div class="card" style="padding:4px 14px;">
         ${cats.length === 0 ? '<div style="padding:16px 2px;color:var(--text-3);font-size:13px;">등록된 항목이 없어요</div>' :
