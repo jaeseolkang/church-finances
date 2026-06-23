@@ -1,7 +1,7 @@
-// 2026-06-23 22:10 KST | 수정: CACHE_NAME v59
+// 2026-06-23 22:20 KST | 수정: CACHE_NAME v60
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v59';
+const CACHE_NAME = 'gaegyebu-v60';
 const ASSETS = [
   './',
   './index.html',

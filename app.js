@@ -1368,12 +1368,12 @@ function renderMembers() {
       noGroup.push(m);
     }
   }
-  const genOrder = { '1세대': 1, '2세대': 2, '3세대': 3 };
+  const genOrder = { '1세대': 1, '2세대': 2, '3세대': 3, '4세대': 4 };
   for (const g of Object.values(groups)) {
     g.sort((a, b) => (genOrder[a.generation] || 9) - (genOrder[b.generation] || 9) || a.name.localeCompare(b.name, 'ko'));
   }
 
-  const genColors = { '1세대': '#1a56db', '2세대': '#057a55', '3세대': '#c27803' };
+  const genColors = { '1세대': '#1a56db', '2세대': '#057a55', '3세대': '#c27803', '4세대': '#9333ea' };
 
   const memberRow = (m, indent = false) => {
     const bg = m.hidden ? 'rgba(0,0,0,0.04)' : 'transparent';
@@ -1534,6 +1534,7 @@ function openMemberEditSheet(member, heongCat) {
           <option value="1세대" ${m.generation==='1세대'?'selected':''}>1세대 (조부모)</option>
           <option value="2세대" ${m.generation==='2세대'?'selected':''}>2세대 (부모)</option>
           <option value="3세대" ${m.generation==='3세대'?'selected':''}>3세대 (자녀)</option>
+          <option value="4세대" ${m.generation==='4세대'?'selected':''}>4세대 (손자·손녀)</option>
         </select>
       </div>
       <div class="formrow">
