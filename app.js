@@ -1,4 +1,4 @@
-// v1.42 | 2026-06-23 18:40 KST | 수정: 설정 데이터 항목 먹통 수정(autoBackup 에러 시 이벤트 등록 실패 방지) | cache:v49
+// v1.41 | 2026-06-23 18:20 KST | 수정: memberRow allMembers→members 스코프 오류 수정, 이름 nowrap, 컬럼 너비 조정 | cache:v48
 'use strict';
 
 /* =========================================================
@@ -173,6 +173,7 @@ const State = {
   // 거래 입력 폼 진행 상태
   formType: 'expense',
   formStep: 'pick', // 'pick'(중분류 선택) -> 'items'
+  memberView: 'family', // 'family' | 'name'
   formCategoryId: null,
   formPersonId: null,
   formDate: null,
@@ -1305,32 +1306,28 @@ function renderSettings() {
     if (el) el.textContent = t;
   });
 
-  // 자동 백업 토글 초기 상태 (에러가 나도 아래 이벤트 등록에 영향 없도록 독립 실행)
-  (async () => {
-    try {
-      const enabled = await getAutoBackupEnabled();
-      const toggle = page.querySelector('#autoBackupToggle');
-      if (!toggle) return;
-      toggle.checked = enabled;
-      const folderRow = page.querySelector('#rowAutoBackupFolder');
-      const nowRow = page.querySelector('#rowAutoBackupNow');
-      if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
+  // 자동 백업 토글 초기 상태
+  getAutoBackupEnabled().then(async enabled => {
+    const toggle = page.querySelector('#autoBackupToggle');
+    if (!toggle) return;
+    toggle.checked = enabled;
+    const folderRow = page.querySelector('#rowAutoBackupFolder');
+    const nowRow = page.querySelector('#rowAutoBackupNow');
+    if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
 
-      try {
-        const dirHandle = await getAutoBackupDirHandle();
-        if (dirHandle) {
-          page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
-        }
-      } catch (_) { /* iOS 등 미지원 환경 무시 */ }
+    // 폴더 이름 표시
+    const dirHandle = await getAutoBackupDirHandle();
+    if (dirHandle) {
+      page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
+    }
 
-      toggle.addEventListener('change', async () => {
-        await setAutoBackupEnabled(toggle.checked);
-        folderRow.style.display = toggle.checked ? '' : 'none';
-        nowRow.style.display = toggle.checked ? '' : 'none';
-        showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
-      });
-    } catch (_) { /* autoBackup 초기화 실패 무시 */ }
-  })();
+    toggle.addEventListener('change', async () => {
+      await setAutoBackupEnabled(toggle.checked);
+      folderRow.style.display = toggle.checked ? '' : 'none';
+      nowRow.style.display = toggle.checked ? '' : 'none';
+      showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
+    });
+  });
 
   page.querySelector('#rowAutoBackupFolder').addEventListener('click', pickAutoBackupFolder);
   page.querySelector('#rowAutoBackupNow').addEventListener('click', () => runAutoBackup(true));
@@ -1359,9 +1356,10 @@ function renderMembers() {
   const page = document.getElementById('page-members');
   const heongCat = State.categories.find(c => c.name === '헌금' && c.usePersonLevel);
   const members = heongCat ? personsOfCategory(heongCat.id, true) : [];
+  const viewMode = State.memberView || 'family'; // 'family' | 'name'
 
   // 가족 그룹 묶기
-  const groups = {};   // { groupName: [member, ...] }
+  const groups = {};
   const noGroup = [];
   for (const m of members) {
     if (m.family) {
@@ -1370,7 +1368,6 @@ function renderMembers() {
       noGroup.push(m);
     }
   }
-  // 그룹 안에서 세대 순 정렬
   const genOrder = { '1세대': 1, '2세대': 2, '3세대': 3 };
   for (const g of Object.values(groups)) {
     g.sort((a, b) => (genOrder[a.generation] || 9) - (genOrder[b.generation] || 9) || a.name.localeCompare(b.name, 'ko'));
@@ -1413,6 +1410,7 @@ function renderMembers() {
     `;
   };
 
+  // 가족 보기
   const groupRows = Object.entries(groups).sort(([a],[b]) => a.localeCompare(b,'ko')).map(([name, ms]) => {
     const nameList = ms.map(m => m.name).join(', ');
     return `
@@ -1423,13 +1421,29 @@ function renderMembers() {
     </tr>
     ${ms.map(m => memberRow(m, true)).join('')}
   `;}).join('');
-
   const noGroupRows = noGroup.map(m => memberRow(m, false)).join('');
+
+  // 이름순 보기
+  const nameRows = [...members].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(m => memberRow(m, false)).join('');
+
+  const bodyRows = members.length === 0
+    ? `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>`
+    : viewMode === 'name'
+      ? nameRows
+      : groupRows + (noGroup.length > 0 ? `
+          ${Object.keys(groups).length > 0 ? `<tr style="background:var(--bg);"><td colspan="5" style="padding:8px 10px; font-weight:800; font-size:13px; color:var(--text-2);">개인</td></tr>` : ''}
+          ${noGroupRows}` : '');
 
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>교인 명부</h1>
-      <button id="memberAdd" style="color:var(--primary);font-weight:800;font-size:14px;">+ 추가</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;background:var(--border);border-radius:8px;padding:2px;gap:2px;">
+          <button id="viewFamily" style="font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;${viewMode==='family'?'background:#fff;color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,0.1);':'color:var(--text-3);'}">가족</button>
+          <button id="viewName" style="font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;${viewMode==='name'?'background:#fff;color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,0.1);':'color:var(--text-3);'}">이름순</button>
+        </div>
+        <button id="memberAdd" style="color:var(--primary);font-weight:800;font-size:14px;">+ 추가</button>
+      </div>
     </div>
     <div style="padding:0 0 120px;">
       <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-sans, -apple-system, sans-serif);">
@@ -1442,16 +1456,13 @@ function renderMembers() {
             <th style="padding:9px 4px; width:8%;"></th>
           </tr>
         </thead>
-        <tbody>
-          ${members.length === 0 ? `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-3);">등록된 교인이 없어요</td></tr>` : groupRows + (noGroup.length > 0 ? `
-            ${Object.keys(groups).length > 0 ? `<tr style="background:var(--bg);"><td colspan="5" style="padding:8px 10px; font-weight:800; font-size:13px; color:var(--text-2);">개인</td></tr>` : ''}
-            ${noGroupRows}
-          ` : '')}
-        </tbody>
+        <tbody>${bodyRows}</tbody>
       </table>
     </div>
   `;
 
+  page.querySelector('#viewFamily').addEventListener('click', () => { State.memberView = 'family'; renderMembers(); });
+  page.querySelector('#viewName').addEventListener('click', () => { State.memberView = 'name'; renderMembers(); });
   page.querySelector('#memberAdd').addEventListener('click', () => openMemberEditSheet(null, heongCat));
   page.querySelectorAll('.member-hidden-toggle').forEach(cb => {
     cb.addEventListener('change', async () => {
@@ -2415,9 +2426,46 @@ function renderTxStepPick(sheet) {
         </div>
         ${flat.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px;">설정에서 대분류를 먼저 추가해주세요</div>` : ''}
       </div>
+      ${(() => {
+        // 헌금처럼 usePersonLevel인 대분류가 있으면 이름 추가 버튼 표시
+        const personCats = cats.filter(c => c.usePersonLevel);
+        if (!personCats.length) return '';
+        const opts = personCats.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+        return `<div style="margin-top:8px;">
+          <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 이름 추가</button>
+          <div id="txAddPersonForm" style="display:none;margin-top:6px;display:none;">
+            ${personCats.length > 1 ? `<select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">${opts}</select>` : `<input type="hidden" id="txAddPersonCat" value="${personCats[0].id}">`}
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="txAddPersonName" placeholder="이름 입력" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+              <button id="txAddPersonSave" style="background:var(--primary);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;">추가</button>
+            </div>
+          </div>
+        </div>`;
+      })()}
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  // 새 이름 추가 버튼
+  const txAddBtn = sheet.querySelector('#txAddPerson');
+  if (txAddBtn) {
+    const form = sheet.querySelector('#txAddPersonForm');
+    txAddBtn.addEventListener('click', () => {
+      const visible = form.style.display !== 'none';
+      form.style.display = visible ? 'none' : 'block';
+      if (!visible) sheet.querySelector('#txAddPersonName')?.focus();
+    });
+    sheet.querySelector('#txAddPersonSave')?.addEventListener('click', async () => {
+      const catId = sheet.querySelector('#txAddPersonCat').value;
+      const name = sheet.querySelector('#txAddPersonName').value.trim();
+      if (!name) { showToast('이름을 입력해주세요'); return; }
+      const list = personsOfCategory(catId);
+      if (list.find(p => p.name === name)) { showToast('이미 있는 이름이에요'); return; }
+      await DB.put('persons', { id: uid(), categoryId: catId, name, order: list.length });
+      await reloadData();
+      showToast(`"${name}" 추가됐어요`);
+      renderTxStepPick(sheet);
+    });
+  }
   sheet.querySelectorAll('.typeswitch button').forEach(b => {
     b.addEventListener('click', () => {
       State.formType = b.dataset.type;

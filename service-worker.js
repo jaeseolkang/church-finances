@@ -1,7 +1,7 @@
-// 2026-06-23 18:50 KST | 수정: CACHE_NAME v49로 업데이트 (캐시 강제 갱신)
+// 2026-06-23 18:10 KST | 수정: fetch 캐싱을 ASSETS 목록 파일만으로 제한 (임의 fetch 캐시 오염 방지)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v49';
+const CACHE_NAME = 'gaegyebu-v50';
 const ASSETS = [
   './',
   './index.html',
