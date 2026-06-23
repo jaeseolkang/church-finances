@@ -11,7 +11,7 @@
    ========================================================= */
 const DB = (() => {
   const DB_NAME = 'budgetAppDB';
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   let db = null;
 
   function open() {
@@ -43,6 +43,10 @@ const DB = (() => {
         }
         if (!_db.objectStoreNames.contains('templates')) {
           _db.createObjectStore('templates', { keyPath: 'id' });
+        }
+        if (!_db.objectStoreNames.contains('subGroups')) {
+          const sg = _db.createObjectStore('subGroups', { keyPath: 'id' });
+          sg.createIndex('byCategory', 'categoryId');
         }
       };
       req.onsuccess = (e) => { db = e.target.result; resolve(db); };
@@ -160,6 +164,7 @@ const State = {
   categories: [],
   persons: [],
   subItems: [],
+  subGroups: [],
   transactions: [],
   statsType: 'expense',
   statsView: 'stats',        // 'stats'(통계) | 'detail'(내용)
@@ -176,6 +181,7 @@ const State = {
   memberView: 'family', // 'family' | 'name'
   formCategoryId: null,
   formPersonId: null,
+  formSubGroupId: null,
   formDate: null,
   formMemo: '',
   formAmounts: {}, // { subItemId: amountNumber }
@@ -247,6 +253,18 @@ function subItemById(id) {
 function subItemsOfCategory(catId) {
   return State.subItems.filter(s => s.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
+function subGroupsOfCategory(catId) {
+  return (State.subGroups || [])
+    .filter(g => g.categoryId === catId)
+    .sort((a,b) => (a.order??0)-(b.order??0));
+}
+
+function subItemsOfGroup(groupId) {
+  return State.subItems
+    .filter(s => s.subGroupId === groupId)
+    .sort((a,b) => (a.order??0)-(b.order??0));
+}
+
 function personsOfCategory(catId, includeHidden = false) {
   return State.persons
     .filter(p => p.categoryId === catId && (includeHidden || !p.hidden))
@@ -268,13 +286,14 @@ function sortItemsForEntry(items) {
 }
 
 async function reloadData() {
-  const [cats, persons, subItems, txs] = await Promise.all([
-    DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('transactions')
+  const [cats, persons, subItems, subGroups, txs] = await Promise.all([
+    DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('subGroups'), DB.getAll('transactions')
   ]);
   cats.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   State.categories = cats;
   State.persons = persons;
   State.subItems = subItems;
+  State.subGroups = subGroups || [];
   State.transactions = txs.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 }
 
@@ -2397,6 +2416,7 @@ function importData(e) {
       for (const c of data.categories) await DB.put('categories', c);
       for (const p of (data.persons || [])) await DB.put('persons', p);
       for (const s of (data.subItems || [])) await DB.put('subItems', s);
+      for (const g of (data.subGroups || [])) await DB.put('subGroups', g);
       for (const t of data.transactions) await DB.put('transactions', t);
       await reloadData();
       renderCurrentPage();
@@ -2497,6 +2517,8 @@ function renderTxSheet() {
   const sheet = document.getElementById('txSheet');
   if (State.formStep === 'pick') {
     renderTxStepPick(sheet);
+  } else if (State.formStep === 'pickGroup') {
+    renderTxStepPickGroup(sheet);
   } else {
     renderTxStepItems(sheet);
   }
@@ -2513,10 +2535,16 @@ function renderTxStepPick(sheet) {
   for (const c of cats) {
     if (c.usePersonLevel) {
       for (const p of personsOfCategory(c.id)) {
-        flat.push({ catId: c.id, personId: p.id, name: p.name, icon: c.icon, color: c.color });
+        flat.push({ catId: c.id, personId: p.id, subGroupId: null, name: p.name, icon: c.icon, color: c.color });
       }
     } else {
-      flat.push({ catId: c.id, personId: null, name: c.name, icon: c.icon, color: c.color });
+      const groups = subGroupsOfCategory(c.id);
+      if (groups.length > 0) {
+        // 중분류 있는 대분류 → 대분류 자체를 선택 항목으로 (다음 단계에서 중분류 선택)
+        flat.push({ catId: c.id, personId: null, subGroupId: '__has_groups__', name: c.name, icon: c.icon, color: c.color });
+      } else {
+        flat.push({ catId: c.id, personId: null, subGroupId: null, name: c.name, icon: c.icon, color: c.color });
+      }
     }
   }
   flat.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
@@ -2536,7 +2564,7 @@ function renderTxStepPick(sheet) {
         <label>항목 선택</label>
         <div class="catgrid">
           ${flat.map(item => `
-            <button class="catchip" data-pick-cat="${item.catId}" data-pick-person="${item.personId || ''}">
+            <button class="catchip" data-pick-cat="${item.catId}" data-pick-person="${item.personId || ''}" data-pick-subgroup="${item.subGroupId || ''}">
               <span class="ic" style="background:${hexToLight(item.color)};">${item.icon}</span>
               <span>${escapeHTML(item.name)}</span>
             </button>
@@ -2641,7 +2669,14 @@ function renderTxStepPick(sheet) {
     b.addEventListener('click', async () => {
       State.formCategoryId = b.dataset.pickCat;
       State.formPersonId = b.dataset.pickPerson || null;
+      State.formSubGroupId = null;
       State.formAmounts = {};
+      if (b.dataset.pickSubgroup === '__has_groups__') {
+        // 중분류 선택 단계로
+        State.formStep = 'pickGroup';
+        renderTxSheet();
+        return;
+      }
       // 반복 등록된 항목이면 금액 자동 적용
       const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
       if (tpl) {
@@ -2653,12 +2688,77 @@ function renderTxStepPick(sheet) {
   });
 }
 
+/* ---- STEP 2: 중분류 선택 (subGroup이 있는 대분류) ---- */
+function renderTxStepPickGroup(sheet) {
+  const cat = catById(State.formCategoryId);
+  const groups = subGroupsOfCategory(State.formCategoryId);
+  // 중분류 없는 소분류도 표시
+  const ungroupedItems = State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
+      <h3>${cat.icon} ${cat.name}</h3>
+      <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
+    </div>
+    <div class="sheet-body">
+      <div class="formrow">
+        <label>중분류 선택</label>
+        <div class="catgrid">
+          ${groups.map(g => `
+            <button class="catchip" data-pick-group="${g.id}">
+              <span class="ic" style="background:${hexToLight(cat.color)};">📂</span>
+              <span>${escapeHTML(g.name)}</span>
+            </button>
+          `).join('')}
+          ${ungroupedItems.map(s => `
+            <button class="catchip" data-pick-group-item="${s.id}">
+              <span class="ic" style="background:${hexToLight(cat.color)};">${cat.icon}</span>
+              <span>${escapeHTML(s.name)}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  sheet.querySelector('#txBack').addEventListener('click', () => {
+    State.formStep = 'pick';
+    State.formCategoryId = null;
+    renderTxSheet();
+  });
+  sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelectorAll('[data-pick-group]').forEach(b => {
+    b.addEventListener('click', async () => {
+      State.formSubGroupId = b.dataset.pickGroup;
+      State.formAmounts = {};
+      State.formStep = 'items';
+      renderTxSheet();
+    });
+  });
+  // 중분류 없는 소분류 직접 선택
+  sheet.querySelectorAll('[data-pick-group-item]').forEach(b => {
+    b.addEventListener('click', async () => {
+      State.formSubGroupId = null;
+      const subId = b.dataset.pickGroupItem;
+      State.formAmounts = { [subId]: 0 };
+      State.formStep = 'items';
+      renderTxSheet();
+    });
+  });
+}
+
 /* ---- STEP 3: 세부항목 다중 입력 ---- */
 async function renderTxStepItems(sheet) {
   const editing = State.editingTx;
   const cat = catById(State.formCategoryId);
   const person = State.formPersonId ? personById(State.formPersonId) : null;
-  const items = sortItemsForEntry(subItemsOfCategory(cat.id));
+  // 중분류 있으면 해당 그룹 소분류만, 없으면 전체
+  const allCatItems = subItemsOfCategory(cat.id);
+  const groupedItems = State.formSubGroupId
+    ? allCatItems.filter(s => s.subGroupId === State.formSubGroupId)
+    : allCatItems.filter(s => !s.subGroupId);
+  const items = sortItemsForEntry(State.formSubGroupId ? groupedItems : allCatItems);
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
   const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
   const hasTpl = !!tpl;
@@ -2767,7 +2867,8 @@ async function renderTxStepItems(sheet) {
   const backBtn = sheet.querySelector('#txBack');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      State.formStep = 'pick';
+      // 중분류에서 왔으면 중분류로, 아니면 pick으로
+      State.formStep = State.formSubGroupId ? 'pickGroup' : 'pick';
       renderTxSheet();
     });
   }
@@ -3099,9 +3200,45 @@ function renderCatManageSheet() {
                   ${persons.map(p => leafRow(p, 'persons', false)).join('')}
                   ${addRow('persons', '새 하위항목 이름')}
                 ` : ''}
-                <div class="cattree-subhead">세부항목 (${subs.length}개)</div>
-                ${subs.map(s => leafRow(s, 'subItems', true)).join('')}
-                ${addRow('items', '새 세부항목 이름')}
+                ${(() => {
+                  const groups = subGroupsOfCategory(c.id);
+                  if (groups.length === 0) {
+                    // 중분류 없음 - 기존 방식
+                    return `<div class="cattree-subhead">세부항목 (${subs.filter(s=>!s.subGroupId).length}개)
+                      <button data-add-group="${c.id}" style="font-size:11px;color:var(--primary);font-weight:700;margin-left:8px;">+ 중분류 추가</button>
+                    </div>
+                    ${subs.filter(s=>!s.subGroupId).map(s => leafRow(s, 'subItems', true)).join('')}
+                    ${addRow('items', '새 세부항목 이름')}`;
+                  }
+                  // 중분류 있음
+                  let html = `<div class="cattree-subhead">중분류/세부항목
+                    <button data-add-group="${c.id}" style="font-size:11px;color:var(--primary);font-weight:700;margin-left:8px;">+ 중분류 추가</button>
+                  </div>`;
+                  for (const g of groups) {
+                    const gSubs = subItemsOfGroup(g.id);
+                    html += `<div style="margin:4px 0 0 0;">
+                      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);">
+                        <span style="font-size:12px;font-weight:800;color:var(--text-2);flex:1;">📂 ${escapeHTML(g.name)}</span>
+                        <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
+                        <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
+                      </div>
+                      <div style="padding-left:12px;">
+                        ${gSubs.map(s => leafRow(s, 'subItems', true)).join('')}
+                        <div class="cattree-addrow">
+                          <input type="text" class="textinput" data-tree-addinput="${c.id}" data-tree-addmode="items" data-tree-addgroup="${g.id}" placeholder="새 세부항목">
+                          <button class="btn-secondary" data-tree-addbtn="${c.id}" data-tree-addmode="items" data-tree-addgroup="${g.id}">추가</button>
+                        </div>
+                      </div>
+                    </div>`;
+                  }
+                  // 중분류 없는 소분류
+                  const ungrouped = subs.filter(s => !s.subGroupId);
+                  if (ungrouped.length > 0) {
+                    html += `<div style="margin-top:4px;"><div style="font-size:11px;color:var(--text-3);padding:2px 0;">기타 세부항목</div>${ungrouped.map(s => leafRow(s,'subItems',true)).join('')}</div>`;
+                  }
+                  html += addRow('items', '새 세부항목 (중분류 없음)');
+                  return html;
+                })()}
               </div>
             ` : ''}
           </div>
@@ -3211,25 +3348,74 @@ function renderCatManageSheet() {
   });
 
   // 트리 안에서 바로 추가
-  const doTreeAdd = async (catId, mode) => {
-    const input = sheet.querySelector(`[data-tree-addinput][data-tree-addmode="${mode}"][data-tree-addinput="${catId}"]`);
-    const name = input.value.trim();
+  const doTreeAdd = async (catId, mode, groupId) => {
+    const input = groupId
+      ? sheet.querySelector(`[data-tree-addinput="${catId}"][data-tree-addgroup="${groupId}"]`)
+      : sheet.querySelector(`[data-tree-addinput="${catId}"][data-tree-addmode="${mode}"]:not([data-tree-addgroup])`);
+    const name = input?.value.trim();
     if (!name) { showToast('이름을 입력해주세요'); return; }
     const isItems = mode === 'items';
     const store = isItems ? 'subItems' : 'persons';
     const list = isItems ? subItemsOfCategory(catId) : personsOfCategory(catId);
     if (list.find(x => x.name === name)) { showToast('이미 있는 항목이에요'); return; }
-    await DB.put(store, { id: uid(), categoryId: catId, name, order: list.length });
+    const newItem = { id: uid(), categoryId: catId, name, order: list.length };
+    if (groupId) newItem.subGroupId = groupId;
+    await DB.put(store, newItem);
     await reloadData();
+    catManageExpanded.add(catId);
     renderCatManageSheet();
   };
   sheet.querySelectorAll('[data-tree-addbtn]').forEach(b => {
-    b.addEventListener('click', (e) => { e.stopPropagation(); doTreeAdd(b.dataset.treeAddbtn, b.dataset.treeAddmode); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); doTreeAdd(b.dataset.treeAddbtn, b.dataset.treeAddmode, b.dataset.treeAddgroup || null); });
   });
   sheet.querySelectorAll('[data-tree-addinput]').forEach(inp => {
     inp.addEventListener('click', (e) => e.stopPropagation());
     inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doTreeAdd(inp.dataset.treeAddinput, inp.dataset.treeAddmode);
+      if (e.key === 'Enter') doTreeAdd(inp.dataset.treeAddinput, inp.dataset.treeAddmode, inp.dataset.treeAddgroup || null);
+    });
+  });
+
+  // 중분류 추가
+  sheet.querySelectorAll('[data-add-group]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const catId = b.dataset.addGroup;
+      const name = prompt('중분류 이름');
+      if (!name?.trim()) return;
+      const groups = subGroupsOfCategory(catId);
+      await DB.put('subGroups', { id: uid(), categoryId: catId, name: name.trim(), order: groups.length });
+      await reloadData();
+      catManageExpanded.add(catId);
+      renderCatManageSheet();
+    });
+  });
+
+  // 중분류 이름 수정
+  sheet.querySelectorAll('[data-rename-group]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const g = (State.subGroups || []).find(x => x.id === b.dataset.renameGroup);
+      if (!g) return;
+      const name = prompt('중분류 이름 수정', g.name);
+      if (!name?.trim()) return;
+      g.name = name.trim();
+      await DB.put('subGroups', g);
+      await reloadData();
+      renderCatManageSheet();
+    });
+  });
+
+  // 중분류 삭제
+  sheet.querySelectorAll('[data-del-group]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const gId = b.dataset.delGroup;
+      const gSubs = subItemsOfGroup(gId);
+      if (!confirm(\`이 중분류를 삭제할까요? 하위 세부항목 \${gSubs.length}개도 함께 삭제됩니다.\`)) return;
+      for (const s of gSubs) await DB.del('subItems', s.id);
+      await DB.del('subGroups', gId);
+      await reloadData();
+      renderCatManageSheet();
     });
   });
 }
