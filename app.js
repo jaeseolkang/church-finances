@@ -1,4 +1,4 @@
-// v1.61 | 2026-06-24 01:30 KST | 수정: 항목관리 3단계UI(대→중→소), 삭제시 데이터이동옵션 | cache:v68
+// v1.62 | 2026-06-24 02:00 KST | 수정: 삭제시 거래 일자별 리스트+대중소 선택 이동 시트 | cache:v69
 'use strict';
 
 /* =========================================================
@@ -3486,128 +3486,287 @@ function attachSubItemEvents(sheet, catId, groupId) {
 }
 
 // ── 삭제 함수들 (데이터 이동 옵션 포함) ──
+// ── 거래 이동 시트 ──
+// deletingItem = { type: 'sub'|'group'|'cat'|'person', id, catId, groupId, name, txs }
+let _deletingItem = null;
+
+function openMoveSheet(deletingItem) {
+  _deletingItem = deletingItem;
+  let sheet = document.getElementById('moveItemSheet');
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = 'moveItemSheet';
+    sheet.className = 'sheet';
+    sheet.style.zIndex = '110';
+    document.getElementById('app').appendChild(sheet);
+  }
+  renderMoveSheet(sheet, 1, null, null); // 대분류 선택부터
+  openSheet('moveItemSheet');
+}
+
+function renderMoveSheet(sheet, step, selCatId, selGroupId) {
+  const d = _deletingItem;
+  const txs = d.txs;
+  const type = d.type; // 'sub','group','cat','person'
+  const txType = txs[0]?.type || 'expense';
+  const cats = State.categories.filter(c => c.type === txType);
+
+  // 거래 목록 HTML
+  const txListHtml = `
+    <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:4px;">관련 거래 ${txs.length}건</div>
+    <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">
+      ${txs.map(t => `
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;">
+          <span style="color:var(--text-2);">${t.date}</span>
+          <span style="font-weight:600;">${fmtMoney(t.amount)}원</span>
+        </div>`).join('')}
+    </div>`;
+
+  if (step === 1) {
+    // 대분류 선택
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h3>거래 이동: "${escapeHTML(d.name)}"</h3>
+        <button id="moveClose" class="sheet-close-btn">${ICONS.close}취소</button>
+      </div>
+      <div class="sheet-body">
+        ${txListHtml}
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px;">이동할 대분류 선택</div>
+        <div class="catgrid">
+          ${cats.map(c => `
+            <button class="catchip" data-move-cat="${c.id}">
+              <span class="ic" style="background:${hexToLight(c.color)};">${c.icon}</span>
+              <span>${escapeHTML(c.name)}</span>
+            </button>`).join('')}
+        </div>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+          <button id="moveDeleteOnly" style="font-size:13px;color:var(--expense);font-weight:700;">거래 이동 없이 항목만 삭제</button>
+        </div>
+      </div>`;
+    sheet.querySelector('#moveClose').addEventListener('click', () => { closeSheet('moveItemSheet'); _deletingItem = null; });
+    sheet.querySelectorAll('[data-move-cat]').forEach(b => {
+      b.addEventListener('click', () => {
+        const cId = b.dataset.moveCat;
+        const groups = subGroupsOfCategory(cId);
+        const hasPersonLevel = catById(cId)?.usePersonLevel;
+        if (groups.length > 0) renderMoveSheet(sheet, 2, cId, null);
+        else if (hasPersonLevel) renderMoveSheet(sheet, 2, cId, null);
+        else renderMoveSheet(sheet, 3, cId, null);
+      });
+    });
+    sheet.querySelector('#moveDeleteOnly').addEventListener('click', async () => {
+      await doDeleteItem(false, null, null, null);
+    });
+
+  } else if (step === 2) {
+    // 중분류 선택
+    const cat = catById(selCatId);
+    const groups = subGroupsOfCategory(selCatId);
+    const persons = cat?.usePersonLevel ? personsOfCategory(selCatId) : [];
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <button id="moveBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
+        <h3>${cat?.icon} ${escapeHTML(cat?.name||'')}</h3>
+        <button id="moveClose" class="sheet-close-btn">${ICONS.close}취소</button>
+      </div>
+      <div class="sheet-body">
+        ${txListHtml}
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px;">중분류 선택</div>
+        <div class="catgrid">
+          ${groups.map(g => `
+            <button class="catchip" data-move-group="${g.id}">
+              <span class="ic" style="background:${hexToLight(cat?.color||'#eee')};">📂</span>
+              <span>${escapeHTML(g.name)}</span>
+            </button>`).join('')}
+          ${persons.map(p => `
+            <button class="catchip" data-move-person="${p.id}">
+              <span class="ic" style="background:${hexToLight(cat?.color||'#eee')};">👤</span>
+              <span>${escapeHTML(p.name)}</span>
+            </button>`).join('')}
+          ${groups.length === 0 && persons.length === 0 ? `<button class="catchip" data-move-direct="${selCatId}">
+            <span class="ic" style="background:${hexToLight(cat?.color||'#eee')};">${cat?.icon}</span>
+            <span>직접 이동</span>
+          </button>` : ''}
+        </div>
+      </div>`;
+    sheet.querySelector('#moveBack').addEventListener('click', () => renderMoveSheet(sheet, 1, null, null));
+    sheet.querySelector('#moveClose').addEventListener('click', () => { closeSheet('moveItemSheet'); _deletingItem = null; });
+    sheet.querySelectorAll('[data-move-group]').forEach(b => {
+      b.addEventListener('click', () => renderMoveSheet(sheet, 3, selCatId, b.dataset.moveGroup));
+    });
+    sheet.querySelectorAll('[data-move-person]').forEach(b => {
+      b.addEventListener('click', async () => {
+        await doDeleteItem(true, selCatId, null, null, b.dataset.movePerson);
+      });
+    });
+    sheet.querySelectorAll('[data-move-direct]').forEach(b => {
+      b.addEventListener('click', () => renderMoveSheet(sheet, 3, selCatId, null));
+    });
+
+  } else {
+    // 소분류 선택
+    const cat = catById(selCatId);
+    const subs = selGroupId ? subItemsOfGroup(selGroupId) : subItemsOfCategory(selCatId).filter(s => !s.subGroupId);
+    const groupName = selGroupId ? (State.subGroups||[]).find(g=>g.id===selGroupId)?.name : '';
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <button id="moveBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
+        <h3>${escapeHTML(groupName || cat?.name||'')}</h3>
+        <button id="moveClose" class="sheet-close-btn">${ICONS.close}취소</button>
+      </div>
+      <div class="sheet-body">
+        ${txListHtml}
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px;">소분류 선택</div>
+        <div class="catgrid">
+          ${subs.map(s => `
+            <button class="catchip" data-move-sub="${s.id}">
+              <span class="ic" style="background:${hexToLight(cat?.color||'#eee')};">${cat?.icon}</span>
+              <span>${escapeHTML(s.name)}</span>
+            </button>`).join('')}
+          ${subs.length === 0 ? `<div style="font-size:12px;color:var(--text-3);padding:8px;">소분류가 없습니다</div>` : ''}
+        </div>
+        <div style="margin-top:8px;">
+          <button id="moveToCatOnly" style="font-size:12px;color:var(--text-2);">소분류 없이 "${escapeHTML(cat?.name||'')}"로 이동</button>
+        </div>
+      </div>`;
+    sheet.querySelector('#moveBack').addEventListener('click', () => {
+      if (selGroupId) renderMoveSheet(sheet, 2, selCatId, null);
+      else renderMoveSheet(sheet, 1, null, null);
+    });
+    sheet.querySelector('#moveClose').addEventListener('click', () => { closeSheet('moveItemSheet'); _deletingItem = null; });
+    sheet.querySelectorAll('[data-move-sub]').forEach(b => {
+      b.addEventListener('click', async () => {
+        await doDeleteItem(true, selCatId, selGroupId, b.dataset.moveSub);
+      });
+    });
+    sheet.querySelector('#moveToCatOnly')?.addEventListener('click', async () => {
+      await doDeleteItem(true, selCatId, selGroupId, null);
+    });
+  }
+}
+
+async function doDeleteItem(doMove, targetCatId, targetGroupId, targetSubId, targetPersonId) {
+  const d = _deletingItem;
+  if (doMove && d.txs.length > 0) {
+    if (d.type === 'sub') {
+      for (const t of d.txs) {
+        if (targetCatId) t.categoryId = targetCatId;
+        for (const l of (t.lines||[])) { if (l.subItemId === d.id && targetSubId) l.subItemId = targetSubId; }
+        await DB.put('transactions', t);
+      }
+    } else if (d.type === 'group') {
+      for (const t of d.txs) {
+        if (targetCatId) t.categoryId = targetCatId;
+        for (const l of (t.lines||[])) {
+          const sub = d.groupSubs?.find(s => s.id === l.subItemId);
+          if (sub && targetSubId) l.subItemId = targetSubId;
+        }
+        await DB.put('transactions', t);
+      }
+    } else if (d.type === 'cat') {
+      for (const t of d.txs) {
+        if (targetCatId) { t.categoryId = targetCatId; if (targetPersonId) t.personId = targetPersonId; }
+        await DB.put('transactions', t);
+      }
+    } else if (d.type === 'person') {
+      for (const t of d.txs) {
+        if (targetPersonId) t.personId = targetPersonId;
+        else if (targetCatId) t.categoryId = targetCatId;
+        await DB.put('transactions', t);
+      }
+    }
+    showToast(`거래 ${d.txs.length}건 이동 완료`);
+  }
+
+  // 실제 삭제
+  if (d.type === 'sub') {
+    await DB.del('subItems', d.id);
+  } else if (d.type === 'group') {
+    for (const s of (d.groupSubs||[])) await DB.del('subItems', s.id);
+    await DB.del('subGroups', d.id);
+  } else if (d.type === 'cat') {
+    for (const s of subItemsOfCategory(d.id)) await DB.del('subItems', s.id);
+    for (const g of subGroupsOfCategory(d.id)) await DB.del('subGroups', g.id);
+    for (const p of personsOfCategory(d.id, true)) await DB.del('persons', p.id);
+    await DB.del('categories', d.id);
+  } else if (d.type === 'person') {
+    await DB.del('persons', d.id);
+  }
+
+  closeSheet('moveItemSheet');
+  _deletingItem = null;
+  await reloadData(); renderCatManageSheet(); renderCurrentPage();
+  showToast('삭제됐어요');
+}
+
+// ── 삭제 진입점 ──
 async function deleteSubWithConfirm(subId, catId, groupId) {
   const item = await DB.get('subItems', subId);
   if (!item) return;
-  const txCount = State.transactions.filter(t => (t.lines||[]).some(l => l.subItemId === subId)).length;
-  if (txCount > 0) {
-    const otherSubs = (groupId ? subItemsOfGroup(groupId) : subItemsOfCategory(catId).filter(s => !s.subGroupId))
-      .filter(s => s.id !== subId);
-    if (otherSubs.length > 0) {
-      const opts = otherSubs.map((s,i) => `${i+1}. ${s.name}`).join('\n');
-      const ans = prompt(`"${item.name}"을 삭제하려 합니다.\n관련 거래가 ${txCount}건 있습니다.\n\n이동할 항목 번호를 입력하거나 0을 입력하면 거래는 유지되고 항목만 삭제됩니다.\n취소하려면 빈칸으로 닫으세요.\n\n${opts}`);
-      if (ans === null || ans === '') return;
-      const idx = parseInt(ans);
-      if (idx > 0 && idx <= otherSubs.length) {
-        const targetId = otherSubs[idx-1].id;
-        for (const t of State.transactions) {
-          let changed = false;
-          for (const l of (t.lines||[])) { if (l.subItemId === subId) { l.subItemId = targetId; changed = true; } }
-          if (changed) await DB.put('transactions', t);
-        }
-        showToast(`거래 ${txCount}건을 "${otherSubs[idx-1].name}"으로 이동했어요`);
-      }
-    } else {
-      if (!confirm(`"${item.name}" 삭제 시 관련 거래 ${txCount}건의 항목 정보가 사라집니다. 계속할까요?`)) return;
-    }
-  } else {
+  const txs = State.transactions.filter(t => (t.lines||[]).some(l => l.subItemId === subId));
+  if (txs.length === 0) {
     if (!confirm(`"${item.name}"을 삭제할까요?`)) return;
+    await DB.del('subItems', subId);
+    await reloadData(); renderCatManageSheet(); renderCurrentPage();
+    showToast('삭제됐어요');
+    return;
   }
-  await DB.del('subItems', subId);
-  await reloadData(); renderCatManageSheet(); renderCurrentPage();
-  showToast('삭제됐어요');
+  // 거래 있으면 이동 시트 열기
+  const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
+  openMoveSheet({ type: 'sub', id: subId, catId, groupId, name: item.name, txs: enriched });
 }
 
 async function deleteGroupWithConfirm(groupId, catId) {
   const group = (State.subGroups||[]).find(g => g.id === groupId);
   if (!group) return;
   const gSubs = subItemsOfGroup(groupId);
-  const txCount = State.transactions.filter(t => (t.lines||[]).some(l => gSubs.some(s => s.id === l.subItemId))).length;
-  if (txCount > 0) {
-    const otherGroups = subGroupsOfCategory(catId).filter(g => g.id !== groupId);
-    if (otherGroups.length > 0) {
-      const opts = otherGroups.map((g,i) => `${i+1}. ${g.name}`).join('\n');
-      const ans = prompt(`"${group.name}" 중분류를 삭제하려 합니다.\n관련 거래가 ${txCount}건 있습니다.\n\n이동할 중분류 번호를 입력하거나 0이면 거래 유지 후 삭제.\n\n${opts}`);
-      if (ans === null || ans === '') return;
-      const idx = parseInt(ans);
-      if (idx > 0 && idx <= otherGroups.length) {
-        const targetGroupId = otherGroups[idx-1].id;
-        for (const s of gSubs) { s.subGroupId = targetGroupId; await DB.put('subItems', s); }
-        showToast(`소분류를 "${otherGroups[idx-1].name}"으로 이동했어요`);
-      }
-    } else {
-      if (!confirm(`"${group.name}" 삭제 시 하위 소분류 ${gSubs.length}개와 관련 거래 ${txCount}건의 항목 정보가 사라집니다. 계속할까요?`)) return;
-      for (const s of gSubs) await DB.del('subItems', s.id);
-    }
-  } else {
+  const txs = State.transactions.filter(t => (t.lines||[]).some(l => gSubs.some(s => s.id === l.subItemId)));
+  if (txs.length === 0) {
     if (!confirm(`"${group.name}" 중분류와 하위 소분류 ${gSubs.length}개를 삭제할까요?`)) return;
     for (const s of gSubs) await DB.del('subItems', s.id);
+    await DB.del('subGroups', groupId);
+    await reloadData(); renderCatManageSheet();
+    showToast('삭제됐어요');
+    return;
   }
-  await DB.del('subGroups', groupId);
-  await reloadData(); renderCatManageSheet();
+  const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
+  openMoveSheet({ type: 'group', id: groupId, catId, name: group.name, txs: enriched, groupSubs: gSubs });
 }
 
 async function deleteCatWithConfirm(catId) {
   const cat = catById(catId);
   if (!cat) return;
-  const txCount = State.transactions.filter(t => t.categoryId === catId).length;
-  if (txCount > 0) {
-    const otherCats = State.categories.filter(c => c.type === cat.type && c.id !== catId);
-    if (otherCats.length > 0) {
-      const opts = otherCats.map((c,i) => `${i+1}. ${c.name}`).join('\n');
-      const ans = prompt(`"${cat.name}" 대분류를 삭제하려 합니다.\n관련 거래가 ${txCount}건 있습니다.\n\n이동할 대분류 번호를 입력하거나 0이면 거래 유지 후 삭제.\n\n${opts}`);
-      if (ans === null || ans === '') return;
-      const idx = parseInt(ans);
-      if (idx > 0 && idx <= otherCats.length) {
-        const targetId = otherCats[idx-1].id;
-        for (const t of State.transactions) {
-          if (t.categoryId === catId) { t.categoryId = targetId; await DB.put('transactions', t); }
-        }
-        showToast(`거래 ${txCount}건을 "${otherCats[idx-1].name}"으로 이동했어요`);
-      }
-    } else {
-      if (!confirm(`"${cat.name}" 삭제 시 관련 거래 ${txCount}건의 항목 정보가 사라집니다. 계속할까요?`)) return;
-    }
-  } else {
+  const txs = State.transactions.filter(t => t.categoryId === catId);
+  if (txs.length === 0) {
     if (!confirm(`"${cat.name}" 대분류를 삭제할까요? 하위 항목도 모두 삭제됩니다.`)) return;
+    for (const s of subItemsOfCategory(catId)) await DB.del('subItems', s.id);
+    for (const g of subGroupsOfCategory(catId)) await DB.del('subGroups', g.id);
+    for (const p of personsOfCategory(catId, true)) await DB.del('persons', p.id);
+    await DB.del('categories', catId);
+    await reloadData(); renderCatManageSheet(); renderCurrentPage();
+    showToast('삭제됐어요');
+    return;
   }
-  // 하위 소분류, 중분류, 하위항목 삭제
-  const subs = subItemsOfCategory(catId);
-  for (const s of subs) await DB.del('subItems', s.id);
-  const groups = subGroupsOfCategory(catId);
-  for (const g of groups) await DB.del('subGroups', g.id);
-  const persons = personsOfCategory(catId, true);
-  for (const p of persons) await DB.del('persons', p.id);
-  await DB.del('categories', catId);
-  await reloadData(); renderCatManageSheet(); renderCurrentPage();
-  showToast('삭제됐어요');
+  const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
+  openMoveSheet({ type: 'cat', id: catId, name: cat.name, txs: enriched });
 }
 
 async function deletePersonWithConfirm(personId, catId) {
   const p = State.persons.find(x => x.id === personId);
   if (!p) return;
-  const txCount = State.transactions.filter(t => t.personId === personId).length;
-  if (txCount > 0) {
-    const otherPersons = personsOfCategory(catId).filter(x => x.id !== personId);
-    if (otherPersons.length > 0) {
-      const opts = otherPersons.map((x,i) => `${i+1}. ${x.name}`).join('\n');
-      const ans = prompt(`"${p.name}"을 삭제하려 합니다.\n관련 거래가 ${txCount}건 있습니다.\n\n이동할 항목 번호 입력 또는 0이면 거래 유지 후 삭제.\n\n${opts}`);
-      if (ans === null || ans === '') return;
-      const idx = parseInt(ans);
-      if (idx > 0 && idx <= otherPersons.length) {
-        const targetId = otherPersons[idx-1].id;
-        for (const t of State.transactions) {
-          if (t.personId === personId) { t.personId = targetId; await DB.put('transactions', t); }
-        }
-      }
-    } else {
-      if (!confirm(`"${p.name}" 삭제 시 관련 거래 ${txCount}건의 항목 정보가 사라집니다. 계속할까요?`)) return;
-    }
-  } else {
+  const txs = State.transactions.filter(t => t.personId === personId);
+  if (txs.length === 0) {
     if (!confirm(`"${p.name}"을 삭제할까요?`)) return;
+    await DB.del('persons', personId);
+    await reloadData(); renderCatManageSheet();
+    showToast('삭제됐어요');
+    return;
   }
-  await DB.del('persons', personId);
-  await reloadData(); renderCatManageSheet();
+  const enriched = txs.map(t => ({ ...t, amount: (t.lines||[]).reduce((s,l) => s+(l.amount||0),0) }));
+  openMoveSheet({ type: 'person', id: personId, catId, name: p.name, txs: enriched });
 }
 
 
