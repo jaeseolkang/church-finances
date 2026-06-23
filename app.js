@@ -1574,6 +1574,7 @@ function openMemberEditSheet(member, heongCat) {
 
 /* =========================================================
    자동 백업 (매주 일요일)
+   ========================================================= */
 async function getAutoBackupEnabled() {
   const rec = await DB.get('settings', 'autoBackup');
   return rec ? rec.enabled : false;
