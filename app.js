@@ -1,4 +1,4 @@
-// v1.75 | 2026-06-24 19:00 KST | 수정: 엑셀 내보내기 헌금 중분류=이름 보장, 이름없으면 (이름없음) 표시 | cache:v73
+// v1.76 | 2026-06-24 20:00 KST | 수정: subGroups 가나다순 정렬 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -260,7 +260,7 @@ function subItemsOfCategory(catId) {
 function subGroupsOfCategory(catId) {
   return (State.subGroups || [])
     .filter(g => g.categoryId === catId)
-    .sort((a,b) => (a.order??0)-(b.order??0));
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
 }
 
 function subItemsOfGroup(groupId) {
