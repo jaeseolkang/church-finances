@@ -1,4 +1,4 @@
-// v1.66 | 2026-06-24 03:00 KST | 수정: closeSheet 함수 추가(moveItemSheet 닫기 안되던 버그) | cache:v73
+// v1.67 | 2026-06-24 12:00 KST | 수정: 거래 입력 비고(메모) 입력란 추가 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -2832,11 +2832,19 @@ async function renderTxStepItems(sheet) {
         ${items.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px 0;">세부항목이 없어요. 위에서 추가해주세요</div>` : ''}
       </div>
 
+      <div class="formrow" style="margin-top:10px;">
+        <label>비고</label>
+        <input type="text" class="textinput" id="txMemoInput" placeholder="메모 (선택)" maxlength="100" value="${escapeHTML(State.formMemo || '')}">
+      </div>
+
       ${editing ? `<button class="btn-secondary" id="txDelete" style="color:var(--expense);">삭제</button>` : ''}
     </div>
   `;
 
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelector('#txMemoInput').addEventListener('input', (e) => {
+    State.formMemo = e.target.value;
+  });
   // 반복 버튼
   const repeatApplyBtn = sheet.querySelector('#txRepeatApply');
   const repeatSaveBtn  = sheet.querySelector('#txRepeatSave');
@@ -2930,7 +2938,7 @@ async function addSubItemInline(sheet, categoryId) {
 
 async function saveTx() {
   const date = State.formDate;
-  const memo = '';
+  const memo = (State.formMemo || '').trim();
   const cat = catById(State.formCategoryId);
 
   const lines = Object.entries(State.formAmounts)
