@@ -1,4 +1,4 @@
-// v1.72 | 2026-06-24 17:00 KST | 수정: renderTxStepItems 진단 로그 추가 | cache:v73
+// v1.73 | 2026-06-24 17:30 KST | 수정: items 필터 버그 수정 - subGroupId 없을 때 전체 소분류 표시 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -2883,24 +2883,22 @@ async function renderTxStepItems(sheet) {
   const cat = catById(State.formCategoryId);
   // subGroupId 기반으로 표시 (persons 구조 폐기)
   const subGroup = State.formSubGroupId ? (State.subGroups||[]).find(g => g.id === State.formSubGroupId) : null;
-  // 진단 로그 (v1.72)
-  console.log('[TxItems] catId:', State.formCategoryId, 'cat:', cat?.name, 'subGroupId:', State.formSubGroupId);
-  console.log('[TxItems] State.subItems count:', State.subItems?.length);
-  const allDbItems = State.subItems?.filter(s => s.categoryId === State.formCategoryId);
-  console.log('[TxItems] items for this cat:', allDbItems?.length, allDbItems?.map(s=>s.name+'(sgId:'+s.subGroupId+')'));
+
   // 중분류(이름)가 선택된 경우:
   //   해당 subGroup 전용 소분류 있으면 그것만, 없으면 subGroupId 없는 공통 소분류 표시
   // 중분류 선택 안 된 경우: subGroupId 없는 소분류 전체
   const allCatItems = subItemsOfCategory(cat.id);
   let items;
   if (State.formSubGroupId) {
+    // 중분류(이름) 선택됨: 해당 subGroup 전용 소분류 우선, 없으면 공통(subGroupId 없는 것)
     const dedicated = allCatItems.filter(s => s.subGroupId === State.formSubGroupId);
     const common    = allCatItems.filter(s => !s.subGroupId);
     items = sortItemsForEntry(dedicated.length > 0 ? dedicated : common);
   } else {
-    items = sortItemsForEntry(allCatItems.filter(s => !s.subGroupId));
+    // 중분류 없이 바로 온 경우: subGroupId 무관하게 전체 표시
+    items = sortItemsForEntry(allCatItems);
   }
-  console.log('[TxItems] final items:', items.length, items.map(s=>s.name));
+
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
   const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
   const hasTpl = !!tpl;
