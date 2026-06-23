@@ -1,4 +1,4 @@
-// v1.73 | 2026-06-24 17:30 KST | 수정: items 필터 버그 수정 - subGroupId 없을 때 전체 소분류 표시 | cache:v73
+// v1.74 | 2026-06-24 18:00 KST | 수정: 교인명부 persons↔subGroups 동기화, usePersonLevel 조건 제거 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -1618,7 +1618,8 @@ function renderSettings() {
    ========================================================= */
 function renderMembers() {
   const page = document.getElementById('page-members');
-  const heongCat = State.categories.find(c => c.name === '헌금' && c.usePersonLevel);
+  // usePersonLevel 폐기 후에도 교인명부는 persons 스토어 사용
+  const heongCat = State.categories.find(c => c.name === '헌금');
   const members = heongCat ? personsOfCategory(heongCat.id, true) : [];
   const viewMode = State.memberView || 'family'; // 'family' | 'name'
 
@@ -1831,6 +1832,18 @@ function openMemberEditSheet(member, heongCat) {
       createdAt:  m.createdAt || Date.now(),
     };
     await DB.put('persons', updated);
+    // subGroups 동기화: 헌금 거래 입력의 이름 선택에도 반영
+    if (heongCat) {
+      const existingGroup = (State.subGroups || []).find(g => g.categoryId === heongCat.id && g.id === updated.id);
+      if (existingGroup) {
+        // 이름 변경 반영
+        existingGroup.name = updated.name;
+        await DB.put('subGroups', existingGroup);
+      } else {
+        // 신규 교인 → subGroup 추가
+        await DB.put('subGroups', { id: updated.id, categoryId: heongCat.id, name: updated.name, order: members.length });
+      }
+    }
     await reloadData();
     closeSubSheet('memberEditSheet');
     renderMembers();
@@ -1840,6 +1853,9 @@ function openMemberEditSheet(member, heongCat) {
     sheet.querySelector('#mEditDel').addEventListener('click', async () => {
       if (!confirm(`"${m.name}"을(를) 명부에서 삭제할까요?\n(기존 거래 데이터는 유지됩니다)`)) return;
       await DB.del('persons', m.id);
+      // subGroups에서도 삭제 (헌금 이름 선택 목록에서 제거)
+      const sg = (State.subGroups || []).find(g => g.id === m.id);
+      if (sg) await DB.del('subGroups', sg.id);
       await reloadData();
       closeSubSheet('memberEditSheet');
       renderMembers();
