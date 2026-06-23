@@ -2431,13 +2431,25 @@ function renderTxStepPick(sheet) {
         const personCats = cats.filter(c => c.usePersonLevel);
         if (!personCats.length) return '';
         const opts = personCats.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
-        return `<div style="margin-top:8px;">
-          <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 이름 추가</button>
-          <div id="txAddPersonForm" style="display:none;margin-top:6px;display:none;">
-            ${personCats.length > 1 ? `<select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">${opts}</select>` : `<input type="hidden" id="txAddPersonCat" value="${personCats[0].id}">`}
-            <div style="display:flex;gap:6px;">
-              <input type="text" id="txAddPersonName" placeholder="이름 입력" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
-              <button id="txAddPersonSave" style="background:var(--primary);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;">추가</button>
+        // 모든 수입 대분류를 대상으로 선택 가능하게
+        const allIncomeCats = cats; // 이미 수입 대분류만 필터된 상태
+        const catOpts = allIncomeCats.map(c =>
+          `<option value="${c.id}" data-person="${c.usePersonLevel?'1':'0'}">${escapeHTML(c.name)} ${c.usePersonLevel ? '(이름 선택)' : '(소분류 직접)' }</option>`
+        ).join('');
+        return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+          <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 항목 추가</button>
+          <div id="txAddPersonForm" style="display:none;margin-top:6px;">
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">대분류를 선택한 후 이름 또는 소분류를 추가합니다</div>
+            <select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+              <option value="">-- 대분류 선택 --</option>
+              ${catOpts}
+            </select>
+            <div id="txAddPersonNameWrap" style="display:none;flex-direction:column;gap:6px;">
+              <div id="txAddPersonDesc" style="font-size:11px;color:var(--text-3);"></div>
+              <div style="display:flex;gap:6px;">
+                <input type="text" id="txAddPersonName" placeholder="이름 입력" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+                <button id="txAddPersonSave" style="background:var(--primary);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;">추가</button>
+              </div>
             </div>
           </div>
         </div>`;
@@ -2445,22 +2457,45 @@ function renderTxStepPick(sheet) {
     </div>
   `;
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
-  // 새 이름 추가 버튼
+  // 새 항목 추가 버튼
   const txAddBtn = sheet.querySelector('#txAddPerson');
   if (txAddBtn) {
     const form = sheet.querySelector('#txAddPersonForm');
     txAddBtn.addEventListener('click', () => {
       const visible = form.style.display !== 'none';
       form.style.display = visible ? 'none' : 'block';
-      if (!visible) sheet.querySelector('#txAddPersonName')?.focus();
+    });
+    const catSel = sheet.querySelector('#txAddPersonCat');
+    const nameWrap = sheet.querySelector('#txAddPersonNameWrap');
+    const desc = sheet.querySelector('#txAddPersonDesc');
+    catSel?.addEventListener('change', () => {
+      const opt = catSel.selectedOptions[0];
+      const isPersonLevel = opt?.dataset.person === '1';
+      if (catSel.value) {
+        nameWrap.style.display = 'flex';
+        desc.textContent = isPersonLevel ? '이름(중분류) 추가' : '소분류 추가';
+        sheet.querySelector('#txAddPersonName').placeholder = isPersonLevel ? '교인 이름 입력' : '소분류 이름 입력';
+        sheet.querySelector('#txAddPersonName').focus();
+      } else {
+        nameWrap.style.display = 'none';
+      }
     });
     sheet.querySelector('#txAddPersonSave')?.addEventListener('click', async () => {
-      const catId = sheet.querySelector('#txAddPersonCat').value;
+      const catId = catSel.value;
+      if (!catId) { showToast('대분류를 선택해주세요'); return; }
+      const opt = catSel.selectedOptions[0];
+      const isPersonLevel = opt?.dataset.person === '1';
       const name = sheet.querySelector('#txAddPersonName').value.trim();
       if (!name) { showToast('이름을 입력해주세요'); return; }
-      const list = personsOfCategory(catId);
-      if (list.find(p => p.name === name)) { showToast('이미 있는 이름이에요'); return; }
-      await DB.put('persons', { id: uid(), categoryId: catId, name, order: list.length });
+      if (isPersonLevel) {
+        const list = personsOfCategory(catId);
+        if (list.find(p => p.name === name)) { showToast('이미 있는 이름이에요'); return; }
+        await DB.put('persons', { id: uid(), categoryId: catId, name, order: list.length });
+      } else {
+        const list = subItemsOfCategory(catId);
+        if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
+        await DB.put('subItems', { id: uid(), categoryId: catId, name, order: list.length });
+      }
       await reloadData();
       showToast(`"${name}" 추가됐어요`);
       renderTxStepPick(sheet);
