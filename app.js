@@ -1,4 +1,4 @@
-// v1.76 | 2026-06-24 20:00 KST | 수정: subGroups 가나다순 정렬 | cache:v73
+// v1.77 | 2026-06-24 20:30 KST | 수정: 엑셀 지정기간 날짜 선택을 연/월/일 드롭다운으로 변경 | cache:v74
 'use strict';
 
 /* =========================================================
@@ -2207,14 +2207,33 @@ function renderExcelRangeSheet() {
       </div>
       <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 달의 정식 교회 결산 양식으로 만들어요.</div>
       ` : `
-      <div class="formrow">
-        <label>시작 날짜</label>
-        <input type="date" class="dateinput" id="excCStart" min="${range.min}" max="${range.max}">
-      </div>
-      <div class="formrow">
-        <label>종료 날짜</label>
-        <input type="date" class="dateinput" id="excCEnd" min="${range.min}" max="${range.max}">
-      </div>
+      ${(() => {
+        // 연도/월 범위 파싱
+        const [minY, minM] = range.min.split('-').map(Number);
+        const [maxY, maxM] = range.max.split('-').map(Number);
+        const years = [];
+        for (let y = minY; y <= maxY; y++) years.push(y);
+        const monthOpts = Array.from({length:12},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">${i+1}월</option>`).join('');
+        const yearOptsStart = years.map(y=>`<option value="${y}">${y}년</option>`).join('');
+        const yearOptsEnd   = years.map(y=>`<option value="${y}">${y}년</option>`).join('');
+        return `
+        <div class="formrow">
+          <label>시작</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select class="dateinput" id="excStartY" style="flex:1;">${yearOptsStart}</select>
+            <select class="dateinput" id="excStartM" style="flex:1;">${monthOpts}</select>
+            <select class="dateinput" id="excStartD" style="flex:1;"></select>
+          </div>
+        </div>
+        <div class="formrow">
+          <label>종료</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select class="dateinput" id="excEndY" style="flex:1;">${yearOptsEnd}</select>
+            <select class="dateinput" id="excEndM" style="flex:1;">${monthOpts}</select>
+            <select class="dateinput" id="excEndD" style="flex:1;"></select>
+          </div>
+        </div>`;
+      })()}
       <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">정확히 선택한 기간의 거래만, 날짜·중분류·소분류·수입·지출·누계가 있는 줄 단위 표 1장으로 만들어요.</div>
       `}
 
@@ -2226,8 +2245,32 @@ function renderExcelRangeSheet() {
   if (excelMode === 'monthly') {
     sheet.querySelector('#excMSingle').value = months[months.length - 1];
   } else {
-    sheet.querySelector('#excCStart').value = range.min;
-    sheet.querySelector('#excCEnd').value   = range.max;
+    // 날일 select 채우기 함수
+    const fillDays = (ySel, mSel, dSel, defaultDay) => {
+      const y = Number(ySel.value), m = Number(mSel.value);
+      const days = new Date(y, m, 0).getDate();
+      dSel.innerHTML = Array.from({length:days},(_,i)=>{
+        const d = String(i+1).padStart(2,'0');
+        return `<option value="${d}">${i+1}일</option>`;
+      }).join('');
+      if (defaultDay) dSel.value = String(Math.min(Number(defaultDay), days)).padStart(2,'0');
+    };
+
+    const [minY, minM, minD] = range.min.split('-');
+    const [maxY, maxM, maxD] = range.max.split('-');
+
+    const sY = sheet.querySelector('#excStartY');
+    const sM = sheet.querySelector('#excStartM');
+    const sD = sheet.querySelector('#excStartD');
+    const eY = sheet.querySelector('#excEndY');
+    const eM = sheet.querySelector('#excEndM');
+    const eD = sheet.querySelector('#excEndD');
+
+    sY.value = minY; sM.value = minM; fillDays(sY, sM, sD, minD);
+    eY.value = maxY; eM.value = maxM; fillDays(eY, eM, eD, maxD);
+
+    [sY, sM].forEach(el => el.addEventListener('change', () => fillDays(sY, sM, sD, sD.value)));
+    [eY, eM].forEach(el => el.addEventListener('change', () => fillDays(eY, eM, eD, eD.value)));
   }
 
   sheet.querySelector('#excClose').addEventListener('click', closeAllSheets);
@@ -2240,9 +2283,12 @@ function renderExcelRangeSheet() {
 
   sheet.querySelector('#excGo').addEventListener('click', async () => {
     if (excelMode === 'custom') {
-      const sDate = sheet.querySelector('#excCStart').value;
-      const eDate = sheet.querySelector('#excCEnd').value;
-      if (!sDate || !eDate) { showToast('날짜를 선택해주세요'); return; }
+      const sDate = sheet.querySelector('#excStartY').value + '-' +
+                    sheet.querySelector('#excStartM').value + '-' +
+                    sheet.querySelector('#excStartD').value;
+      const eDate = sheet.querySelector('#excEndY').value + '-' +
+                    sheet.querySelector('#excEndM').value + '-' +
+                    sheet.querySelector('#excEndD').value;
       if (sDate > eDate) { showToast('시작 날짜가 종료 날짜보다 늦어요'); return; }
       const wb = generateCustomRangeWorkbook(sDate, eDate);
       XLSX.writeFile(wb, `회계부-지정기간-${sDate}_${eDate}.xlsx`);
