@@ -1,4 +1,4 @@
-// v1.65 | 2026-06-24 02:50 KST | 수정: 이동 완료 후 삭제 전 위치로 자동 복귀 | cache:v72
+// v1.66 | 2026-06-24 03:00 KST | 수정: closeSheet 함수 추가(moveItemSheet 닫기 안되던 버그) | cache:v73
 'use strict';
 
 /* =========================================================
@@ -2463,6 +2463,14 @@ function closeAllSheets() {
 function openSheet(id) {
   document.getElementById('sheetBackdrop').classList.add('show');
   document.getElementById(id).classList.add('show');
+}
+
+function closeSheet(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+  // 남은 시트가 없으면 backdrop도 제거
+  const anyOpen = document.querySelectorAll('.sheet.show').length > 0;
+  if (!anyOpen) document.getElementById('sheetBackdrop').classList.remove('show');
 }
 
 // 거래입력 시트(txSheet)만 닫기: 일별상세/통계항목상세에서 열렸으면 그 화면으로 복귀, 아니면 전체 닫기
