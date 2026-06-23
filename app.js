@@ -3004,8 +3004,12 @@ function renderCatManageSheet() {
           const hasChildren = subs.length > 0 || persons.length > 0;
           const expanded = catManageExpanded.has(c.id);
           const leafRow = (item, store, isItems) => `
-            <div class="cattree-leaf" style="${item.hidden ? 'opacity:0.45;' : ''}">
-              <span>${item.hidden ? '🚫 ' : ''}${escapeHTML(item.name)}</span>
+            <div class="cattree-leaf" style="${item.hidden ? 'opacity:0.45;' : ''}; flex-wrap:wrap; gap:4px;">
+              <span style="flex:1;">${item.hidden ? '🚫 ' : ''}${escapeHTML(item.name)}</span>
+              ${isItems ? `<div style="display:flex;align-items:center;gap:3px;">
+                <input type="text" inputmode="numeric" data-budget-id="${item.id}" data-cat-id="${c.id}" value="${item.budget ? fmtMoney(item.budget) : ''}" placeholder="연간예산" style="width:85px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
+                <span style="font-size:11px;color:var(--text-3);">원</span>
+              </div>` : ''}
               <div style="display:flex; gap:2px;">
                 <button class="grip" data-tree-hide="${item.id}" data-tree-store="${store}" data-tree-hidden="${item.hidden ? '1' : '0'}" title="${item.hidden ? '숨김 해제' : '숨김'}" style="font-size:11px; color:${item.hidden ? 'var(--primary)' : 'var(--text-3)'};">${item.hidden ? '표시' : '숨김'}</button>
                 <button class="grip" data-tree-rename="${item.id}" data-tree-store="${store}">${ICONS.edit}</button>
@@ -3061,6 +3065,33 @@ function renderCatManageSheet() {
     b.addEventListener('click', (e) => { e.stopPropagation(); openCatEditSheet(b.dataset.edit); });
   });
   sheet.querySelector('#catAddNew').addEventListener('click', () => openCatEditSheet(null));
+
+  // 소분류 연간 예산 입력 → 저장 + 대분류 자동 합산
+  sheet.querySelectorAll('[data-budget-id]').forEach(input => {
+    attachMoneyInputFormatter(input, () => {});
+    const save = async () => {
+      const subId = input.dataset.budgetId;
+      const catId = input.dataset.catId;
+      const item = await DB.get('subItems', subId);
+      if (!item) return;
+      const newVal = Number(rawDigits(input.value)) || 0;
+      if (item.budget === newVal) return;
+      item.budget = newVal;
+      await DB.put('subItems', item);
+      // 대분류 예산 자동 합산
+      const allSubs = subItemsOfCategory(catId);
+      const catTotal = allSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget || 0)), 0);
+      const catObj = catById(catId);
+      if (catObj) { catObj.budget = catTotal; await DB.put('categories', catObj); }
+      await reloadData();
+      renderCatManageSheet();
+      renderCurrentPage();
+      showToast('예산 저장됐어요');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
+  });
 
   // 트리 안에서 바로 이름 수정
   // 숨김 토글
