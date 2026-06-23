@@ -2444,7 +2444,7 @@ function renderTxStepPick(sheet) {
               <option value="">-- 대분류 선택 --</option>
               ${catOpts}
             </select>
-            <button id="txAddNewCat" style="font-size:12px;color:var(--primary);font-weight:700;padding:4px 0;margin-bottom:4px;">+ 새 대분류 추가...</button>
+            <button id="txAddNewCat" style="font-size:12px;color:var(--primary);font-weight:700;padding:8px 0;margin-bottom:40px;display:block;">+ 새 대분류 추가...</button>
             <div id="txAddPersonNameWrap" style="display:none;flex-direction:column;gap:6px;">
               <div id="txAddPersonDesc" style="font-size:11px;color:var(--text-3);"></div>
               <div style="display:flex;gap:6px;">
