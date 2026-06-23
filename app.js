@@ -1,4 +1,4 @@
-// v1.70 | 2026-06-24 15:00 KST | 수정: 예산탭 수입을 헌금종류별(소분류) 예산/실적으로 표시 | cache:v73
+// v1.71 | 2026-06-24 16:00 KST | 수정: 항목관리 레벨2 헌금=헌금종류예산+이름관리 분리 | cache:v73
 'use strict';
 
 /* =========================================================
@@ -3402,6 +3402,9 @@ function renderCatLevel2(sheet) {
   const subs = subItemsOfCategory(cat.id).filter(s => !s.subGroupId);
   // persons 구조 폐기
 
+  const hasGroups = groups.length > 0;
+  const subBudgetTotal = subs.reduce((s,x) => s+(x.budget||0), 0);
+
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
@@ -3410,47 +3413,53 @@ function renderCatLevel2(sheet) {
       <button id="catMClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
-      <!-- persons 구조 폐기: subGroups으로 완전 전환 -->
 
-      <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">중분류</div>
-      <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-        ${groups.length === 0 ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">중분류 없음 (소분류 직접 관리)</div>' :
-          groups.map(g => {
-            const gSubs = subItemsOfGroup(g.id);
-            const gBudget = gSubs.reduce((s,x) => s+(x.budget||0), 0);
-            return `<div style="border-bottom:1px solid var(--border);padding:6px 0;">
-              <div class="catrow" style="cursor:pointer;border:none;padding:0;" data-go-group="${g.id}">
-                <span style="font-size:16px;">📂</span>
+      ${hasGroups ? `
+        <!-- 헌금처럼 이름(subGroup)이 있는 대분류: 헌금종류(공통 소분류) 예산 설정 우선 -->
+        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">헌금종류 (소분류 · 예산 설정)</div>
+        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
+          ${subs.length === 0
+            ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">헌금종류를 추가하세요 (예: 주일헌금, 십일조, 감사헌금)</div>'
+            : subs.map(s => renderSubRow(s, cat.id)).join('')}
+          <div class="cattree-addrow">
+            <input type="text" class="textinput" id="newSubName" placeholder="헌금종류 이름 (예: 주일헌금)">
+            <button class="btn-secondary" id="addSubBtn">추가</button>
+          </div>
+          ${subs.length > 0 ? `
+          <div style="border-top:1px solid var(--border);padding:8px 0 4px;display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
+            <span style="color:var(--text-3);">소분류 예산 합계</span>
+            <span class="tabular" style="color:var(--income);">${subBudgetTotal > 0 ? fmtMoney(subBudgetTotal)+'원' : '미설정'}</span>
+          </div>` : ''}
+        </div>
+
+        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">이름 관리 (중분류 · 거래 입력에서 선택)</div>
+        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
+          ${groups.length === 0
+            ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 이름이 없어요</div>'
+            : groups.map(g => `
+              <div class="catrow" style="border:none;padding:5px 0;border-bottom:1px solid var(--border);">
+                <span style="font-size:15px;">👤</span>
                 <div class="nm">${escapeHTML(g.name)}</div>
-                <div style="font-size:11px;color:var(--text-3);">${gSubs.length}개</div>
                 <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
                 <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;padding:2px 0 4px 28px;">
-                <span style="font-size:11px;color:var(--text-3);">중분류 예산:</span>
-                <input type="text" inputmode="numeric" data-group-budget="${g.id}" data-cat-id="${cat.id}" value="${g.budget?fmtMoney(g.budget):''}" placeholder="연간예산" style="width:100px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
-                <span style="font-size:11px;color:var(--text-3);">원</span>
-                <span style="font-size:10px;color:var(--text-3);">(소분류 합산: ${gBudget>0?fmtMoney(gBudget)+'원':'없음'})</span>
-              </div>
-            </div>`;
-          }).join('')}
-        <div class="cattree-addrow">
-          <input type="text" class="textinput" id="newGroupName" placeholder="새 중분류 이름">
-          <button class="btn-secondary" id="addGroupBtn">추가</button>
+              </div>`).join('')}
+          <div class="cattree-addrow">
+            <input type="text" class="textinput" id="newGroupName" placeholder="이름 추가 (예: 홍길동)">
+            <button class="btn-secondary" id="addGroupBtn">추가</button>
+          </div>
         </div>
-      </div>
-
-      ${true ? `   // 소분류 섹션 항상 표시
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류 (중분류 없음)</div>
-        <div class="card" style="padding:4px 14px;">
-          ${subs.length === 0 ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">없음</div>' :
+      ` : `
+        <!-- subGroups 없는 대분류: 기존 방식 (소분류 직접) -->
+        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류</div>
+        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
+          ${subs.length === 0 ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 소분류가 없어요</div>' :
             subs.map(s => renderSubRow(s, cat.id)).join('')}
           <div class="cattree-addrow">
             <input type="text" class="textinput" id="newSubName" placeholder="새 소분류 이름">
             <button class="btn-secondary" id="addSubBtn">추가</button>
           </div>
         </div>
-      ` : ''}
+      `}
     </div>
   `;
 
@@ -3501,27 +3510,7 @@ function renderCatLevel2(sheet) {
     });
   });
 
-  // 중분류 예산 입력 저장
-  sheet.querySelectorAll('[data-group-budget]').forEach(input => {
-    attachMoneyInputFormatter(input, () => {});
-    const save = async () => {
-      const gId = input.dataset.groupBudget;
-      const catId = input.dataset.catId;
-      const g = (State.subGroups||[]).find(x => x.id === gId);
-      if (!g) return;
-      const newVal = Number(rawDigits(input.value)) || 0;
-      if (g.budget === newVal) return;
-      g.budget = newVal;
-      await DB.put('subGroups', g);
-      // 대분류 예산 재합산 (소분류합 + 중분류직접입력합)
-      await recalcCatBudget(catId);
-      await reloadData(); renderCurrentPage();
-      showToast('중분류 예산 저장됐어요');
-    };
-    input.addEventListener('blur', save);
-    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
-    input.addEventListener('click', e => e.stopPropagation());
-  });
+  // 중분류(이름) 예산은 헌금종류(소분류)에서 설정 — 중분류 예산 입력 제거
 
   // 소분류 직접 추가 (중분류 없는 경우)
   sheet.querySelector('#addSubBtn')?.addEventListener('click', async () => {
