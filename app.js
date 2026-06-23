@@ -2443,8 +2443,8 @@ function renderTxStepPick(sheet) {
             <select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
               <option value="">-- 대분류 선택 --</option>
               ${catOpts}
-              <option value="__new__">+ 새 대분류 추가...</option>
             </select>
+            <button id="txAddNewCat" style="font-size:12px;color:var(--primary);font-weight:700;padding:4px 0;margin-bottom:4px;">+ 새 대분류 추가...</button>
             <div id="txAddPersonNameWrap" style="display:none;flex-direction:column;gap:6px;">
               <div id="txAddPersonDesc" style="font-size:11px;color:var(--text-3);"></div>
               <div style="display:flex;gap:6px;">
@@ -2471,17 +2471,6 @@ function renderTxStepPick(sheet) {
     const desc = sheet.querySelector('#txAddPersonDesc');
     catSel?.addEventListener('change', () => {
       const opt = catSel.selectedOptions[0];
-      if (catSel.value === '__new__') {
-        // 새 대분류 추가 시트 열기 (수입 타입으로)
-        catSel.value = '';
-        nameWrap.style.display = 'none';
-        // catManageType을 수입으로 임시 설정 후 시트 열기
-        const prevType = catManageType;
-        catManageType = State.formType;
-        openCatEditSheet(null);
-        catManageType = prevType;
-        return;
-      }
       const isPersonLevel = opt?.dataset.person === '1';
       if (catSel.value) {
         nameWrap.style.display = 'flex';
@@ -2491,6 +2480,12 @@ function renderTxStepPick(sheet) {
       } else {
         nameWrap.style.display = 'none';
       }
+    });
+    sheet.querySelector('#txAddNewCat')?.addEventListener('click', () => {
+      const prevType = catManageType;
+      catManageType = State.formType;
+      openCatEditSheet(null);
+      catManageType = prevType;
     });
     sheet.querySelector('#txAddPersonSave')?.addEventListener('click', async () => {
       const catId = catSel.value;
