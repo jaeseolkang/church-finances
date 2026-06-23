@@ -2437,14 +2437,17 @@ function renderTxStepPick(sheet) {
           `<option value="${c.id}" data-person="${c.usePersonLevel?'1':'0'}">${escapeHTML(c.name)} ${c.usePersonLevel ? '(이름 선택)' : '(소분류 직접)' }</option>`
         ).join('');
         return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
-          <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 항목 추가</button>
-          <div id="txAddPersonForm" style="display:none;margin-top:6px;">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+            <button id="txAddPerson" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 새 항목 추가</button>
+            <span style="color:var(--border);">|</span>
+            <button id="txAddNewCat" style="font-size:13px;color:var(--text-2);font-weight:700;padding:6px 0;">+ 새 대분류</button>
+          </div>
+          <div id="txAddPersonForm" style="display:none;margin-top:2px;padding-bottom:60px;">
             <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">대분류를 선택한 후 이름 또는 소분류를 추가합니다</div>
             <select id="txAddPersonCat" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
               <option value="">-- 대분류 선택 --</option>
               ${catOpts}
             </select>
-            <button id="txAddNewCat" style="font-size:12px;color:var(--primary);font-weight:700;padding:8px 0;margin-bottom:40px;display:block;">+ 새 대분류 추가...</button>
             <div id="txAddPersonNameWrap" style="display:none;flex-direction:column;gap:6px;">
               <div id="txAddPersonDesc" style="font-size:11px;color:var(--text-3);"></div>
               <div style="display:flex;gap:6px;">
