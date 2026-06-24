@@ -3545,7 +3545,6 @@ function renderCatLevel2(sheet) {
   const subs = subItemsOfCategory(cat.id).filter(s => !s.subGroupId);
   // persons 구조 폐기
 
-  const hasGroups = groups.length > 0;
   const subBudgetTotal = subs.reduce((s,x) => s+(x.budget||0), 0);
 
   sheet.innerHTML = `
@@ -3557,65 +3556,49 @@ function renderCatLevel2(sheet) {
     </div>
     <div class="sheet-body">
 
-      ${hasGroups ? `
-        <!-- 헌금처럼 이름(subGroup)이 있는 대분류: 헌금종류(공통 소분류) 예산 설정 우선 -->
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류 (중분류 공통 · 예산 설정)</div>
-        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-          ${subs.length === 0
-            ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">헌금종류를 추가하세요 (예: 주일헌금, 십일조, 감사헌금)</div>'
-            : subs.map(s => renderSubRow(s, cat.id)).join('')}
-          <div class="cattree-addrow">
-            <input type="text" class="textinput" id="newSubName" placeholder="헌금종류 이름 (예: 주일헌금)">
-            <button class="btn-secondary" id="addSubBtn">추가</button>
-          </div>
-          ${subs.length > 0 ? `
-          <div style="border-top:1px solid var(--border);padding:8px 0 4px;display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
-            <span style="color:var(--text-3);">소분류 예산 합계</span>
-            <span class="tabular" style="color:var(--income);">${subBudgetTotal > 0 ? fmtMoney(subBudgetTotal)+'원' : '미설정'}</span>
-          </div>` : ''}
+      <!-- 소분류 섹션: 항상 표시 (중분류에 속하지 않는 공통 소분류) -->
+      <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">
+        소분류${groups.length > 0 ? ' (중분류 공통)' : ''}
+      </div>
+      <div class="card" style="padding:4px 14px;margin-bottom:12px;">
+        ${subs.length === 0
+          ? `<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 소분류가 없어요</div>`
+          : subs.map(s => renderSubRow(s, cat.id)).join('')}
+        ${subs.length > 0 ? `
+        <div style="border-top:1px solid var(--border);padding:6px 0 2px;display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);">
+          <span>소분류 예산 합계</span>
+          <span class="tabular">${subBudgetTotal > 0 ? fmtMoney(subBudgetTotal)+'원' : '미설정'}</span>
+        </div>` : ''}
+        <div class="cattree-addrow">
+          <input type="text" class="textinput" id="newSubName" placeholder="새 소분류 이름">
+          <button class="btn-secondary" id="addSubBtn">추가</button>
         </div>
+      </div>
 
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">중분류 관리 (탭하면 소분류 추가/관리)</div>
-        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-          ${groups.length === 0
-            ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 이름이 없어요</div>'
-            : groups.map(g => {
-                const gSubs = subItemsOfGroup(g.id);
-                return `
-                <div class="catrow" style="border:none;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;" data-go-group="${g.id}">
-                  <span style="font-size:15px;">📂</span>
-                  <div class="nm">${escapeHTML(g.name)}</div>
-                  <div style="font-size:11px;color:var(--text-3);margin-right:2px;">${gSubs.length > 0 ? gSubs.length+'개 소분류' : '소분류 없음'}</div>
-                  <span style="color:var(--text-3);font-size:16px;margin-right:2px;">›</span>
-                  <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
-                  <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
-                </div>`;
-              }).join('')}
-          <div class="cattree-addrow">
-            <input type="text" class="textinput" id="newGroupName" placeholder="이름 추가 (예: 홍길동)">
-            <button class="btn-secondary" id="addGroupBtn">추가</button>
-          </div>
+      <!-- 중분류 섹션: 항상 표시 -->
+      <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">
+        중분류${groups.length > 0 ? ' (탭하면 소분류 추가/관리)' : ' (추가하면 거래 입력 시 선택)'}
+      </div>
+      <div class="card" style="padding:4px 14px;margin-bottom:12px;">
+        ${groups.length === 0
+          ? `<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 중분류가 없어요</div>`
+          : groups.map(g => {
+              const gSubs = subItemsOfGroup(g.id);
+              return `
+              <div class="catrow" style="border:none;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;" data-go-group="${g.id}">
+                <span style="font-size:15px;">📂</span>
+                <div class="nm">${escapeHTML(g.name)}</div>
+                <div style="font-size:11px;color:var(--text-3);margin-right:2px;">${gSubs.length > 0 ? gSubs.length+'개 소분류' : '소분류 없음'}</div>
+                <span style="color:var(--text-3);font-size:16px;margin-right:2px;">›</span>
+                <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
+                <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
+              </div>`;
+            }).join('')}
+        <div class="cattree-addrow">
+          <input type="text" class="textinput" id="newGroupName" placeholder="새 중분류 이름">
+          <button class="btn-secondary" id="addGroupBtn">추가</button>
         </div>
-      ` : `
-        <!-- subGroups 없는 대분류: 소분류 + 중분류 추가 가능 -->
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류</div>
-        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-          ${subs.length === 0 ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 소분류가 없어요</div>' :
-            subs.map(s => renderSubRow(s, cat.id)).join('')}
-          <div class="cattree-addrow">
-            <input type="text" class="textinput" id="newSubName" placeholder="새 소분류 이름">
-            <button class="btn-secondary" id="addSubBtn">추가</button>
-          </div>
-        </div>
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">중분류</div>
-        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-          <div style="padding:6px 2px 2px;font-size:11px;color:var(--text-3);">중분류를 추가하면 거래 입력 시 중분류 선택 후 소분류를 입력합니다.</div>
-          <div class="cattree-addrow" style="margin-top:6px;">
-            <input type="text" class="textinput" id="newGroupName" placeholder="새 중분류 이름">
-            <button class="btn-secondary" id="addGroupBtn">추가</button>
-          </div>
-        </div>
-      `}
+      </div>
     </div>
   `;
 
