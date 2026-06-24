@@ -1794,7 +1794,7 @@ function openMemberEditSheet(member, heongCat) {
       <div class="formrow"><label>이름 *</label><input type="text" id="mName" class="dateinput" value="${escapeHTML(m.name)}" placeholder="이름"></div>
       <div class="formrow"><label>직분</label><input type="text" id="mPosition" class="dateinput" value="${escapeHTML(m.position||'')}" placeholder="예: 집사, 권사, 장로"></div>
       <div class="formrow"><label>주민번호</label><input type="text" id="mResidentId" class="dateinput" value="${escapeHTML(m.residentId||'')}" placeholder="000000-0000000"></div>
-      <div class="formrow"><label>전화번호</label><input type="tel" id="mPhone" class="dateinput" value="${escapeHTML(m.phone||'')}" placeholder="010-0000-0000"></div>
+      <div class="formrow"><label>전화번호</label><input type="text" id="mPhone" class="dateinput" value="${escapeHTML(m.phone||'')}" placeholder="010-0000-0000"></div>
       <div class="formrow"><label>주소</label><input type="text" id="mAddress" class="dateinput" value="${escapeHTML(m.address||'')}" placeholder="주소"></div>
       <div class="formrow"><label>비고</label><input type="text" id="mMemo" class="dateinput" value="${escapeHTML(m.memo||'')}" placeholder="메모"></div>
 
@@ -1853,7 +1853,7 @@ function openMemberEditSheet(member, heongCat) {
         await DB.put('subGroups', existingGroup);
       } else {
         // 신규 교인 → subGroup 추가
-        await DB.put('subGroups', { id: updated.id, categoryId: heongCat.id, name: updated.name, order: members.length });
+        await DB.put('subGroups', { id: updated.id, categoryId: heongCat.id, name: updated.name, order: allMembers.length });
       }
     }
     await reloadData();
