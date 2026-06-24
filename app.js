@@ -2622,13 +2622,14 @@ function importData(e) {
       if (!replace) return;
 
       // 기존 데이터 전체 삭제 후 교체
-      const [oldCats, oldPersons, oldSubs, oldTxs] = await Promise.all([
-        DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('transactions')
+      const [oldCats, oldPersons, oldSubs, oldTxs, oldSubGroups] = await Promise.all([
+        DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('transactions'), DB.getAll('subGroups')
       ]);
       for (const x of oldTxs) await DB.del('transactions', x.id);
       for (const x of oldSubs) await DB.del('subItems', x.id);
       for (const x of oldPersons) await DB.del('persons', x.id);
       for (const x of oldCats) await DB.del('categories', x.id);
+      for (const x of oldSubGroups) await DB.del('subGroups', x.id);
 
       for (const c of data.categories) await DB.put('categories', c);
       for (const p of (data.persons || [])) await DB.put('persons', p);
