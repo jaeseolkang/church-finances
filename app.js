@@ -899,7 +899,7 @@ function dateGroupLabel(dateStr) {
    ========================================================= */
 function renderBudget() {
   const page = document.getElementById('page-budget');
-  const year = new Date(State.cursorDate + '-01').getFullYear();
+  const year = State.cursorDate.getFullYear();
 
   // 해당 연도 지출 거래 집계
   const yearTxs = State.transactions.filter(t => t.type === 'expense' && t.date.startsWith(String(year)));
