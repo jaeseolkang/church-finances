@@ -1093,11 +1093,23 @@ function renderBudget() {
           <div style="font-size:11px;color:var(--income);font-weight:700;">수입 예산</div>
           <div style="font-size:13px;font-weight:800;">${fmtMoney(totalIncomeBudget)}원</div>
           <div style="font-size:11px;color:var(--text-3);">실적 ${fmtMoney(totalIncomeSpent)}원</div>
+          ${totalIncomeBudget > 0 ? `
+          <div style="margin-top:6px;background:var(--border);border-radius:4px;height:5px;overflow:hidden;">
+            <div style="height:100%;border-radius:4px;background:var(--income);width:${Math.min(100,Math.round(totalIncomeSpent/totalIncomeBudget*100))}%;"></div>
+          </div>
+          <div style="font-size:11px;color:var(--income);font-weight:700;margin-top:3px;text-align:right;">${Math.round(totalIncomeSpent/totalIncomeBudget*100)}%</div>
+          ` : ''}
         </div>
         <div style="background:var(--expense-light,#fff5f5);border-radius:8px;padding:10px;">
           <div style="font-size:11px;color:var(--expense);font-weight:700;">지출 예산</div>
           <div style="font-size:13px;font-weight:800;">${fmtMoney(totalExpenseBudget)}원</div>
           <div style="font-size:11px;color:var(--text-3);">실적 ${fmtMoney(totalExpenseSpent)}원</div>
+          ${totalExpenseBudget > 0 ? `
+          <div style="margin-top:6px;background:var(--border);border-radius:4px;height:5px;overflow:hidden;">
+            <div style="height:100%;border-radius:4px;background:var(--expense);width:${Math.min(100,Math.round(totalExpenseSpent/totalExpenseBudget*100))}%;"></div>
+          </div>
+          <div style="font-size:11px;color:var(--expense);font-weight:700;margin-top:3px;text-align:right;">${Math.round(totalExpenseSpent/totalExpenseBudget*100)}%</div>
+          ` : ''}
         </div>
       </div>
     </div>
