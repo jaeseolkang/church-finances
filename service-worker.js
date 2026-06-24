@@ -1,7 +1,7 @@
-// 2026-06-24 23:15 KST | 수정: CACHE_NAME v75 (예산 접기/펼치기 적용)
+// 2026-06-25 00:10 KST | 수정: CACHE_NAME v76 (항목 구조 내보내기 추가)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v75';
+const CACHE_NAME = 'gaegyebu-v76';
 const ASSETS = [
   './',
   './index.html',
