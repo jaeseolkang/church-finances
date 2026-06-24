@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 01:30 KST | 수정: subGroups 자동 복구 마이그레이션 추가 | cache:v82
+// v1.83 | 2026-06-25 02:10 KST | 수정: 마이그레이션 - subGroupId 없는 subItem도 대분류명으로 중분류 자동 생성 | cache:v84
 'use strict';
 
 /* =========================================================
@@ -358,29 +358,51 @@ async function migratePersonsToSubGroups() {
    레코드가 없는 경우 자동 복구. (멱등성 보장)
    ========================================================= */
 async function migrateSubGroupsFromSubItems() {
-  const [allSubItems, allSubGroups] = await Promise.all([
-    DB.getAll('subItems'), DB.getAll('subGroups')
+  const [allCats, allSubItems, allSubGroups] = await Promise.all([
+    DB.getAll('categories'), DB.getAll('subItems'), DB.getAll('subGroups')
   ]);
   const existingIds = new Set(allSubGroups.map(g => g.id));
+  let count = 0;
 
-  // subGroupId별로 첫 번째 등장하는 subItem 정보로 그룹 생성
+  // ① subGroupId가 있지만 subGroups 스토어에 레코드가 없는 경우 → 복구
   const sgMap = new Map();
   for (const s of allSubItems) {
     if (s.subGroupId && !existingIds.has(s.subGroupId) && !sgMap.has(s.subGroupId)) {
-      sgMap.set(s.subGroupId, {
-        id: s.subGroupId,
-        categoryId: s.categoryId,
-        name: s.name,
-        order: s.order ?? 0,
-      });
+      sgMap.set(s.subGroupId, { id: s.subGroupId, categoryId: s.categoryId, name: s.name, order: s.order ?? 0 });
     }
   }
-  if (sgMap.size === 0) return;
-
   for (const g of sgMap.values()) {
     await DB.put('subGroups', g);
+    existingIds.add(g.id);
+    count++;
   }
-  console.log(`[migration] subGroups 복구: ${sgMap.size}개`);
+
+  // ② subGroupId가 아예 없는 subItem → 대분류 이름으로 중분류 생성 후 연결
+  const catGroupMap = new Map(); // categoryId → 새로 만든 groupId
+  for (const s of allSubItems) {
+    if (s.subGroupId) continue; // 이미 중분류 있음
+    const cat = allCats.find(c => c.id === s.categoryId);
+    if (!cat) continue;
+
+    // 이 카테고리에 이미 subGroup이 있으면 첫 번째 그룹에 연결
+    const existingGroup = allSubGroups.find(g => g.categoryId === cat.id)
+      || (catGroupMap.has(cat.id) ? { id: catGroupMap.get(cat.id) } : null);
+
+    let groupId;
+    if (existingGroup) {
+      groupId = existingGroup.id;
+    } else {
+      // 새 중분류 생성
+      groupId = uid();
+      await DB.put('subGroups', { id: groupId, categoryId: cat.id, name: cat.name, order: 0 });
+      catGroupMap.set(cat.id, groupId);
+      count++;
+    }
+    s.subGroupId = groupId;
+    await DB.put('subItems', s);
+  }
+
+  if (count > 0) console.log(`[migration] subGroups 처리: ${count}개`);
 }
 
 async function reloadData() {
@@ -4312,11 +4334,24 @@ function openCatEditSheet(catId) {
       const isNew = !editing;
       if (isNew) { draft.id = uid(); draft.order = State.categories.length; }
       await DB.put('categories', draft);
+
+      // 새 대분류 추가 시: 중분류·소분류가 없으면 동일 이름으로 자동 생성
+      if (isNew) {
+        const existingGroups = (await DB.getAll('subGroups')).filter(g => g.categoryId === draft.id);
+        const existingItems  = (await DB.getAll('subItems')).filter(s => s.categoryId === draft.id);
+        if (existingGroups.length === 0 && existingItems.length === 0) {
+          const groupId  = uid();
+          const subItemId = uid();
+          await DB.put('subGroups', { id: groupId,  categoryId: draft.id, name: draft.name, order: 0 });
+          await DB.put('subItems',  { id: subItemId, categoryId: draft.id, subGroupId: groupId, name: draft.name, order: 0, budget: 0 });
+        }
+      }
+
       await reloadData();
       closeAllSheets();
       openCatManageSheet();
       renderCurrentPage();
-      showToast(editing ? '수정되었습니다' : '대분류가 추가되었습니다');
+      showToast(editing ? '수정되었습니다' : `'${draft.name}' 대분류가 추가되었습니다`);
     });
     if (editing) {
       sheet.querySelector('#catDelete').addEventListener('click', async () => {
