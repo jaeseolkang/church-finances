@@ -1,4 +1,4 @@
-// v1.82 | 2026-06-24 23:10 KST | 수정: 예산 대분류 클릭 시 중분류 펼침, 중분류 클릭 시 소분류 펼침 (접기/펼치기) | cache:v75
+// v1.83 | 2026-06-25 00:10 KST | 수정: 설정 > 항목구조 엑셀 내보내기 추가 | cache:v76
 'use strict';
 
 /* =========================================================
@@ -1547,6 +1547,13 @@ function renderSettings() {
         <div><div class="settings-label">수입/지출 항목 관리</div></div>
         ${ICONS.chevR}
       </div>
+      <div class="settings-row" id="rowExportStructure">
+        <div>
+          <div class="settings-label">항목 구조 내보내기</div>
+          <div class="settings-sub">수입/지출 항목을 트리 구조 표로 내보내기</div>
+        </div>
+        ${ICONS.download}
+      </div>
     </div>
 
     <div class="settings-group">
@@ -1658,6 +1665,7 @@ function renderSettings() {
     });
   });
   page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
+  page.querySelector('#rowExportStructure').addEventListener('click', exportStructureExcel);
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
@@ -2200,6 +2208,101 @@ async function ensureYearCarryover(year) {
   return amount;
 }
 
+
+/* =========================================================
+   항목 구조 엑셀 내보내기
+   카테고리 > 중분류(subGroup) > 소분류(subItem) 트리를 표로 출력
+   ========================================================= */
+function exportStructureExcel() {
+  const wb = XLSX.utils.book_new();
+  const aoa = [];
+
+  // 헤더
+  aoa.push(['구분', '대분류', '중분류', '소분류', '비고']);
+
+  const cats = [...State.categories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  for (const type of ['income', 'expense']) {
+    const label = type === 'income' ? '수입' : '지출';
+    const typeCats = cats.filter(c => c.type === type);
+
+    for (const cat of typeCats) {
+      const groups = subGroupsOfCategory(cat.id);
+      // subGroup에 속하지 않은 직속 subItem
+      const directItems = State.subItems
+        .filter(s => s.categoryId === cat.id && !s.subGroupId)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      if (groups.length === 0 && directItems.length === 0) continue;
+
+      let catFirstRow = true;
+
+      // subGroup 있는 경우
+      for (const grp of groups) {
+        const items = subItemsOfGroup(grp.id);
+        if (items.length === 0) {
+          // 중분류만 있고 소분류 없음
+          aoa.push([
+            catFirstRow ? label : '',
+            catFirstRow ? cat.name : '',
+            grp.name,
+            '',
+            '',
+          ]);
+          catFirstRow = false;
+        } else {
+          for (const item of items) {
+            aoa.push([
+              catFirstRow ? label : '',
+              catFirstRow ? cat.name : '',
+              grp.name,
+              item.name,
+              '',
+            ]);
+            catFirstRow = false;
+          }
+        }
+      }
+
+      // 직속 subItem (subGroup 없음)
+      for (const item of directItems) {
+        aoa.push([
+          catFirstRow ? label : '',
+          catFirstRow ? cat.name : '',
+          '',
+          item.name,
+          '',
+        ]);
+        catFirstRow = false;
+      }
+    }
+
+    // 수입/지출 섹션 사이 빈 줄
+    if (type === 'income') aoa.push(['', '', '', '', '']);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // 열 너비
+  ws['!cols'] = [
+    { wch: 6  }, // 구분
+    { wch: 16 }, // 대분류
+    { wch: 18 }, // 중분류
+    { wch: 20 }, // 소분류
+    { wch: 12 }, // 비고
+  ];
+
+  // 헤더 행 굵게 (SheetJS는 스타일 미지원이므로 별도 처리 없음)
+  // 셀 서식: 헤더 freeze
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  XLSX.utils.book_append_sheet(wb, ws, '항목구조');
+
+  const today = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `항목구조-${today}.xlsx`);
+  showToast('항목 구조 파일을 내보냈어요');
+}
+
 async function exportExcel() {
   if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
   openExcelRangeSheet();
@@ -2631,6 +2734,7 @@ async function exportData(startYm, endYm) {
     categories: State.categories,
     persons:    State.persons,
     subItems:   State.subItems,
+    subGroups:  State.subGroups,
     transactions: txs,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
