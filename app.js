@@ -1,4 +1,4 @@
-// v1.81 | 2026-06-24 22:30 KST | 수정: 항목관리 레벨2 이름(중분류) 탭하면 레벨3 소분류 관리로 이동 | cache:v74
+// v1.82 | 2026-06-24 23:10 KST | 수정: 예산 대분류 클릭 시 중분류 펼침, 중분류 클릭 시 소분류 펼침 (접기/펼치기) | cache:v74
 'use strict';
 
 /* =========================================================
@@ -194,6 +194,7 @@ const State = {
   subStatDetailKey: null, // 현재 열려있는 '내용 탭 집계 상세' 시트의 key (null이면 닫힌 상태)
   statsSortKey: 'amount',   // '내용' 탭 정렬 기준: 'label' | 'count' | 'amount'
   statsSortDir: 'desc',     // 'asc' | 'desc'
+  budgetExpanded: {},       // { [catId]: true/false, [catId+'__'+groupName]: true/false }
 };
 
 function fmtMoney(n) {
@@ -939,7 +940,7 @@ function renderBudget() {
   const renderSubsWithGroup = (c, budSubs, spentByS) => {
     const groups = SUB_GROUPS[c.name];
     if (!groups) {
-      // 그룹핑 없음 - 기존 방식
+      // 그룹핑 없음 — 소분류 목록만
       return budSubs.map(s => {
         const ss = spentByS[s.id] || 0;
         const sp = s.budget > 0 ? Math.min(100, Math.round(ss / s.budget * 100)) : 0;
@@ -952,7 +953,7 @@ function renderBudget() {
         </div>`;
       }).join('');
     }
-    // 그룹핑 있음
+    // 그룹핑 있음 — 중분류별 접기/펼치기
     const grouped = {};
     const ungrouped = [];
     for (const s of budSubs) {
@@ -967,9 +968,16 @@ function renderBudget() {
       const gTotal = gSubs.reduce((s,x) => s + (x.budget||0), 0);
       const gSpent = gSubs.reduce((s,x) => s + (spentByS[x.id]||0), 0);
       const gPct = gTotal > 0 ? Math.min(100, Math.round(gSpent/gTotal*100)) : 0;
+      const groupKey = c.id + '__' + gName;
+      const groupOpen = !!State.budgetExpanded[groupKey];
+      const arrow = groupOpen ? '▾' : '▸';
       html += `<div style="margin-bottom:8px;">
-        <div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:3px;">▸ ${gName}</div>
-        <div style="padding-left:8px;">
+        <div class="budget-group-header" data-group-key="${escapeHTML(groupKey)}"
+             style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:3px 0;user-select:none;">
+          <div style="font-size:11px;font-weight:800;color:var(--text-2);">${arrow} ${escapeHTML(gName)}</div>
+          <div style="font-size:11px;color:var(--text-3);">${fmtMoney(gSpent)} / ${fmtMoney(gTotal)}원</div>
+        </div>
+        <div class="budget-group-body" data-group-key="${escapeHTML(groupKey)}" style="padding-left:8px;${groupOpen ? '' : 'display:none;'}">
           ${gSubs.map(s => {
             const ss = spentByS[s.id]||0;
             const sp = s.budget>0 ? Math.min(100,Math.round(ss/s.budget*100)) : 0;
@@ -1003,6 +1011,7 @@ function renderBudget() {
   const renderIncomeCatSection = (budgetCats) => {
     if (budgetCats.length === 0) return `<div style="font-size:13px;color:var(--text-3);padding:12px 2px;">설정된 예산이 없어요</div>`;
     return budgetCats.map(c => {
+      const catOpen = !!State.budgetExpanded[c.id];
       const hasGroups = subGroupsOfCategory(c.id).length > 0;
       if (hasGroups) {
         // 헌금 대분류: 공통 소분류(헌금종류)별 예산/실적
@@ -1013,25 +1022,29 @@ function renderBudget() {
         const catBudget = c.budget || budSubs.reduce((s,x) => s + (x.budget||0), 0);
         const catPct = catBudget > 0 ? Math.min(100, Math.round(catSpent / catBudget * 100)) : 0;
         return `<div class="budget-item" style="margin-bottom:14px;">
-          <div class="budget-top">
-            <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}</div>
-            <div class="budget-nums tabular"><b>${fmtMoney(catSpent)}</b> / ${fmtMoney(catBudget)}원</div>
+          <div class="budget-cat-header" data-cat-id="${c.id}" style="cursor:pointer;user-select:none;">
+            <div class="budget-top">
+              <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name} <span style="font-size:11px;color:var(--text-3);">${catOpen ? '▾' : '▸'}</span></div>
+              <div class="budget-nums tabular"><b>${fmtMoney(catSpent)}</b> / ${fmtMoney(catBudget)}원</div>
+            </div>
+            <div class="budget-track"><div class="budget-fill" style="width:${catPct}%; background:${budgetColor(catPct)};"></div></div>
+            <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${catPct}%</div>
           </div>
-          <div class="budget-track"><div class="budget-fill" style="width:${catPct}%; background:${budgetColor(catPct)};"></div></div>
-          <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${catPct}%</div>
-          ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
-            ${budSubs.map(s => {
-              const ss = incBySub[s.id] || 0;
-              const sp = s.budget > 0 ? Math.min(100, Math.round(ss / s.budget * 100)) : 0;
-              return `<div style="margin-bottom:5px;">
-                <div class="budget-top" style="font-size:12px;">
-                  <div style="font-weight:600;color:var(--text-1);">${escapeHTML(s.name)}</div>
-                  <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
-                </div>
-                <div class="budget-track" style="height:5px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
-              </div>`;
-            }).join('')}
-          </div>` : `<div style="font-size:11px;color:var(--text-3);padding:4px 0 0 10px;">헌금종류별 예산은 항목 관리에서 소분류 예산을 설정하세요</div>`}
+          <div class="budget-cat-body" data-cat-id="${c.id}" style="${catOpen ? '' : 'display:none;'}">
+            ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
+              ${budSubs.map(s => {
+                const ss = incBySub[s.id] || 0;
+                const sp = s.budget > 0 ? Math.min(100, Math.round(ss / s.budget * 100)) : 0;
+                return `<div style="margin-bottom:5px;">
+                  <div class="budget-top" style="font-size:12px;">
+                    <div style="font-weight:600;color:var(--text-1);">${escapeHTML(s.name)}</div>
+                    <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+                  </div>
+                  <div class="budget-track" style="height:5px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
+                </div>`;
+              }).join('')}
+            </div>` : `<div style="font-size:11px;color:var(--text-3);padding:4px 0 0 10px;">헌금종류별 예산은 항목 관리에서 소분류 예산을 설정하세요</div>`}
+          </div>
         </div>`;
       } else {
         // 이자/기타: 기존 방식 (대분류 + 소분류)
@@ -1039,14 +1052,18 @@ function renderBudget() {
         const pct = c.budget > 0 ? Math.min(100, Math.round(spent / c.budget * 100)) : 0;
         const budSubs = subItemsOfCategory(c.id).filter(s => s.budget > 0);
         return `<div class="budget-item" style="margin-bottom:14px;">
-          <div class="budget-top">
-            <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}</div>
-            <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+          <div class="budget-cat-header" data-cat-id="${c.id}" style="cursor:pointer;user-select:none;">
+            <div class="budget-top">
+              <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}${budSubs.length > 0 ? ` <span style="font-size:11px;color:var(--text-3);">${catOpen ? '▾' : '▸'}</span>` : ''}</div>
+              <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+            </div>
+            <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
+            <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
           </div>
-          <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
-          <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
-          ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
-            ${renderSubsWithGroup(c, budSubs, incBySub)}
+          ${budSubs.length > 0 ? `<div class="budget-cat-body" data-cat-id="${c.id}" style="${catOpen ? '' : 'display:none;'}">
+            <div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
+              ${renderSubsWithGroup(c, budSubs, incBySub)}
+            </div>
           </div>` : ''}
         </div>`;
       }
@@ -1060,15 +1077,20 @@ function renderBudget() {
       const spent = spentByC[c.id] || 0;
       const pct = c.budget > 0 ? Math.min(100, Math.round(spent / c.budget * 100)) : 0;
       const budSubs = subItemsOfCategory(c.id).filter(s => s.budget > 0);
+      const catOpen = !!State.budgetExpanded[c.id];
       return `<div class="budget-item" style="margin-bottom:14px;">
-        <div class="budget-top">
-          <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}</div>
-          <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+        <div class="budget-cat-header" data-cat-id="${c.id}" style="cursor:pointer;user-select:none;">
+          <div class="budget-top">
+            <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}${budSubs.length > 0 ? ` <span style="font-size:11px;color:var(--text-3);">${catOpen ? '▾' : '▸'}</span>` : ''}</div>
+            <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+          </div>
+          <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
+          <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
         </div>
-        <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
-        <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
-        ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
-          ${renderSubsWithGroup(c, budSubs, spentByS)}
+        ${budSubs.length > 0 ? `<div class="budget-cat-body" data-cat-id="${c.id}" style="${catOpen ? '' : 'display:none;'}">
+          <div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
+            ${renderSubsWithGroup(c, budSubs, spentByS)}
+          </div>
         </div>` : ''}
       </div>`;
     }).join('');
@@ -1135,6 +1157,24 @@ function renderBudget() {
   page.querySelector('#prevYear').addEventListener('click', () => changeMonth(-12));
   page.querySelector('#nextYear').addEventListener('click', () => changeMonth(12));
   page.querySelector('#manageCatsBtn').addEventListener('click', () => openCatManageSheet());
+
+  // 대분류 접기/펼치기
+  page.querySelectorAll('.budget-cat-header').forEach(el => {
+    el.addEventListener('click', () => {
+      const catId = el.dataset.catId;
+      State.budgetExpanded[catId] = !State.budgetExpanded[catId];
+      renderBudget();
+    });
+  });
+  // 중분류 접기/펼치기
+  page.querySelectorAll('.budget-group-header').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const groupKey = el.dataset.groupKey;
+      State.budgetExpanded[groupKey] = !State.budgetExpanded[groupKey];
+      renderBudget();
+    });
+  });
 }
 
 function budgetColor(pct) {
