@@ -3475,21 +3475,90 @@ function openCatManageSheet() {
 
 function renderCatManageSheet() {
   const sheet = document.getElementById('catManageSheet');
-  if (catManageLevel === 1) renderCatLevel1(sheet);
-  else if (catManageLevel === 2) renderCatLevel2(sheet);
-  else renderCatLevel3(sheet);
+  renderCatTree(sheet);
 }
 
-// ── 레벨1: 대분류 목록 ──
-function renderCatLevel1(sheet) {
+// ── 항목 관리 트리 ──
+function renderCatTree(sheet) {
   const cats = State.categories.filter(c => c.type === catManageType);
-
-  // 현재 탭(수입/지출) 예산 합계
   const totalBudget = cats.reduce((s, c) => s + (c.budget || 0), 0);
-  const isIncomeCat = catManageType === 'income';
-  const budgetAccentColor = isIncomeCat ? 'var(--income)' : 'var(--expense)';
-  const budgetBgColor = isIncomeCat ? 'var(--income-light, #f0fdf4)' : 'var(--expense-light, #fff5f5)';
-  const budgetLabel = isIncomeCat ? '수입' : '지출';
+  const isIncome = catManageType === 'income';
+  const accent = isIncome ? 'var(--income)' : 'var(--expense)';
+  const accentBg = isIncome ? 'var(--income-light,#f0fdf4)' : 'var(--expense-light,#fff5f5)';
+
+  function subRowHTML(s, catId) {
+    return `<div class="cattree-leaf" style="${s.hidden?'opacity:0.45;':''}display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:5px 0 5px 40px;border-bottom:1px solid var(--border);">
+      <span style="flex:1;font-size:13px;">${s.hidden?'🚫 ':''}${escapeHTML(s.name)}</span>
+      <div style="display:flex;align-items:center;gap:3px;">
+        <input type="text" inputmode="numeric" data-budget-id="${s.id}" data-cat-id="${catId}" value="${s.budget?fmtMoney(s.budget):''}" placeholder="연간예산" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
+        <span style="font-size:11px;color:var(--text-3);">원</span>
+      </div>
+      <button class="grip" data-rename-sub="${s.id}">${ICONS.edit}</button>
+      <button class="grip" data-del-sub="${s.id}" style="color:var(--expense);">${ICONS.trash}</button>
+    </div>`;
+  }
+
+  function groupBlockHTML(g, catId) {
+    const gSubs = subItemsOfGroup(g.id);
+    const expanded = catManageExpanded.has(g.id);
+    return `<div class="cattree-group-block" data-group-id="${g.id}">
+      <div class="catrow" style="padding:6px 0 6px 20px;border-bottom:1px solid var(--border);cursor:pointer;" data-toggle-group="${g.id}">
+        <span style="font-size:13px;margin-right:4px;transition:transform .2s;display:inline-block;transform:rotate(${expanded?'90':'0'}deg);">›</span>
+        <span style="font-size:15px;margin-right:6px;">📂</span>
+        <div class="nm" style="font-size:13.5px;">${escapeHTML(g.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-right:4px;">${gSubs.length > 0 ? gSubs.length+'개 소분류' : '소분류 없음'}</div>
+        <button class="grip" data-rename-group="${g.id}" style="margin-left:2px;">${ICONS.edit}</button>
+        <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
+      </div>
+      ${expanded ? `
+        <div class="cattree-group-subs">
+          ${gSubs.length === 0 ? '<div style="padding:6px 0 6px 40px;font-size:12px;color:var(--text-3);">소분류가 없어요</div>' : gSubs.map(s => subRowHTML(s, catId)).join('')}
+          <div class="cattree-addrow" style="padding:6px 0 6px 40px;">
+            <input type="text" class="textinput" data-add-sub-group="${g.id}" data-add-sub-cat="${catId}" placeholder="새 소분류 이름" style="font-size:12px;">
+            <button class="btn-secondary" data-add-sub-btn="${g.id}" style="font-size:12px;padding:5px 10px;">추가</button>
+          </div>
+        </div>` : ''}
+    </div>`;
+  }
+
+  function catBlockHTML(c) {
+    const groups = subGroupsOfCategory(c.id);
+    const subs = subItemsOfCategory(c.id).filter(s => !s.subGroupId);
+    const expanded = catManageExpanded.has(c.id);
+    return `<div class="cattree-cat-block" data-cat-id="${c.id}" style="border-bottom:1px solid var(--border);">
+      <div class="catrow" style="padding:6px 0;cursor:pointer;" data-toggle-cat="${c.id}">
+        <span style="font-size:14px;margin-right:4px;transition:transform .2s;display:inline-block;transform:rotate(${expanded?'90':'0'}deg);">›</span>
+        <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
+        <div class="nm">${escapeHTML(c.name)}${c.usePersonLevel?' <span style="font-size:11px;color:var(--primary);font-weight:700;">· 하위항목</span>':''}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-right:4px;">${c.budget?fmtMoney(c.budget)+'원':'미설정'}</div>
+        <button class="grip" data-edit-cat="${c.id}">${ICONS.edit}</button>
+        <button class="grip" data-del-cat="${c.id}" style="color:var(--expense);">${ICONS.trash}</button>
+      </div>
+      ${expanded ? `
+        <div class="cattree-cat-body" style="padding:0 0 6px 0;">
+          <!-- 공통 소분류 -->
+          ${subs.length > 0 || groups.length === 0 ? `
+            <div style="font-size:11px;font-weight:700;color:var(--text-3);padding:6px 0 2px 10px;">${groups.length>0?'공통 소분류':'소분류'}</div>
+            ${subs.map(s => subRowHTML(s, c.id)).join('')}` : ''}
+          <!-- 중분류 목록 -->
+          ${groups.length > 0 ? `
+            <div style="font-size:11px;font-weight:700;color:var(--text-3);padding:6px 0 2px 10px;">중분류</div>
+            ${groups.map(g => groupBlockHTML(g, c.id)).join('')}` : ''}
+          <!-- 추가 영역 -->
+          <div style="padding:6px 0 0 10px;display:flex;flex-direction:column;gap:6px;">
+            ${groups.length > 0 ? '' : `
+            <div class="cattree-addrow">
+              <input type="text" class="textinput" data-add-sub-cat-direct="${c.id}" placeholder="새 소분류 이름" style="font-size:12px;">
+              <button class="btn-secondary" data-add-sub-direct="${c.id}" style="font-size:12px;padding:5px 10px;">소분류 추가</button>
+            </div>`}
+            <div class="cattree-addrow">
+              <input type="text" class="textinput" data-add-group-cat="${c.id}" placeholder="새 중분류 이름" style="font-size:12px;">
+              <button class="btn-secondary" data-add-group-btn="${c.id}" style="font-size:12px;padding:5px 10px;">중분류 추가</button>
+            </div>
+          </div>
+        </div>` : ''}
+    </div>`;
+  }
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -3502,166 +3571,54 @@ function renderCatLevel1(sheet) {
         <button data-type="expense" class="${catManageType==='expense'?'active':''}">지출 항목</button>
         <button data-type="income" class="${catManageType==='income'?'active':''}">수입 항목</button>
       </div>
-      <div style="background:${budgetBgColor};border-radius:10px;padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:12px;font-weight:800;color:${budgetAccentColor};">${budgetLabel} 연간 예산 합계</div>
-        <div style="font-size:17px;font-weight:900;color:${budgetAccentColor};" class="tabular">${totalBudget > 0 ? fmtMoney(totalBudget) + '원' : '미설정'}</div>
+      <div style="background:${accentBg};border-radius:10px;padding:10px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;font-weight:800;color:${accent};">${isIncome?'수입':'지출'} 연간 예산 합계</div>
+        <div style="font-size:17px;font-weight:900;color:${accent};" class="tabular">${totalBudget>0?fmtMoney(totalBudget)+'원':'미설정'}</div>
       </div>
       <div class="card" style="padding:4px 14px;">
-        ${cats.length === 0 ? '<div style="padding:16px 2px;color:var(--text-3);font-size:13px;">등록된 항목이 없어요</div>' :
-          cats.map(c => `
-          <div style="border-bottom:1px solid var(--border);padding:4px 0;">
-            <div class="catrow" style="cursor:pointer;border:none;padding:4px 0;" data-go-cat="${c.id}">
-              <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
-              <div class="nm">${escapeHTML(c.name)}${c.usePersonLevel ? ' <span style="font-size:11px;color:var(--primary);font-weight:700;">· 하위항목</span>' : ''}</div>
-              <button class="grip" data-edit-cat="${c.id}" style="margin-left:2px;">${ICONS.edit}</button>
-              <button class="grip" data-del-cat="${c.id}" style="color:var(--expense);">${ICONS.trash}</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;padding:2px 0 4px 44px;">
-              <span style="font-size:11px;color:var(--text-3);">대분류 예산:</span>
-              <input type="text" inputmode="numeric" data-cat-budget="${c.id}" value="${c.budget?fmtMoney(c.budget):''}" placeholder="연간예산" style="width:100px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
-              <span style="font-size:11px;color:var(--text-3);">원</span>
-            </div>
-          </div>`).join('')}
+        ${cats.length === 0
+          ? '<div style="padding:16px 2px;color:var(--text-3);font-size:13px;">등록된 항목이 없어요</div>'
+          : cats.map(c => catBlockHTML(c)).join('')}
       </div>
       <button class="btn-secondary" id="catAddNew" style="color:var(--primary);font-weight:800;">+ 새 대분류 추가</button>
     </div>
   `;
+
   sheet.querySelector('#catMClose').addEventListener('click', closeAllSheets);
   sheet.querySelectorAll('.segctrl button').forEach(b => {
     b.addEventListener('click', () => { catManageType = b.dataset.type; renderCatManageSheet(); });
   });
-  sheet.querySelectorAll('[data-go-cat]').forEach(b => {
-    b.addEventListener('click', (e) => {
+  sheet.querySelector('#catAddNew').addEventListener('click', () => openCatEditSheet(null));
+
+  // 대분류 토글
+  sheet.querySelectorAll('[data-toggle-cat]').forEach(el => {
+    el.addEventListener('click', (e) => {
       if (e.target.closest('[data-edit-cat],[data-del-cat]')) return;
-      catManageSelCatId = b.dataset.goCat;
-      catManageSelGroupId = null;
-      catManageLevel = 2;
+      const id = el.dataset.toggleCat;
+      catManageExpanded.has(id) ? catManageExpanded.delete(id) : catManageExpanded.add(id);
       renderCatManageSheet();
     });
   });
-  // 대분류 예산 입력 저장
-  sheet.querySelectorAll('[data-cat-budget]').forEach(input => {
-    attachMoneyInputFormatter(input, () => {});
-    const save = async () => {
-      const catId = input.dataset.catBudget;
-      const cat = catById(catId);
-      if (!cat) return;
-      const newVal = Number(rawDigits(input.value)) || 0;
-      if (cat.budget === newVal) return;
-      cat.budget = newVal;
-      await DB.put('categories', cat);
-      await reloadData(); renderCurrentPage();
-      showToast('대분류 예산 저장됐어요');
-    };
-    input.addEventListener('blur', save);
-    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
-    input.addEventListener('click', e => e.stopPropagation());
+
+  // 중분류 토글
+  sheet.querySelectorAll('[data-toggle-group]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-rename-group],[data-del-group]')) return;
+      const id = el.dataset.toggleGroup;
+      catManageExpanded.has(id) ? catManageExpanded.delete(id) : catManageExpanded.add(id);
+      renderCatManageSheet();
+    });
   });
 
+  // 대분류 수정/삭제
   sheet.querySelectorAll('[data-edit-cat]').forEach(b => {
     b.addEventListener('click', (e) => { e.stopPropagation(); openCatEditSheet(b.dataset.editCat); });
   });
   sheet.querySelectorAll('[data-del-cat]').forEach(b => {
-    b.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await deleteCatWithConfirm(b.dataset.delCat);
-    });
-  });
-  sheet.querySelector('#catAddNew').addEventListener('click', () => openCatEditSheet(null));
-}
-
-// ── 레벨2: 중분류 목록 ──
-function renderCatLevel2(sheet) {
-  const cat = catById(catManageSelCatId);
-  if (!cat) { catManageLevel = 1; renderCatManageSheet(); return; }
-  const groups = subGroupsOfCategory(cat.id);
-  const subs = subItemsOfCategory(cat.id).filter(s => !s.subGroupId);
-  // persons 구조 폐기
-
-  const subBudgetTotal = subs.reduce((s,x) => s+(x.budget||0), 0);
-
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <button id="catBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
-      <h3>${cat.icon} ${escapeHTML(cat.name)}</h3>
-      <button id="catMClose" class="sheet-close-btn">${ICONS.close}닫기</button>
-    </div>
-    <div class="sheet-body">
-
-      <!-- 소분류 섹션: 항상 표시 (중분류에 속하지 않는 공통 소분류) -->
-      <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">
-        소분류${groups.length > 0 ? ' (중분류 공통)' : ''}
-      </div>
-      <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-        ${subs.length === 0
-          ? `<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 소분류가 없어요</div>`
-          : subs.map(s => renderSubRow(s, cat.id)).join('')}
-        ${subs.length > 0 ? `
-        <div style="border-top:1px solid var(--border);padding:6px 0 2px;display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);">
-          <span>소분류 예산 합계</span>
-          <span class="tabular">${subBudgetTotal > 0 ? fmtMoney(subBudgetTotal)+'원' : '미설정'}</span>
-        </div>` : ''}
-        <div class="cattree-addrow">
-          <input type="text" class="textinput" id="newSubName" placeholder="새 소분류 이름">
-          <button class="btn-secondary" id="addSubBtn">추가</button>
-        </div>
-      </div>
-
-      <!-- 중분류 섹션: 항상 표시 -->
-      <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">
-        중분류${groups.length > 0 ? ' (탭하면 소분류 추가/관리)' : ' (추가하면 거래 입력 시 선택)'}
-      </div>
-      <div class="card" style="padding:4px 14px;margin-bottom:12px;">
-        ${groups.length === 0
-          ? `<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 중분류가 없어요</div>`
-          : groups.map(g => {
-              const gSubs = subItemsOfGroup(g.id);
-              return `
-              <div class="catrow" style="border:none;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;" data-go-group="${g.id}">
-                <span style="font-size:15px;">📂</span>
-                <div class="nm">${escapeHTML(g.name)}</div>
-                <div style="font-size:11px;color:var(--text-3);margin-right:2px;">${gSubs.length > 0 ? gSubs.length+'개 소분류' : '소분류 없음'}</div>
-                <span style="color:var(--text-3);font-size:16px;margin-right:2px;">›</span>
-                <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
-                <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
-              </div>`;
-            }).join('')}
-        <div class="cattree-addrow">
-          <input type="text" class="textinput" id="newGroupName" placeholder="새 중분류 이름">
-          <button class="btn-secondary" id="addGroupBtn">추가</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  sheet.querySelector('#catBack').addEventListener('click', () => { catManageLevel = 1; renderCatManageSheet(); });
-  sheet.querySelector('#catMClose').addEventListener('click', closeAllSheets);
-
-  // 중분류 선택 → 레벨3
-  sheet.querySelectorAll('[data-go-group]').forEach(b => {
-    b.addEventListener('click', (e) => {
-      if (e.target.closest('[data-rename-group],[data-del-group]')) return;
-      catManageSelGroupId = b.dataset.goGroup;
-      catManageLevel = 3;
-      renderCatManageSheet();
-    });
+    b.addEventListener('click', async (e) => { e.stopPropagation(); await deleteCatWithConfirm(b.dataset.delCat); });
   });
 
-  // 중분류 추가
-  sheet.querySelector('#addGroupBtn')?.addEventListener('click', async () => {
-    const name = sheet.querySelector('#newGroupName').value.trim();
-    if (!name) { showToast('이름을 입력해주세요'); return; }
-    const groups = subGroupsOfCategory(cat.id);
-    if (groups.find(g => g.name === name)) { showToast('이미 있는 이름이에요'); return; }
-    await DB.put('subGroups', { id: uid(), categoryId: cat.id, name, order: groups.length });
-    await reloadData(); renderCatManageSheet();
-  });
-  sheet.querySelector('#newGroupName')?.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') sheet.querySelector('#addGroupBtn').click();
-  });
-
-  // 중분류 이름 수정
+  // 중분류 이름 수정/삭제
   sheet.querySelectorAll('[data-rename-group]').forEach(b => {
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -3673,91 +3630,131 @@ function renderCatLevel2(sheet) {
       await DB.put('subGroups', g); await reloadData(); renderCatManageSheet();
     });
   });
-
-  // 중분류 삭제
   sheet.querySelectorAll('[data-del-group]').forEach(b => {
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
-      await deleteGroupWithConfirm(b.dataset.delGroup, cat.id);
+      const catId = b.closest('[data-cat-id]')?.dataset.catId;
+      await deleteGroupWithConfirm(b.dataset.delGroup, catId);
     });
   });
 
-  // 중분류(이름) 예산은 헌금종류(소분류)에서 설정 — 중분류 예산 입력 제거
-
-  // 소분류 직접 추가 (중분류 없는 경우)
-  sheet.querySelector('#addSubBtn')?.addEventListener('click', async () => {
-    const name = sheet.querySelector('#newSubName').value.trim();
-    if (!name) { showToast('이름을 입력해주세요'); return; }
-    const list = subItemsOfCategory(cat.id);
-    if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
-    await DB.put('subItems', { id: uid(), categoryId: cat.id, name, order: list.length, budget: 0 });
-    await reloadData(); renderCatManageSheet();
+  // 중분류 안에 소분류 추가
+  sheet.querySelectorAll('[data-add-sub-btn]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const gId = btn.dataset.addSubBtn;
+      const catId = btn.dataset.addSubCat || btn.closest('[data-cat-id]')?.dataset.catId;
+      const input = sheet.querySelector(`[data-add-sub-group="${gId}"]`);
+      const name = input?.value.trim();
+      if (!name) { showToast('이름을 입력해주세요'); return; }
+      const list = subItemsOfGroup(gId);
+      if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
+      await DB.put('subItems', { id: uid(), categoryId: catId, subGroupId: gId, name, order: list.length, budget: 0 });
+      await reloadData(); renderCatManageSheet();
+    });
   });
-  sheet.querySelector('#newSubName')?.addEventListener('keydown', e => { if(e.key==='Enter') sheet.querySelector('#addSubBtn').click(); });
-
-  // 소분류 수정/삭제
-  attachSubItemEvents(sheet, cat.id, null);
-
-  // persons 구조 폐기: 이벤트 핸들러 제거됨
-}
-
-// ── 레벨3: 소분류 목록 ──
-function renderCatLevel3(sheet) {
-  const cat = catById(catManageSelCatId);
-  const group = (State.subGroups||[]).find(g => g.id === catManageSelGroupId);
-  if (!cat || !group) { catManageLevel = 2; renderCatManageSheet(); return; }
-  const subs = subItemsOfGroup(group.id);
-
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <button id="catBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>
-      <h3>📂 ${escapeHTML(group.name)}</h3>
-      <button id="catMClose" class="sheet-close-btn">${ICONS.close}닫기</button>
-    </div>
-    <div class="sheet-body">
-      <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">${cat.icon} ${escapeHTML(cat.name)} → ${escapeHTML(group.name)}</div>
-      <div class="card" style="padding:4px 14px;">
-        ${subs.length === 0 ? '<div style="padding:12px 2px;color:var(--text-3);font-size:13px;">등록된 소분류가 없어요</div>' :
-          subs.map(s => renderSubRow(s, cat.id)).join('')}
-        <div class="cattree-addrow">
-          <input type="text" class="textinput" id="newSubName" placeholder="새 소분류 이름">
-          <button class="btn-secondary" id="addSubBtn">추가</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  sheet.querySelector('#catBack').addEventListener('click', () => { catManageLevel = 2; renderCatManageSheet(); });
-  sheet.querySelector('#catMClose').addEventListener('click', closeAllSheets);
-
-  sheet.querySelector('#addSubBtn').addEventListener('click', async () => {
-    const name = sheet.querySelector('#newSubName').value.trim();
-    if (!name) { showToast('이름을 입력해주세요'); return; }
-    const list = subItemsOfGroup(group.id);
-    if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
-    await DB.put('subItems', { id: uid(), categoryId: cat.id, subGroupId: group.id, name, order: list.length, budget: 0 });
-    await reloadData(); renderCatManageSheet();
+  sheet.querySelectorAll('[data-add-sub-group]').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const gId = input.dataset.addSubGroup;
+      sheet.querySelector(`[data-add-sub-btn="${gId}"]`)?.click();
+    });
   });
-  sheet.querySelector('#newSubName').addEventListener('keydown', e => { if(e.key==='Enter') sheet.querySelector('#addSubBtn').click(); });
 
-  attachSubItemEvents(sheet, cat.id, group.id);
+  // 대분류 직접 소분류 추가 (중분류 없는 경우)
+  sheet.querySelectorAll('[data-add-sub-direct]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const catId = btn.dataset.addSubDirect;
+      const input = sheet.querySelector(`[data-add-sub-cat-direct="${catId}"]`);
+      const name = input?.value.trim();
+      if (!name) { showToast('이름을 입력해주세요'); return; }
+      const list = subItemsOfCategory(catId);
+      if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
+      await DB.put('subItems', { id: uid(), categoryId: catId, name, order: list.length, budget: 0 });
+      await reloadData(); renderCatManageSheet();
+    });
+  });
+  sheet.querySelectorAll('[data-add-sub-cat-direct]').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const catId = input.dataset.addSubCatDirect;
+      sheet.querySelector(`[data-add-sub-direct="${catId}"]`)?.click();
+    });
+  });
+
+  // 중분류 추가
+  sheet.querySelectorAll('[data-add-group-btn]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const catId = btn.dataset.addGroupBtn;
+      const input = sheet.querySelector(`[data-add-group-cat="${catId}"]`);
+      const name = input?.value.trim();
+      if (!name) { showToast('이름을 입력해주세요'); return; }
+      const groups = subGroupsOfCategory(catId);
+      if (groups.find(g => g.name === name)) { showToast('이미 있는 이름이에요'); return; }
+      await DB.put('subGroups', { id: uid(), categoryId: catId, name, order: groups.length });
+      catManageExpanded.add(catId);
+      await reloadData(); renderCatManageSheet();
+    });
+  });
+  sheet.querySelectorAll('[data-add-group-cat]').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const catId = input.dataset.addGroupCat;
+      sheet.querySelector(`[data-add-group-btn="${catId}"]`)?.click();
+    });
+  });
+
+  // 소분류 예산/수정/삭제 (기존 attachSubItemEvents 인라인)
+  sheet.querySelectorAll('[data-budget-id]').forEach(input => {
+    attachMoneyInputFormatter(input, () => {});
+    const save = async () => {
+      const subId = input.dataset.budgetId;
+      const catId = input.dataset.catId;
+      const item = await DB.get('subItems', subId);
+      if (!item) return;
+      const newVal = Number(rawDigits(input.value)) || 0;
+      if (item.budget === newVal) return;
+      item.budget = newVal;
+      await DB.put('subItems', item);
+      if (item.subGroupId) {
+        const g = (State.subGroups||[]).find(x => x.id === item.subGroupId);
+        if (g) {
+          const gSubs = subItemsOfGroup(g.id);
+          const gTotal = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
+          if (g.budget !== gTotal) { g.budget = gTotal; await DB.put('subGroups', g); }
+        }
+      }
+      await recalcCatBudget(catId);
+      await reloadData(); renderCurrentPage();
+      showToast('예산 저장됐어요');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
+  });
+  sheet.querySelectorAll('[data-rename-sub]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const item = await DB.get('subItems', b.dataset.renameSub);
+      if (!item) return;
+      const name = prompt('소분류 이름 수정', item.name);
+      if (!name?.trim()) return;
+      item.name = name.trim();
+      await DB.put('subItems', item); await reloadData(); renderCatManageSheet();
+    });
+  });
+  sheet.querySelectorAll('[data-del-sub]').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const catId = b.closest('[data-cat-id]')?.dataset.catId;
+      const groupId = b.closest('[data-group-id]')?.dataset.groupId || null;
+      await deleteSubWithConfirm(b.dataset.delSub, catId, groupId);
+    });
+  });
 }
 
-// ── 소분류 행 렌더링 ──
-function renderSubRow(s, catId) {
-  return `<div class="cattree-leaf" style="${s.hidden?'opacity:0.45;':''}flex-wrap:wrap;gap:4px;">
-    <span style="flex:1;">${s.hidden?'🚫 ':''}${escapeHTML(s.name)}</span>
-    <div style="display:flex;align-items:center;gap:3px;">
-      <input type="text" inputmode="numeric" data-budget-id="${s.id}" data-cat-id="${catId}" value="${s.budget?fmtMoney(s.budget):''}" placeholder="연간예산" style="width:85px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
-      <span style="font-size:11px;color:var(--text-3);">원</span>
-    </div>
-    <div style="display:flex;gap:2px;">
-      <button class="grip" data-rename-sub="${s.id}">${ICONS.edit}</button>
-      <button class="grip" data-del-sub="${s.id}" style="color:var(--expense);">${ICONS.trash}</button>
-    </div>
-  </div>`;
-}
 
 // ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선) ──
 async function recalcCatBudget(catId) {
@@ -4060,16 +4057,6 @@ async function doDeleteItem(doMove, targetCatId, targetGroupId, targetSubId, tar
   _deletingItem = null;
   await reloadData();
 
-  // 삭제 후 상위 레벨로 복귀 (삭제된 항목이 있던 레벨의 부모)
-  if (returnLevel === 3) {
-    catManageLevel = 2;
-    catManageSelCatId = returnCatId;
-    catManageSelGroupId = null;
-  } else if (returnLevel === 2) {
-    catManageLevel = 1;
-  } else {
-    catManageLevel = 1;
-  }
   renderCatManageSheet();
   renderCurrentPage();
   showToast('삭제됐어요');
