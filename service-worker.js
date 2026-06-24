@@ -1,7 +1,7 @@
-// 2026-06-25 01:20 KST | 수정: CACHE_NAME v81 (항목구조 내보내기 설정에서 제거)
+// 2026-06-25 01:30 KST | 수정: CACHE_NAME v82 (subGroups 자동 복구 마이그레이션)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v81';
+const CACHE_NAME = 'gaegyebu-v82';
 const ASSETS = [
   './',
   './index.html',

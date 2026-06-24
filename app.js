@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 01:20 KST | 수정: 설정 > 항목구조 내보내기 제거 | cache:v81
+// v1.83 | 2026-06-25 01:30 KST | 수정: subGroups 자동 복구 마이그레이션 추가 | cache:v82
 'use strict';
 
 /* =========================================================
@@ -349,6 +349,38 @@ async function migratePersonsToSubGroups() {
       await DB.del('persons', p.id);
     }
   }
+}
+
+
+/* =========================================================
+   MIGRATION: subItems.subGroupId → subGroups 스토어 복구
+   subItems에 subGroupId가 있지만 subGroups 스토어에 해당
+   레코드가 없는 경우 자동 복구. (멱등성 보장)
+   ========================================================= */
+async function migrateSubGroupsFromSubItems() {
+  const [allSubItems, allSubGroups] = await Promise.all([
+    DB.getAll('subItems'), DB.getAll('subGroups')
+  ]);
+  const existingIds = new Set(allSubGroups.map(g => g.id));
+
+  // subGroupId별로 첫 번째 등장하는 subItem 정보로 그룹 생성
+  const sgMap = new Map();
+  for (const s of allSubItems) {
+    if (s.subGroupId && !existingIds.has(s.subGroupId) && !sgMap.has(s.subGroupId)) {
+      sgMap.set(s.subGroupId, {
+        id: s.subGroupId,
+        categoryId: s.categoryId,
+        name: s.name,
+        order: s.order ?? 0,
+      });
+    }
+  }
+  if (sgMap.size === 0) return;
+
+  for (const g of sgMap.values()) {
+    await DB.put('subGroups', g);
+  }
+  console.log(`[migration] subGroups 복구: ${sgMap.size}개`);
 }
 
 async function reloadData() {
@@ -4444,6 +4476,7 @@ async function initApp() {
   await DB.open();
   await seedIfEmpty();
   await migratePersonsToSubGroups();
+  await migrateSubGroupsFromSubItems();
   await reloadData();
   renderShell();
   switchTab('home');
