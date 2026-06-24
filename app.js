@@ -2715,7 +2715,13 @@ function openTxSheet(txId, presetDate, presetType) {
     State.formDate = editing.date;
     State.formMemo = editing.memo || '';
     State.formAmounts = {};
-    (editing.lines || []).forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
+    (editing.lines || []).forEach(l => {
+      if (l.subItemId) State.formAmounts[l.subItemId] = l.amount;
+      else State.formAmounts['__direct__'] = l.amount; // 소분류 없이 저장된 거래
+    });
+    if (!editing.lines || editing.lines.length === 0) {
+      State.formAmounts['__direct__'] = editing.amount || 0; // 구버전 호환
+    }
     // 수정 시에는 바로 항목 입력 단계로 진입 (대분류/이름은 이미 확정된 상태로 보여줌)
     State.formStep = 'items';
   } else {
@@ -3071,7 +3077,18 @@ async function renderTxStepItems(sheet) {
           <input type="text" class="textinput" id="newSubItemName" placeholder="새 세부항목 추가" style="flex:1;">
           <button class="btn-secondary" id="addSubItemBtn" style="width:auto; padding:0 16px; margin-top:0; color:var(--primary); font-weight:700;">추가</button>
         </div>
-        ${items.length === 0 ? `<div style="font-size:13px;color:var(--text-3);padding:8px 2px 0;">세부항목이 없어요. 위에서 추가해주세요</div>` : ''}
+        ${items.length === 0 ? `
+          <div style="margin-top:8px;">
+            <label style="font-weight:600;color:var(--text-1);margin-bottom:6px;display:block;font-size:13px;">
+              ${subGroup ? escapeHTML(subGroup.name) : cat.name}
+            </label>
+            <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px;padding-bottom:5px;gap:3px;">
+              <input type="text" inputmode="numeric" class="item-amt-input" data-item="__direct__" placeholder="0"
+                style="font-size:18px;font-weight:700;"
+                value="${State.formAmounts['__direct__'] != null ? fmtMoney(State.formAmounts['__direct__']) : ''}">
+              <span class="won" style="font-size:13px;">원</span>
+            </div>
+          </div>` : ''}
       </div>
 
       <div class="formrow" style="margin-top:10px;">
@@ -3203,7 +3220,10 @@ async function saveTx() {
 
   const lines = Object.entries(State.formAmounts)
     .filter(([, amt]) => Number(amt) > 0)
-    .map(([subItemId, amt]) => ({ subItemId, amount: Number(amt) }));
+    .map(([subItemId, amt]) => ({
+      subItemId: subItemId === '__direct__' ? null : subItemId,
+      amount: Number(amt)
+    }));
 
   if (lines.length === 0) { showToast('금액을 1개 이상 입력해주세요'); return; }
   // usePersonLevel 구조 사용 안 함 — subGroupId 필수 여부는 subGroups 여부로 판단
