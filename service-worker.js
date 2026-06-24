@@ -1,7 +1,7 @@
-// 2026-06-25 00:10 KST | 수정: CACHE_NAME v76 (항목 구조 내보내기 추가)
+// 2026-06-25 00:30 KST | 수정: CACHE_NAME v77 (항목 구조 내보내기 추가)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v76';
+const CACHE_NAME = 'gaegyebu-v77';
 const ASSETS = [
   './',
   './index.html',

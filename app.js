@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 00:10 KST | 수정: 설정 > 항목구조 엑셀 내보내기 추가 | cache:v76
+// v1.83 | 2026-06-25 00:30 KST | 수정: 항목구조 내보내기 - subGroups 없는 경우 subGroupId 추론 | cache:v77
 'use strict';
 
 /* =========================================================
@@ -2227,53 +2227,76 @@ function exportStructureExcel() {
     const typeCats = cats.filter(c => c.type === type);
 
     for (const cat of typeCats) {
-      const groups = subGroupsOfCategory(cat.id);
-      // subGroup에 속하지 않은 직속 subItem
-      const directItems = State.subItems
-        .filter(s => s.categoryId === cat.id && !s.subGroupId)
+      const catSubItems = State.subItems
+        .filter(s => s.categoryId === cat.id)
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      if (catSubItems.length === 0) continue;
 
-      if (groups.length === 0 && directItems.length === 0) continue;
+      // State.subGroups 우선 사용, 없으면 subGroupId로 추론
+      let groups = subGroupsOfCategory(cat.id);
 
-      let catFirstRow = true;
+      if (groups.length === 0) {
+        // subGroupId 기준으로 그룹 추론 (순서 유지)
+        const sgMap = new Map();
+        for (const s of catSubItems) {
+          if (s.subGroupId && !sgMap.has(s.subGroupId)) {
+            sgMap.set(s.subGroupId, { id: s.subGroupId, name: null, items: [] });
+          }
+          if (s.subGroupId) sgMap.get(s.subGroupId).items.push(s);
+        }
+        // 그룹명: 그룹 내 첫 번째 subItem명으로 추론
+        for (const grp of sgMap.values()) {
+          grp.name = grp.items[0].name;
+          // 그룹 내 아이템이 1개이고 이름이 같으면 중분류 생략(카테고리명 사용)
+          grp.skipGroupName = grp.items.length === 1;
+        }
 
-      // subGroup 있는 경우
-      for (const grp of groups) {
-        const items = subItemsOfGroup(grp.id);
-        if (items.length === 0) {
-          // 중분류만 있고 소분류 없음
-          aoa.push([
-            catFirstRow ? label : '',
-            catFirstRow ? cat.name : '',
-            grp.name,
-            '',
-            '',
-          ]);
-          catFirstRow = false;
-        } else {
-          for (const item of items) {
+        const directItems = catSubItems.filter(s => !s.subGroupId);
+        let catFirstRow = true;
+
+        for (const grp of sgMap.values()) {
+          for (const item of grp.items) {
             aoa.push([
               catFirstRow ? label : '',
               catFirstRow ? cat.name : '',
-              grp.name,
+              grp.skipGroupName ? '' : grp.name,
               item.name,
               '',
             ]);
             catFirstRow = false;
           }
         }
-      }
+        for (const item of directItems) {
+          aoa.push([
+            catFirstRow ? label : '',
+            catFirstRow ? cat.name : '',
+            '',
+            item.name,
+            '',
+          ]);
+          catFirstRow = false;
+        }
+      } else {
+        // State.subGroups 있는 경우
+        const directItems = catSubItems.filter(s => !s.subGroupId);
+        let catFirstRow = true;
 
-      // 직속 subItem (subGroup 없음)
-      for (const item of directItems) {
-        aoa.push([
-          catFirstRow ? label : '',
-          catFirstRow ? cat.name : '',
-          '',
-          item.name,
-          '',
-        ]);
-        catFirstRow = false;
+        for (const grp of groups) {
+          const items = subItemsOfGroup(grp.id);
+          if (items.length === 0) {
+            aoa.push([catFirstRow ? label : '', catFirstRow ? cat.name : '', grp.name, '', '']);
+            catFirstRow = false;
+          } else {
+            for (const item of items) {
+              aoa.push([catFirstRow ? label : '', catFirstRow ? cat.name : '', grp.name, item.name, '']);
+              catFirstRow = false;
+            }
+          }
+        }
+        for (const item of directItems) {
+          aoa.push([catFirstRow ? label : '', catFirstRow ? cat.name : '', '', item.name, '']);
+          catFirstRow = false;
+        }
       }
     }
 
