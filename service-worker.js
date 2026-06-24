@@ -1,7 +1,7 @@
-// 2026-06-25 00:30 KST | 수정: CACHE_NAME v77 (항목 구조 내보내기 추가)
+// 2026-06-25 00:50 KST | 수정: CACHE_NAME v79 (항목구조 내보내기 재작성)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v77';
+const CACHE_NAME = 'gaegyebu-v79';
 const ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,6 @@ const ASSETS = [
   './manifest.json'
 ];
 
-// 설치: 모든 에셋 캐싱 후 즉시 활성화
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -19,12 +18,10 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// skipWaiting 메시지 처리
 self.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// 활성화: 구버전 캐시 삭제
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -34,16 +31,12 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// 요청 처리: 캐시 우선, 실패 시 네트워크
 self.addEventListener('fetch', (e) => {
-  // chrome-extension 등 비-http 요청은 무시
   if (!e.request.url.startsWith('http')) return;
-
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) return cached;
       return fetch(e.request).then((response) => {
-        // ASSETS 목록에 있는 파일만 캐싱 (임의 fetch 캐시 오염 방지)
         const url = new URL(e.request.url);
         const isAsset = ASSETS.some(a => url.pathname.endsWith(a.replace('./', '/'))) ||
                         url.pathname === '/' || url.pathname.endsWith('/');
@@ -54,7 +47,6 @@ self.addEventListener('fetch', (e) => {
         return response;
       });
     }).catch(() => {
-      // 오프라인 + 캐시 미스 시 index.html 반환 (SPA fallback)
       return caches.match('./index.html');
     })
   );
