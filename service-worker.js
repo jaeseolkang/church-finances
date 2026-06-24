@@ -1,7 +1,7 @@
-// 2026-06-25 00:50 KST | 수정: CACHE_NAME v79 (항목구조 내보내기 재작성)
+// 2026-06-25 01:20 KST | 수정: CACHE_NAME v81 (항목구조 내보내기 설정에서 제거)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v79';
+const CACHE_NAME = 'gaegyebu-v81';
 const ASSETS = [
   './',
   './index.html',
@@ -17,11 +17,9 @@ self.addEventListener('install', (e) => {
       .then(() => self.skipWaiting())
   );
 });
-
 self.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
-
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -30,7 +28,6 @@ self.addEventListener('activate', (e) => {
   );
   self.clients.claim();
 });
-
 self.addEventListener('fetch', (e) => {
   if (!e.request.url.startsWith('http')) return;
   e.respondWith(
@@ -46,8 +43,6 @@ self.addEventListener('fetch', (e) => {
         }
         return response;
       });
-    }).catch(() => {
-      return caches.match('./index.html');
-    })
+    }).catch(() => caches.match('./index.html'))
   );
 });

@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 00:50 KST | 수정: 항목구조 내보내기 - Python 생성본과 동일한 구조로 재작성 | cache:v79
+// v1.83 | 2026-06-25 01:20 KST | 수정: 설정 > 항목구조 내보내기 제거 | cache:v81
 'use strict';
 
 /* =========================================================
@@ -1547,13 +1547,6 @@ function renderSettings() {
         <div><div class="settings-label">수입/지출 항목 관리</div></div>
         ${ICONS.chevR}
       </div>
-      <div class="settings-row" id="rowExportStructure">
-        <div>
-          <div class="settings-label">항목 구조 내보내기</div>
-          <div class="settings-sub">수입/지출 항목을 트리 구조 표로 내보내기</div>
-        </div>
-        ${ICONS.download}
-      </div>
     </div>
 
     <div class="settings-group">
@@ -1665,7 +1658,6 @@ function renderSettings() {
     });
   });
   page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
-  page.querySelector('#rowExportStructure').addEventListener('click', exportStructureExcel);
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
@@ -2213,126 +2205,6 @@ async function ensureYearCarryover(year) {
    항목 구조 엑셀 내보내기
    카테고리 > 중분류(subGroup) > 소분류(subItem) 트리를 표로 출력
    ========================================================= */
-function exportStructureExcel() {
-  const aoa = [];
-
-  // ── 타이틀 + 헤더 ──────────────────────────────────────────
-  aoa.push(['교회 회계 항목 구조표', '', '', '', '', '']);
-  aoa.push(['#', '대분류(카테고리)', '중분류(그룹)', '소분류(항목)', 'subGroupId', '비고']);
-
-  const cats = [...State.categories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-  // ── subGroupId → 그룹 추론 헬퍼 ───────────────────────────
-  // subGroups 스토어가 비어있는 경우, subItems의 subGroupId로 그룹을 직접 묶는다
-  function buildGroupsFromSubItems(catId) {
-    const catSubs = State.subItems
-      .filter(s => s.categoryId === catId)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    // State.subGroups 있으면 우선 사용
-    const storeGroups = subGroupsOfCategory(catId);
-    if (storeGroups.length > 0) {
-      return {
-        groups: storeGroups.map(g => ({
-          id: g.id,
-          name: g.name,
-          items: subItemsOfGroup(g.id),
-        })),
-        directItems: catSubs.filter(s => !s.subGroupId),
-      };
-    }
-
-    // subGroupId 기준으로 그룹 추론
-    const sgMap = new Map(); // subGroupId → { id, name, items[] }
-    const directItems = [];
-    for (const s of catSubs) {
-      if (s.subGroupId) {
-        if (!sgMap.has(s.subGroupId)) {
-          sgMap.set(s.subGroupId, { id: s.subGroupId, name: s.name, items: [] });
-        }
-        sgMap.get(s.subGroupId).items.push(s);
-      } else {
-        directItems.push(s);
-      }
-    }
-    return { groups: [...sgMap.values()], directItems };
-  }
-
-  // ── 수입 / 지출 섹션 출력 ──────────────────────────────────
-  for (const type of ['income', 'expense']) {
-    const sectionLabel = type === 'income' ? '▶  수입 항목' : '▶  지출 항목';
-    aoa.push([sectionLabel, '', '', '', '', '']);
-
-    const typeCats = cats.filter(c => c.type === type);
-    let seq = 1;
-
-    for (const cat of typeCats) {
-      const { groups, directItems } = buildGroupsFromSubItems(cat.id);
-      if (groups.length === 0 && directItems.length === 0) continue;
-
-      let catFirstRow = true;
-
-      // 그룹 있는 항목
-      for (const grp of groups) {
-        let grpFirstRow = true;
-        const items = grp.items;
-
-        if (items.length === 0) {
-          aoa.push([
-            catFirstRow ? seq : '',
-            catFirstRow ? cat.name : '',
-            grp.name, '', grp.id, '',
-          ]);
-          catFirstRow = false;
-        } else {
-          for (const item of items) {
-            aoa.push([
-              catFirstRow ? seq : '',
-              catFirstRow ? cat.name : '',
-              grpFirstRow ? grp.name : '',       // 중분류: 그룹 첫 행만
-              item.name,
-              grpFirstRow ? grp.id : '',          // subGroupId: 그룹 첫 행만
-              '',
-            ]);
-            catFirstRow = false;
-            grpFirstRow = false;
-          }
-        }
-      }
-
-      // 그룹 없는 직속 소분류
-      for (const item of directItems) {
-        aoa.push([
-          catFirstRow ? seq : '',
-          catFirstRow ? cat.name : '',
-          '(그룹없음)', item.name, '', '',
-        ]);
-        catFirstRow = false;
-      }
-
-      seq++;
-    }
-  }
-
-  // ── 워크북 생성 ────────────────────────────────────────────
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  ws['!cols'] = [
-    { wch: 5  }, // #
-    { wch: 16 }, // 대분류
-    { wch: 18 }, // 중분류
-    { wch: 20 }, // 소분류
-    { wch: 22 }, // subGroupId
-    { wch: 12 }, // 비고
-  ];
-  ws['!freeze'] = { xSplit: 0, ySplit: 2 };
-
-  XLSX.utils.book_append_sheet(wb, ws, '항목구조');
-  const today = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `항목구조-${today}.xlsx`);
-  showToast('항목 구조 파일을 내보냈어요');
-}
 
 async function exportExcel() {
   if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
