@@ -633,25 +633,33 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .cal-weekdays span:first-child{color:var(--expense);}
 .cal-weekdays span:last-child{color:var(--primary);}
 
-.cal-days{display:grid; grid-template-columns:repeat(7,1fr);}
+.cal-days{display:grid; grid-template-columns:repeat(7,minmax(0,1fr));}
 .cal-day{
   position:relative;
   min-height:58px;
-  padding:6px 3px 4px;
+  min-width:0;
+  padding:6px 2px 4px;
   border-top:1px solid var(--border);
   display:flex; flex-direction:column; align-items:center;
   -webkit-tap-highlight-color:transparent;
+  overflow:hidden;
 }
 .cal-day.other-month{opacity:0.32;}
 .cal-day .dnum{
   font-size:13px; font-weight:700; color:var(--text-1);
   width:22px; height:22px; display:flex; align-items:center; justify-content:center;
   border-radius:50%;
+  flex-shrink:0;
 }
 .cal-day.is-sun .dnum{color:var(--expense);}
 .cal-day.is-sat .dnum{color:var(--primary);}
 .cal-day.is-today .dnum{background:var(--text-1); color:#fff;}
-.cal-day .damt{font-size:10px; font-weight:700; margin-top:3px; line-height:1.3; text-align:center;}
+.cal-day .damt{
+  font-size:9.5px; font-weight:700; margin-top:3px; line-height:1.25; text-align:center;
+  width:100%; max-width:100%;
+  word-break:break-all;
+  overflow-wrap:anywhere;
+}
 .cal-day .damt.income{color:var(--primary);}
 .cal-day .damt.expense{color:var(--expense);}
 .cal-day:active{background:var(--bg);}
