@@ -1,4 +1,4 @@
-// v1.77 | 2026-06-24 20:30 KST | 수정: 엑셀 지정기간 날짜 선택을 연/월/일 드롭다운으로 변경 | cache:v74
+// v1.80 | 2026-06-24 22:00 KST | 수정: 거래 수정 시 기존 소분류 항상 표시, 대/중/소 변경 가능 | cache:v74
 'use strict';
 
 /* =========================================================
@@ -2804,7 +2804,19 @@ function renderTxStepPick(sheet) {
       </div>
     </div>
   `;
-  sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelector('#txClose').addEventListener('click', () => {
+    if (State.editingTx) {
+      // 수정 모드에서 분류 변경 중 취소 → items로 복귀
+      State.formCategoryId = State.editingTx.categoryId;
+      State.formSubGroupId = State.editingTx.subGroupId || State.editingTx.personId || null;
+      State.formAmounts = {};
+      (State.editingTx.lines || []).forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
+      State.formStep = 'items';
+      renderTxSheet();
+    } else {
+      closeTxSheet();
+    }
+  });
   // 새 항목 추가 버튼
   const txAddBtn = sheet.querySelector('#txAddPerson');
   if (txAddBtn) {
@@ -2933,7 +2945,18 @@ function renderTxStepPickGroup(sheet) {
     State.formCategoryId = null;
     renderTxSheet();
   });
-  sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelector('#txClose').addEventListener('click', () => {
+    if (State.editingTx) {
+      // 수정 모드에서 중분류 변경 중 취소 → items로 복귀
+      State.formSubGroupId = State.editingTx.subGroupId || State.editingTx.personId || null;
+      State.formAmounts = {};
+      (State.editingTx.lines || []).forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
+      State.formStep = 'items';
+      renderTxSheet();
+    } else {
+      closeTxSheet();
+    }
+  });
   sheet.querySelectorAll('[data-pick-group]').forEach(b => {
     b.addEventListener('click', async () => {
       State.formSubGroupId = b.dataset.pickGroup;
@@ -2976,6 +2999,17 @@ async function renderTxStepItems(sheet) {
     items = sortItemsForEntry(allCatItems);
   }
 
+  // 수정 모드: 기존 거래의 lines에 있는 소분류가 목록에 없으면 추가 표시
+  if (editing) {
+    const existingIds = new Set(items.map(s => s.id));
+    const missingItems = (editing.lines || [])
+      .map(l => l.subItemId ? subItemById(l.subItemId) : null)
+      .filter(s => s && !existingIds.has(s.id));
+    if (missingItems.length > 0) {
+      items = [...missingItems, ...items];
+    }
+  }
+
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
   const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
   const hasTpl = !!tpl;
@@ -2986,7 +3020,17 @@ async function renderTxStepItems(sheet) {
       <div style="display:flex; align-items:center; justify-content:space-between;">
         ${!editing ? `<button id="txBack" style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:2px;">${ICONS.chevLeft}이전</button>` : `<div style="width:40px;"></div>`}
         <div style="text-align:center;">
-          <h3 style="line-height:1.3;">${cat.icon} ${subGroup ? escapeHTML(subGroup.name) : cat.name}</h3>
+          ${editing ? `
+            <div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:2px;flex-wrap:wrap;">
+              <button id="txChangeCat" style="font-size:14px;font-weight:800;color:var(--text-1);border-bottom:1px dashed var(--border);padding-bottom:1px;line-height:1.4;background:none;cursor:pointer;">
+                ${cat.icon} ${escapeHTML(cat.name)}
+              </button>
+              ${subGroup ? `<span style="color:var(--text-3);font-size:13px;">›</span>
+              <button id="txChangeGroup" style="font-size:13px;font-weight:700;color:var(--primary);border-bottom:1px dashed var(--primary);padding-bottom:1px;background:none;cursor:pointer;">
+                ${escapeHTML(subGroup.name)}
+              </button>` : ''}
+            </div>
+          ` : `<h3 style="line-height:1.3;">${cat.icon} ${subGroup ? escapeHTML(subGroup.name) : cat.name}</h3>`}
           <span id="txDateLabel" style="font-size:12px; color:var(--primary); font-weight:600; border-bottom:1px dashed var(--primary); padding-bottom:1px; cursor:pointer;">${dayLabel(State.formDate)}</span>
             <input type="date" id="txDateInput" value="${State.formDate}" style="width:0;height:0;opacity:0;position:absolute;">
         </div>
@@ -3040,6 +3084,24 @@ async function renderTxStepItems(sheet) {
   `;
 
   sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+
+  // 수정 모드: 대분류 변경 → pick 단계
+  sheet.querySelector('#txChangeCat')?.addEventListener('click', () => {
+    State.formAmounts = {};
+    State.formSubGroupId = null;
+    State.formCategoryId = null;
+    State.formStep = 'pick';
+    renderTxSheet();
+  });
+
+  // 수정 모드: 중분류 변경 → pickGroup 단계
+  sheet.querySelector('#txChangeGroup')?.addEventListener('click', () => {
+    State.formAmounts = {};
+    State.formSubGroupId = null;
+    State.formStep = 'pickGroup';
+    renderTxSheet();
+  });
+
   sheet.querySelector('#txMemoInput').addEventListener('input', (e) => {
     State.formMemo = e.target.value;
   });
@@ -3530,7 +3592,7 @@ function renderCatLevel2(sheet) {
           </div>
         </div>
       ` : `
-        <!-- subGroups 없는 대분류: 기존 방식 (소분류 직접) -->
+        <!-- subGroups 없는 대분류: 소분류 + 중분류 추가 가능 -->
         <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류</div>
         <div class="card" style="padding:4px 14px;margin-bottom:12px;">
           ${subs.length === 0 ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 소분류가 없어요</div>' :
@@ -3538,6 +3600,14 @@ function renderCatLevel2(sheet) {
           <div class="cattree-addrow">
             <input type="text" class="textinput" id="newSubName" placeholder="새 소분류 이름">
             <button class="btn-secondary" id="addSubBtn">추가</button>
+          </div>
+        </div>
+        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">중분류</div>
+        <div class="card" style="padding:4px 14px;margin-bottom:12px;">
+          <div style="padding:6px 2px 2px;font-size:11px;color:var(--text-3);">중분류를 추가하면 거래 입력 시 중분류 선택 후 소분류를 입력합니다.</div>
+          <div class="cattree-addrow" style="margin-top:6px;">
+            <input type="text" class="textinput" id="newGroupName" placeholder="새 중분류 이름">
+            <button class="btn-secondary" id="addGroupBtn">추가</button>
           </div>
         </div>
       `}
