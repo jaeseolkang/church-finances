@@ -1,4 +1,4 @@
-// v1.80 | 2026-06-24 22:00 KST | 수정: 거래 수정 시 기존 소분류 항상 표시, 대/중/소 변경 가능 | cache:v74
+// v1.81 | 2026-06-24 22:30 KST | 수정: 항목관리 레벨2 이름(중분류) 탭하면 레벨3 소분류 관리로 이동 | cache:v74
 'use strict';
 
 /* =========================================================
@@ -3559,7 +3559,7 @@ function renderCatLevel2(sheet) {
 
       ${hasGroups ? `
         <!-- 헌금처럼 이름(subGroup)이 있는 대분류: 헌금종류(공통 소분류) 예산 설정 우선 -->
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">헌금종류 (소분류 · 예산 설정)</div>
+        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">소분류 (중분류 공통 · 예산 설정)</div>
         <div class="card" style="padding:4px 14px;margin-bottom:12px;">
           ${subs.length === 0
             ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">헌금종류를 추가하세요 (예: 주일헌금, 십일조, 감사헌금)</div>'
@@ -3575,17 +3575,22 @@ function renderCatLevel2(sheet) {
           </div>` : ''}
         </div>
 
-        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">이름 관리 (중분류 · 거래 입력에서 선택)</div>
+        <div style="font-size:12px;font-weight:800;color:var(--text-3);margin-bottom:6px;">중분류 관리 (탭하면 소분류 추가/관리)</div>
         <div class="card" style="padding:4px 14px;margin-bottom:12px;">
           ${groups.length === 0
             ? '<div style="padding:8px 2px;color:var(--text-3);font-size:12px;">등록된 이름이 없어요</div>'
-            : groups.map(g => `
-              <div class="catrow" style="border:none;padding:5px 0;border-bottom:1px solid var(--border);">
-                <span style="font-size:15px;">👤</span>
-                <div class="nm">${escapeHTML(g.name)}</div>
-                <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
-                <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
-              </div>`).join('')}
+            : groups.map(g => {
+                const gSubs = subItemsOfGroup(g.id);
+                return `
+                <div class="catrow" style="border:none;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;" data-go-group="${g.id}">
+                  <span style="font-size:15px;">📂</span>
+                  <div class="nm">${escapeHTML(g.name)}</div>
+                  <div style="font-size:11px;color:var(--text-3);margin-right:2px;">${gSubs.length > 0 ? gSubs.length+'개 소분류' : '소분류 없음'}</div>
+                  <span style="color:var(--text-3);font-size:16px;margin-right:2px;">›</span>
+                  <button class="grip" data-rename-group="${g.id}">${ICONS.edit}</button>
+                  <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
+                </div>`;
+              }).join('')}
           <div class="cattree-addrow">
             <input type="text" class="textinput" id="newGroupName" placeholder="이름 추가 (예: 홍길동)">
             <button class="btn-secondary" id="addGroupBtn">추가</button>
