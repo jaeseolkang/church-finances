@@ -1,4 +1,4 @@
-// v2.06 | 2026-06-25 17:40 KST | 수정: 결재란 - 결재(세로) + 담당/부장/담임목사 4열 구조 | cache:v111
+// v2.07 | 2026-06-25 17:40 KST | 수정: 결재란 - 결재 세로텍스트/병합 인쇄+엑셀 수정 | cache:v111
 'use strict';
 
 /* =========================================================
@@ -1497,7 +1497,7 @@ function exportLedgerToExcel(ym) {
   aoa.push(['','순헌금/지출','','',inc-transfer,exp-deposit,'']);
   // 결재란 (빈 행 후 우측)
   aoa.push([]);
-  aoa.push(['','','','','담 당','부 장','담임목사']);
+  aoa.push(['','','','결재','담 당','부 장','담임목사']);
   aoa.push(['','','','','','','']);
   aoa.push(['','','','','','','']);
   aoa.push(['','','','','','','']);
@@ -1513,26 +1513,34 @@ function exportLedgerToExcel(ym) {
       if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
     }
   }
-  // 결재란 테두리 (마지막 5행, D~G열 = col 4~6)
+  // 결재란 테두리 (마지막 5행, D~G열 = col 3~6)
   const approvalStartRow = totalRows - 4;
   const thin = {style:'thin', color:{rgb:'000000'}};
   const bdr = {top:thin,bottom:thin,left:thin,right:thin};
   for (let r = approvalStartRow; r < totalRows; r++) {
-    for (let col = 4; col <= 6; col++) {
+    for (let col = 3; col <= 6; col++) {
       const addr = XLSX.utils.encode_cell({r, col});
       if (!ws[addr]) ws[addr] = {t:'s', v:''};
       ws[addr].s = {border: bdr, alignment:{horizontal:'center',vertical:'center'}};
     }
   }
-  // 결재란 헤더 굵게
-  for (let col = 4; col <= 6; col++) {
+  // 결재란 헤더 굵게 (담당/부장/담임목사)
+  for (let col = 3; col <= 6; col++) {
     const addr = XLSX.utils.encode_cell({r: approvalStartRow, col});
-    if (ws[addr]) ws[addr].s = {...(ws[addr].s||{}), font:{bold:true}, alignment:{horizontal:'center'}, border:bdr};
+    if (ws[addr]) ws[addr].s = {font:{bold:true}, alignment:{horizontal:'center',vertical:'center'}, border:bdr};
   }
+  // "결재" 셀 세로 병합 (D열=col3, 헤더행~마지막행)
+  if (!ws['!merges']) ws['!merges'] = [];
+  ws['!merges'].push({
+    s:{r:approvalStartRow, c:3},
+    e:{r:totalRows-1, c:3}
+  });
+  const keolAddr = XLSX.utils.encode_cell({r:approvalStartRow, c:3});
+  ws[keolAddr] = {t:'s', v:'결재', s:{font:{bold:true}, alignment:{horizontal:'center',vertical:'center',textRotation:90}, border:bdr}};
   // 행 높이 설정
   if (!ws['!rows']) ws['!rows'] = [];
   for (let r = approvalStartRow+1; r < totalRows; r++) {
-    ws['!rows'][r] = {hpt: 36};
+    ws['!rows'][r] = {hpt: 30};
   }
   XLSX.utils.book_append_sheet(wb, ws, `${month}월장부`);
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
@@ -2274,7 +2282,9 @@ function openLedgerSheet() {
         <table style="border-collapse:collapse;font-size:8pt;">
           <thead>
             <tr>
-              <th rowspan="2" style="border:0.5pt solid #000;padding:2pt 4pt;text-align:center;font-weight:700;writing-mode:vertical-rl;letter-spacing:4pt;width:16pt;">결재</th>
+              <th rowspan="2" style="border:0.5pt solid #000;padding:0;text-align:center;font-weight:700;width:18pt;vertical-align:middle;">
+                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:8pt;font-weight:700;letter-spacing:3pt;padding:4pt 2pt;">결재</div>
+              </th>
               <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">담 당</th>
               <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">부 장</th>
               <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">담임목사</th>
