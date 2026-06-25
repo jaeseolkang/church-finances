@@ -1,4 +1,4 @@
-// v1.85 | 2026-06-25 17:40 KST | 수정: renderTxStepPickGroup - subGroups 있는 카테고리는 ungroupedItems 숨김 (헌금종류가 이름목록에 섞이는 버그) | cache:v103
+// v1.86 | 2026-06-25 17:40 KST | 수정: 통계 인쇄 기능 추가 (A4, 막대/내용/헌금피벗 포함) | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1322,6 +1322,154 @@ function txInPeriod(start, end) {
   return State.transactions.filter(t => t.date >= start && t.date <= end);
 }
 
+/* =========================================================
+   PRINT: 통계 인쇄 (A4)
+   ========================================================= */
+function printStats() {
+  const range = statsPeriodRange();
+  const allTx  = txInPeriod(range.start, range.end);
+  const list   = allTx.filter(t => t.type === State.statsType);
+  const isIncome = State.statsType === 'income';
+
+  const incTotal = allTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expTotal = allTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const netTotal = incTotal - expTotal;
+
+  // ── 통계 탭: 막대 데이터 ──
+  const byCat = {};
+  let statTotal = 0;
+  for (const t of list) {
+    byCat[t.categoryId] = (byCat[t.categoryId] || 0) + t.amount;
+    statTotal += t.amount;
+  }
+  const statRows = Object.entries(byCat)
+    .map(([catId, amt]) => {
+      const cat = catById(catId) || {name:'삭제된 항목', icon: isIncome?'🙏':'📦'};
+      return { icon: cat.icon, name: cat.name, amt };
+    })
+    .sort((a,b) => b.amt - a.amt);
+
+  // ── 내용 탭: 집계 데이터 ──
+  const detailTx = list.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const aggMap = buildStatsAggMap(detailTx, isIncome);
+  const aggRows = Object.entries(aggMap)
+    .map(([key,r]) => ({key,...r}))
+    .sort((a,b) => b.amount - a.amount);
+
+  // ── 헌금 피벗 ──
+  let pivotHTML = '';
+  if (isIncome) {
+    const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+    if (heongCat) {
+      const heongList = list.filter(t => t.categoryId === heongCat.id);
+      const pivot = {};
+      const colSet = new Set();
+      for (const t of heongList) {
+        const sgId = t.subGroupId || t.personId;
+        const pName = sgId ? ((State.persons||[]).find(p=>p.id===sgId)||{}).name||'(이름없음)' : '(이름없음)';
+        if (!pivot[pName]) pivot[pName] = {};
+        for (const l of (t.lines||[])) {
+          const si = subItemById(l.subItemId);
+          const sName = si ? subItemDisplayName('income','헌금',si.name) : '(기타)';
+          pivot[pName][sName] = (pivot[pName][sName]||0) + l.amount;
+          colSet.add(sName);
+        }
+      }
+      const rows = Object.keys(pivot).sort((a,b)=>a.localeCompare(b,'ko'));
+      const orderedCols = [
+        ...TX_ENTRY_ITEM_ORDER.filter(n=>colSet.has(n)),
+        ...[...colSet].filter(n=>!TX_ENTRY_ITEM_ORDER.includes(n)).sort()
+      ];
+      if (rows.length > 0) {
+        const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
+        const grandTotal = colTotals.reduce((s,v)=>s+v,0);
+        pivotHTML = `
+          <div style="margin-top:16pt;">
+            <div style="font-size:12pt;font-weight:800;margin-bottom:6pt;border-bottom:1pt solid #000;padding-bottom:4pt;">🙏 헌금 개인별 명세</div>
+            <table>
+              <thead><tr>
+                <th class="left">이름</th>
+                ${orderedCols.map(c=>`<th>${escapeHTML(c)}</th>`).join('')}
+                <th>합계</th>
+              </tr></thead>
+              <tbody>
+                ${rows.map(name => {
+                  const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
+                  return `<tr>
+                    <td class="left">${escapeHTML(name)}</td>
+                    ${orderedCols.map(c=>`<td>${pivot[name][c]?fmtMoney(pivot[name][c]):''}</td>`).join('')}
+                    <td>${fmtMoney(rowTotal)}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+              <tfoot><tr>
+                <td class="left">합계</td>
+                ${colTotals.map(v=>`<td>${fmtMoney(v)}</td>`).join('')}
+                <td>${fmtMoney(grandTotal)}</td>
+              </tr></tfoot>
+            </table>
+          </div>`;
+      }
+    }
+  }
+
+  const typeLabel = isIncome ? '수입' : '지출';
+  const html = `
+    <div class="print-title">📊 통계 — ${typeLabel}</div>
+    <div class="print-period">${range.label}</div>
+    <div class="print-summary">
+      <div class="print-summary-item">
+        <div class="print-summary-label">수입</div>
+        <div class="print-summary-value income">${fmtMoney(incTotal)}원</div>
+      </div>
+      <div class="print-summary-item">
+        <div class="print-summary-label">지출</div>
+        <div class="print-summary-value expense">${fmtMoney(expTotal)}원</div>
+      </div>
+      <div class="print-summary-item">
+        <div class="print-summary-label">합계</div>
+        <div class="print-summary-value">${fmtMoney(netTotal)}원</div>
+      </div>
+    </div>
+
+    <div style="font-size:12pt;font-weight:800;margin-bottom:6pt;">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
+    ${statRows.map(r => {
+      const pct = statTotal > 0 ? Math.round(r.amt/statTotal*100) : 0;
+      return `<div class="print-bar-row">
+        <div class="print-bar-label">${r.icon} ${escapeHTML(r.name)}</div>
+        <div class="print-bar-pct">${pct}%</div>
+        <div class="print-bar-amt">${fmtMoney(r.amt)}원</div>
+      </div>`;
+    }).join('')}
+
+    <div style="margin-top:16pt;">
+      <div style="font-size:12pt;font-weight:800;margin-bottom:6pt;border-bottom:1pt solid #000;padding-bottom:4pt;">내용 상세</div>
+      <div style="display:flex;justify-content:space-between;font-size:9pt;color:#666;font-weight:700;padding:2pt 2pt 4pt;border-bottom:0.5pt solid #aaa;">
+        <span style="flex:1;">항목</span><span style="min-width:36pt;text-align:right;">건수</span><span style="min-width:80pt;text-align:right;">금액</span>
+      </div>
+      ${aggRows.map(r=>`
+        <div class="print-detail-row">
+          <div class="print-detail-label">${escapeHTML(r.label)}</div>
+          <div class="print-detail-count">${r.count}건</div>
+          <div class="print-detail-amt">${fmtMoney(r.amount)}원</div>
+        </div>`).join('')}
+      <div class="print-total-row">
+        <span>합계</span>
+        <span>${fmtMoney(aggRows.reduce((s,r)=>s+r.amount,0))}원</span>
+      </div>
+    </div>
+
+    ${pivotHTML}
+  `;
+
+  const area = document.getElementById('print-area');
+  area.innerHTML = html;
+  area.style.display = 'block';
+  window.print();
+  area.style.display = 'none';
+  area.innerHTML = '';
+}
+
 function renderStats() {
   const page = document.getElementById('page-stats');
   const range = statsPeriodRange();
@@ -1359,6 +1507,7 @@ function renderStats() {
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>통계</h1>
+      <button id="statsPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
     </div>
 
     <!-- 통계 | 내용 -->
@@ -1421,6 +1570,8 @@ function renderStats() {
   `;
 
   // 이벤트
+  page.querySelector('#statsPrint').addEventListener('click', () => printStats());
+
   page.querySelectorAll('.segctrl')[0].querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => { State.statsView = b.dataset.view; renderStats(); });
   });

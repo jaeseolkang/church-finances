@@ -1,4 +1,4 @@
-<!-- 2026-06-23 21:40 KST | 수정: sheet-body padding-bottom 24→80px (하단 버튼 잘림 방지) -->
+<!-- 2026-06-25 17:40 KST | 수정: @media print A4 스타일 + #print-area 추가 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -695,10 +695,62 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .day-add-btn.income{background:var(--primary-light); color:var(--primary);}
 .day-add-btn.expense{background:var(--expense-light); color:var(--expense);}
 .day-add-btn svg{width:16px;height:16px;}
+
+/* ===== 인쇄 스타일 (A4) ===== */
+@media print {
+  @page { size: A4 portrait; margin: 15mm 12mm; }
+
+  body { position: static !important; background: #fff !important; overflow: visible !important; height: auto !important; }
+  #app  { display: block !important; overflow: visible !important; height: auto !important; }
+
+  /* 인쇄 대상이 아닌 모든 요소 숨김 */
+  .page, .tabbar, #catStatDetailSheet, #subStatDetailSheet,
+  #txSheet, #dayDetailSheet, .sheet-overlay { display: none !important; }
+
+  /* 인쇄 대상만 표시 */
+  #print-area {
+    display: block !important;
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+    font-size: 11pt;
+    color: #000;
+  }
+
+  .print-title { font-size: 15pt; font-weight: 800; margin-bottom: 6pt; }
+  .print-period { font-size: 10pt; color: #555; margin-bottom: 10pt; }
+  .print-summary { display: flex; gap: 20pt; margin-bottom: 12pt; border-bottom: 1.5pt solid #000; padding-bottom: 8pt; }
+  .print-summary-item { flex: 1; }
+  .print-summary-label { font-size: 9pt; color: #666; }
+  .print-summary-value { font-size: 13pt; font-weight: 800; }
+  .print-summary-value.income { color: #1F5C8B; }
+  .print-summary-value.expense { color: #B00; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 9pt; }
+  table th { background: #2D6CDF !important; color: #fff !important; padding: 5pt 4pt; text-align: right; border: 0.5pt solid #aaa; font-size: 9pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table th.left { text-align: left; }
+  table td { padding: 4pt 4pt; border: 0.5pt solid #ddd; text-align: right; }
+  table td.left { text-align: left; font-weight: 600; }
+  table tr:nth-child(even) td { background: #f7f7f7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table tfoot td { background: #eee !important; font-weight: 800; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .print-bar-row { display: flex; justify-content: space-between; padding: 5pt 2pt; border-bottom: 0.5pt solid #eee; font-size: 10pt; }
+  .print-bar-label { flex: 1; }
+  .print-bar-amt { font-weight: 700; min-width: 80pt; text-align: right; }
+  .print-bar-pct { min-width: 36pt; text-align: right; color: #555; }
+
+  .print-detail-row { display: flex; justify-content: space-between; padding: 4pt 2pt; border-bottom: 0.5pt solid #eee; font-size: 10pt; }
+  .print-detail-label { flex: 1; }
+  .print-detail-count { min-width: 36pt; text-align: right; color: #555; }
+  .print-detail-amt { min-width: 80pt; text-align: right; font-weight: 700; }
+  .print-total-row { display: flex; justify-content: space-between; padding: 6pt 2pt; font-weight: 800; font-size: 11pt; border-top: 1.5pt solid #000; margin-top: 2pt; }
+
+  .print-no-print { display: none !important; }
+}
 </style>
 </head>
 <body>
 <div id="app"></div>
+<div id="print-area" style="display:none;"></div>
 <script src="xlsx.full.min.js"></script>
 <script src="app.js"></script>
 <script>
