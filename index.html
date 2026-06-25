@@ -743,6 +743,13 @@ input,textarea,select{font-family:inherit; color:inherit;}
 
   .print-no-print { display: none !important; }
 
+  /* 월장부 테이블 — thead 매 페이지 반복 */
+  #print-area table thead { display: table-header-group; }
+  #print-area table tfoot { display: table-footer-group; }
+  #print-area table { width: 100% !important; font-size: 7.5pt !important; }
+  #print-area table th,
+  #print-area table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; white-space: nowrap; }
+
   /* 페이지 구분 */
   .print-page {
     page-break-after: always;
