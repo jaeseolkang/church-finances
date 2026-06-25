@@ -701,13 +701,10 @@ input,textarea,select{font-family:inherit; color:inherit;}
   @page { size: A4 portrait; margin: 15mm 12mm; }
 
   body { position: static !important; background: #fff !important; overflow: visible !important; height: auto !important; }
-  #app  { display: block !important; overflow: visible !important; height: auto !important; }
 
-  /* 인쇄 대상이 아닌 모든 요소 숨김 */
-  .page, .tabbar, #catStatDetailSheet, #subStatDetailSheet,
-  #txSheet, #dayDetailSheet, .sheet-overlay { display: none !important; }
+  /* 앱 UI 전체 숨김, print-area만 표시 */
+  #app { display: none !important; }
 
-  /* 인쇄 대상만 표시 */
   #print-area {
     display: block !important;
     width: 100%;
