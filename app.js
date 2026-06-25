@@ -671,7 +671,7 @@ function dateToStr(d) {
 async function renderHome() {
   const page = document.getElementById('page-home');
   const { income, expense, balance } = monthSummary();
-  const { totalIncome, totalExpense, carryover, net } = await totalAssets();
+  const { totalIncome, totalExpense, depositExp, netExpense, carryover, net } = await totalAssets();
   const netColor = net < 0 ? 'var(--expense-light)' : '#fff';
 
   const viewTabsHTML = `
