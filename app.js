@@ -1,4 +1,4 @@
-// v2.02 | 2026-06-25 17:40 KST | 수정: 개인별헌금/월지출/월장부 엑셀 저장 버튼 추가 | cache:v110
+// v2.03 | 2026-06-25 17:40 KST | 수정: 월장부 결재란(담당/부장/담임목사) 인쇄+엑셀 추가 | cache:v110
 'use strict';
 
 /* =========================================================
@@ -1496,15 +1496,44 @@ function exportLedgerToExcel(ym) {
   aoa.push(['','통장이동(선교)','','',transfer,'','']);
   aoa.push(['','예금','','','',deposit,'']);
   aoa.push(['','순헌금/지출','','',inc-transfer,exp-deposit,'']);
+  // 결재란 (빈 행 후 우측)
+  aoa.push([]);
+  aoa.push(['','','','','담 당','부 장','담임목사']);
+  aoa.push(['','','','','','','']);
+  aoa.push(['','','','','','','']);
+  aoa.push(['','','','','','','']);
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const numFmt = '#,##0';
-  for (let r = 2; r < aoa.length; r++) {
-    for (const c of [4,5,6]) {
-      const addr = XLSX.utils.encode_cell({r,c});
+  const totalRows = aoa.length;
+  // 숫자 서식
+  for (let r = 2; r < totalRows; r++) {
+    for (const col of [4,5,6]) {
+      const addr = XLSX.utils.encode_cell({r, col});
       if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
     }
+  }
+  // 결재란 테두리 (마지막 5행, D~G열 = col 4~6)
+  const approvalStartRow = totalRows - 4;
+  const thin = {style:'thin', color:{rgb:'000000'}};
+  const bdr = {top:thin,bottom:thin,left:thin,right:thin};
+  for (let r = approvalStartRow; r < totalRows; r++) {
+    for (let col = 4; col <= 6; col++) {
+      const addr = XLSX.utils.encode_cell({r, col});
+      if (!ws[addr]) ws[addr] = {t:'s', v:''};
+      ws[addr].s = {border: bdr, alignment:{horizontal:'center',vertical:'center'}};
+    }
+  }
+  // 결재란 헤더 굵게
+  for (let col = 4; col <= 6; col++) {
+    const addr = XLSX.utils.encode_cell({r: approvalStartRow, col});
+    if (ws[addr]) ws[addr].s = {...(ws[addr].s||{}), font:{bold:true}, alignment:{horizontal:'center'}, border:bdr};
+  }
+  // 행 높이 설정
+  if (!ws['!rows']) ws['!rows'] = [];
+  for (let r = approvalStartRow+1; r < totalRows; r++) {
+    ws['!rows'][r] = {hpt: 36};
   }
   XLSX.utils.book_append_sheet(wb, ws, `${month}월장부`);
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
@@ -2241,7 +2270,26 @@ function openLedgerSheet() {
     // thead repeat을 위해 table을 print-page div 없이 직접 출력
     // @media print에서 thead가 매 페이지 반복됨
     const area = document.getElementById('print-area');
-    area.innerHTML = currentTableHTML;
+    const approvalBox = `
+      <div style="display:flex;justify-content:flex-end;margin-top:12pt;">
+        <table style="border-collapse:collapse;font-size:9pt;width:200pt;">
+          <thead>
+            <tr>
+              <th style="border:1pt solid #000;padding:3pt 12pt;text-align:center;font-weight:700;">담 당</th>
+              <th style="border:1pt solid #000;padding:3pt 12pt;text-align:center;font-weight:700;">부 장</th>
+              <th style="border:1pt solid #000;padding:3pt 12pt;text-align:center;font-weight:700;">담임목사</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="border:1pt solid #000;height:40pt;"></td>
+              <td style="border:1pt solid #000;height:40pt;"></td>
+              <td style="border:1pt solid #000;height:40pt;"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+    area.innerHTML = currentTableHTML + approvalBox;
     area.style.display = 'block';
     window.print();
     area.style.display = 'none';
