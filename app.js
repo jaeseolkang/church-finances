@@ -1,4 +1,4 @@
-// v2.04 | 2026-06-25 17:40 KST | 수정: 엑셀 타이틀 제거, 인쇄 thead반복+결재란 개선 | cache:v111
+// v2.05 | 2026-06-25 17:40 KST | 수정: 결재란 크기 축소(4cm이내), 짤리면 다음페이지 | cache:v111
 'use strict';
 
 /* =========================================================
@@ -2270,20 +2270,20 @@ function openLedgerSheet() {
     // @media print에서 thead가 매 페이지 반복됨
     const area = document.getElementById('print-area');
     const approvalBox = `
-      <div style="page-break-inside:avoid;display:flex;justify-content:flex-end;margin-top:16pt;">
-        <table style="border-collapse:collapse;font-size:9pt;">
+      <div style="page-break-inside:avoid;break-inside:avoid;display:flex;justify-content:flex-end;margin-top:8pt;">
+        <table style="border-collapse:collapse;font-size:8pt;width:150pt;">
           <thead>
             <tr>
-              <th style="border:1pt solid #000;padding:4pt 20pt;text-align:center;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">담 당</th>
-              <th style="border:1pt solid #000;padding:4pt 20pt;text-align:center;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">부 장</th>
-              <th style="border:1pt solid #000;padding:4pt 20pt;text-align:center;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">담임목사</th>
+              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:50pt;">담 당</th>
+              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:50pt;">부 장</th>
+              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:50pt;">담임목사</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style="border:1pt solid #000;height:50pt;width:60pt;"></td>
-              <td style="border:1pt solid #000;height:50pt;width:60pt;"></td>
-              <td style="border:1pt solid #000;height:50pt;width:60pt;"></td>
+              <td style="border:0.5pt solid #000;height:28pt;"></td>
+              <td style="border:0.5pt solid #000;height:28pt;"></td>
+              <td style="border:0.5pt solid #000;height:28pt;"></td>
             </tr>
           </tbody>
         </table>

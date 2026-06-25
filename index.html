@@ -750,10 +750,11 @@ input,textarea,select{font-family:inherit; color:inherit;}
   #print-area > table tfoot { display: table-footer-group; }
   #print-area > table th { padding: 2pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; background: #DCE6F1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   #print-area > table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; }
-  /* 결재란 테이블 — 반복 없음 */
-  #print-area div table { width: auto !important; font-size: 9pt !important; table-layout: auto !important; }
-  #print-area div table th { background: none !important; font-size: 9pt !important; padding: 4pt 20pt !important; }
-  #print-area div table td { font-size: 9pt !important; padding: 0 !important; height: 50pt !important; width: 60pt !important; }
+  /* 결재란 테이블 — 반복 없음, 잘리면 다음 페이지로 */
+  #print-area div { page-break-inside: avoid; break-inside: avoid; }
+  #print-area div table { width: 150pt !important; font-size: 8pt !important; table-layout: fixed !important; }
+  #print-area div table th { background: none !important; font-size: 8pt !important; padding: 2pt 0 !important; width: 50pt !important; }
+  #print-area div table td { font-size: 8pt !important; padding: 0 !important; height: 28pt !important; width: 50pt !important; }
 
   /* 페이지 구분 */
   .print-page {
