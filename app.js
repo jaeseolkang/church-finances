@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 06:00 KST | 수정: 통계-헌금 클릭 시 개인별×헌금종류 피벗 표 | cache:v102
+// v1.85 | 2026-06-25 17:40 KST | 수정: renderTxStepPickGroup - subGroups 있는 카테고리는 ungroupedItems 숨김 (헌금종류가 이름목록에 섞이는 버그) | cache:v103
 'use strict';
 
 /* =========================================================
@@ -378,27 +378,24 @@ async function migrateSubGroupsFromSubItems() {
   }
 
   // ② subGroupId가 아예 없는 subItem → 대분류 이름으로 중분류 생성 후 연결
+  //    단, 이미 subGroups가 있는 카테고리(예: 헌금)는 공통 소분류이므로 건너뜀
   const catGroupMap = new Map(); // categoryId → 새로 만든 groupId
+  const catsWithGroups = new Set(allSubGroups.map(g => g.categoryId));
   for (const s of allSubItems) {
     if (s.subGroupId) continue; // 이미 중분류 있음
     const cat = allCats.find(c => c.id === s.categoryId);
     if (!cat) continue;
+    // 이미 subGroups가 있는 카테고리(예: 헌금)의 소분류는 공통 소분류 — 건드리지 않음
+    if (catsWithGroups.has(cat.id)) continue;
 
-    // 이 카테고리에 이미 subGroup이 있으면 첫 번째 그룹에 연결
-    const existingGroup = allSubGroups.find(g => g.categoryId === cat.id)
-      || (catGroupMap.has(cat.id) ? { id: catGroupMap.get(cat.id) } : null);
-
-    let groupId;
-    if (existingGroup) {
-      groupId = existingGroup.id;
-    } else {
-      // 새 중분류 생성
-      groupId = uid();
+    // 새 중분류 생성 (subGroups가 전혀 없는 카테고리만 해당)
+    if (!catGroupMap.has(cat.id)) {
+      const groupId = uid();
       await DB.put('subGroups', { id: groupId, categoryId: cat.id, name: cat.name, order: 0 });
       catGroupMap.set(cat.id, groupId);
       count++;
     }
-    s.subGroupId = groupId;
+    s.subGroupId = catGroupMap.get(cat.id);
     await DB.put('subItems', s);
   }
 
@@ -3064,8 +3061,8 @@ function renderTxStepPick(sheet) {
 function renderTxStepPickGroup(sheet) {
   const cat = catById(State.formCategoryId);
   const groups = subGroupsOfCategory(State.formCategoryId);
-  // 중분류 없는 소분류도 표시
-  const ungroupedItems = State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
+  // subGroups(사람)가 있는 카테고리(예: 헌금)는 ungroupedItems 표시 안 함 — 공통 소분류이므로
+  const ungroupedItems = groups.length > 0 ? [] : State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>

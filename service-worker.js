@@ -1,7 +1,7 @@
-// 2026-06-25 06:00 KST | 수정: CACHE_NAME v102 (통계-헌금 피벗 표)
+// 2026-06-25 17:40 KST | 수정: CACHE_NAME v103 (헌금 이름 선택 migration 버그 수정)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v102';
+const CACHE_NAME = 'gaegyebu-v103';
 const ASSETS = [
   './',
   './index.html',
