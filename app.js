@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 05:20 KST | 수정: explodeTxToRows - subGroups 없으면 persons에서 이름 조회 | cache:v101
+// v1.83 | 2026-06-25 06:00 KST | 수정: 통계-헌금 클릭 시 개인별×헌금종류 피벗 표 | cache:v102
 'use strict';
 
 /* =========================================================
@@ -3484,12 +3484,107 @@ function renderCatStatDetail(categoryId) {
 
   const total = list.reduce((s,t) => s + t.amount, 0);
 
-  // 날짜별 그룹화
-  const byDate = {};
-  for (const t of list) {
-    (byDate[t.date] = byDate[t.date] || []).push(t);
+  // 헌금 카테고리이면 개인별 × 헌금종류 피벗 표
+  const isHeon = cat.name === '헌금' && State.statsType === 'income';
+
+  let bodyHTML = '';
+
+  if (isHeon) {
+    // ── 피벗 집계 ──────────────────────────────────────
+    const pivot  = {};   // { personName: { subItemName: amount } }
+    const colSet = new Set();
+
+    for (const t of list) {
+      // 인물 이름: subGroupId → persons
+      const sgId  = t.subGroupId || t.personId;
+      const pName = sgId
+        ? ((State.persons||[]).find(p=>p.id===sgId)||{}).name || '(이름없음)'
+        : '(이름없음)';
+
+      if (!pivot[pName]) pivot[pName] = {};
+      for (const l of (t.lines||[])) {
+        const si    = subItemById(l.subItemId);
+        const sName = si ? subItemDisplayName('income', '헌금', si.name) : '(기타)';
+        pivot[pName][sName] = (pivot[pName][sName] || 0) + l.amount;
+        colSet.add(sName);
+      }
+    }
+
+    const rows = Object.keys(pivot).sort((a,b) => a.localeCompare(b,'ko'));
+    // 헌금종류 열 순서: TX_ENTRY_ITEM_ORDER 기준, 나머지는 뒤에
+    const orderedCols = [
+      ...TX_ENTRY_ITEM_ORDER.filter(n => colSet.has(n)),
+      ...[...colSet].filter(n => !TX_ENTRY_ITEM_ORDER.includes(n)).sort()
+    ];
+
+    if (rows.length === 0) {
+      bodyHTML = `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', '선택한 기간의 헌금 내역이 없습니다')}</div>`;
+    } else {
+      // 헤더
+      const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:#fff;background:var(--primary);text-align:right;white-space:nowrap;border:1px solid rgba(255,255,255,0.2);';
+      const thStyleL = thStyle + 'text-align:left;';
+      const tdStyle  = 'padding:5px 4px;font-size:11.5px;text-align:right;border:1px solid var(--border);white-space:nowrap;';
+      const tdStyleL = tdStyle + 'text-align:left;font-weight:600;';
+      const tdSum    = tdStyle + 'font-weight:700;background:var(--bg-2);';
+      const trSum    = 'background:var(--bg-2);';
+
+      const headerCols = orderedCols.map(c=>`<th style="${thStyle}">${escapeHTML(c)}</th>`).join('');
+      const colTotals  = orderedCols.map(c => rows.reduce((s,r) => s+(pivot[r][c]||0), 0));
+      const grandTotal = colTotals.reduce((s,v)=>s+v, 0);
+
+      const dataRows = rows.map(name => {
+        const rowTotal = orderedCols.reduce((s,c) => s+(pivot[name][c]||0), 0);
+        const cells = orderedCols.map(c => {
+          const v = pivot[name][c] || 0;
+          return `<td style="${tdStyle}">${v ? fmtMoney(v) : ''}</td>`;
+        }).join('');
+        return `<tr>
+          <td style="${tdStyleL}">${escapeHTML(name)}</td>
+          ${cells}
+          <td style="${tdSum}">${fmtMoney(rowTotal)}</td>
+        </tr>`;
+      }).join('');
+
+      const sumRow = `<tr style="${trSum}">
+        <td style="${tdStyleL}">합계</td>
+        ${colTotals.map(v=>`<td style="${tdSum}">${fmtMoney(v)}</td>`).join('')}
+        <td style="${tdSum}">${fmtMoney(grandTotal)}</td>
+      </tr>`;
+
+      bodyHTML = `
+        <div style="overflow-x:auto; margin-bottom:14px;">
+          <table style="border-collapse:collapse; width:100%; min-width:max-content; font-size:12px;">
+            <thead>
+              <tr>
+                <th style="${thStyleL}">이름</th>
+                ${headerCols}
+                <th style="${thStyle}">합계</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${dataRows}
+              ${sumRow}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+  } else {
+    // ── 기존: 날짜별 목록 ──────────────────────────────
+    const byDate = {};
+    for (const t of list) {
+      (byDate[t.date] = byDate[t.date] || []).push(t);
+    }
+    const dates = Object.keys(byDate).sort();
+    bodyHTML = dates.length === 0
+      ? `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', '선택한 기간의 거래 내역이 없습니다')}</div>`
+      : dates.map(d => `
+          <div class="section-title">${dayLabel(d)}</div>
+          <div class="card" style="padding:4px 16px; margin-bottom:14px;">
+            ${byDate[d].map(txItemHTML).join('')}
+          </div>
+        `).join('');
   }
-  const dates = Object.keys(byDate).sort();
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -3503,23 +3598,16 @@ function renderCatStatDetail(categoryId) {
         <span>${range.label}</span>
         <b class="tabular ${State.statsType}">${fmtMoney(total)}원</b>
       </div>
-
-      ${dates.length === 0
-        ? `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', '선택한 기간의 거래 내역이 없습니다')}</div>`
-        : dates.map(d => `
-            <div class="section-title">${dayLabel(d)}</div>
-            <div class="card" style="padding:4px 16px; margin-bottom:14px;">
-              ${byDate[d].map(txItemHTML).join('')}
-            </div>
-          `).join('')
-      }
+      ${bodyHTML}
     </div>
   `;
 
   sheet.querySelector('#csdClose').addEventListener('click', closeAllSheets);
-  sheet.querySelectorAll('.tx-item').forEach(el => {
-    el.addEventListener('click', () => openTxSheet(el.dataset.id));
-  });
+  if (!isHeon) {
+    sheet.querySelectorAll('.tx-item').forEach(el => {
+      el.addEventListener('click', () => openTxSheet(el.dataset.id));
+    });
+  }
 }
 
 /* =========================================================

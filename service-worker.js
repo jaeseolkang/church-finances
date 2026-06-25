@@ -1,7 +1,7 @@
-// 2026-06-25 05:00 KST | 수정: CACHE_NAME v94 (헤더 배너 레이아웃 완성)
+// 2026-06-25 06:00 KST | 수정: CACHE_NAME v102 (통계-헌금 피벗 표)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v101';
+const CACHE_NAME = 'gaegyebu-v102';
 const ASSETS = [
   './',
   './index.html',
