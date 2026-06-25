@@ -1,7 +1,7 @@
-// 2026-06-25 04:20 KST | 수정: CACHE_NAME v92 (헤더 전년이월/총수입/총예금/순지출)
+// 2026-06-25 04:30 KST | 수정: CACHE_NAME v93 (헤더 레이아웃 - 좌측 전년이월+현자산)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v92';
+const CACHE_NAME = 'gaegyebu-v93';
 const ASSETS = [
   './',
   './index.html',
