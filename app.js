@@ -1,4 +1,4 @@
-// v2.03 | 2026-06-25 17:40 KST | 수정: 월장부 결재란(담당/부장/담임목사) 인쇄+엑셀 추가 | cache:v110
+// v2.04 | 2026-06-25 17:40 KST | 수정: 엑셀 타이틀 제거, 인쇄 thead반복+결재란 개선 | cache:v111
 'use strict';
 
 /* =========================================================
@@ -1463,7 +1463,6 @@ function exportLedgerToExcel(ym) {
   }
 
   const aoa = [];
-  aoa.push([`${yearStr}년 ${month}월 장부`]);
   aoa.push(['일자','대분류','중분류','소분류','수입금액','지출금액','누계금액']);
   for (const t of txs) {
     const cat = catById(t.categoryId)||{name:'?',type:t.type};
@@ -1508,7 +1507,7 @@ function exportLedgerToExcel(ym) {
   const numFmt = '#,##0';
   const totalRows = aoa.length;
   // 숫자 서식
-  for (let r = 2; r < totalRows; r++) {
+  for (let r = 1; r < totalRows; r++) {
     for (const col of [4,5,6]) {
       const addr = XLSX.utils.encode_cell({r, col});
       if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
@@ -2271,20 +2270,20 @@ function openLedgerSheet() {
     // @media print에서 thead가 매 페이지 반복됨
     const area = document.getElementById('print-area');
     const approvalBox = `
-      <div style="display:flex;justify-content:flex-end;margin-top:12pt;">
-        <table style="border-collapse:collapse;font-size:9pt;width:200pt;">
+      <div style="page-break-inside:avoid;display:flex;justify-content:flex-end;margin-top:16pt;">
+        <table style="border-collapse:collapse;font-size:9pt;">
           <thead>
             <tr>
-              <th style="border:1pt solid #000;padding:3pt 12pt;text-align:center;font-weight:700;">담 당</th>
-              <th style="border:1pt solid #000;padding:3pt 12pt;text-align:center;font-weight:700;">부 장</th>
-              <th style="border:1pt solid #000;padding:3pt 12pt;text-align:center;font-weight:700;">담임목사</th>
+              <th style="border:1pt solid #000;padding:4pt 20pt;text-align:center;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">담 당</th>
+              <th style="border:1pt solid #000;padding:4pt 20pt;text-align:center;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">부 장</th>
+              <th style="border:1pt solid #000;padding:4pt 20pt;text-align:center;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">담임목사</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style="border:1pt solid #000;height:40pt;"></td>
-              <td style="border:1pt solid #000;height:40pt;"></td>
-              <td style="border:1pt solid #000;height:40pt;"></td>
+              <td style="border:1pt solid #000;height:50pt;width:60pt;"></td>
+              <td style="border:1pt solid #000;height:50pt;width:60pt;"></td>
+              <td style="border:1pt solid #000;height:50pt;width:60pt;"></td>
             </tr>
           </tbody>
         </table>

@@ -744,12 +744,16 @@ input,textarea,select{font-family:inherit; color:inherit;}
 
   .print-no-print { display: none !important; }
 
-  /* 월장부 테이블 — thead 매 페이지 반복, 열 고정 */
-  #print-area table { width: 100% !important; font-size: 7.5pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
-  #print-area table thead { display: table-header-group; }
-  #print-area table tfoot { display: table-footer-group; }
-  #print-area table th { padding: 2pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; background: #DCE6F1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #print-area table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; }
+  /* 월장부 메인 테이블 — thead 매 페이지 반복 */
+  #print-area > table { width: 100% !important; font-size: 7.5pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
+  #print-area > table thead { display: table-header-group; }
+  #print-area > table tfoot { display: table-footer-group; }
+  #print-area > table th { padding: 2pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; background: #DCE6F1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #print-area > table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; }
+  /* 결재란 테이블 — 반복 없음 */
+  #print-area div table { width: auto !important; font-size: 9pt !important; table-layout: auto !important; }
+  #print-area div table th { background: none !important; font-size: 9pt !important; padding: 4pt 20pt !important; }
+  #print-area div table td { font-size: 9pt !important; padding: 0 !important; height: 50pt !important; width: 60pt !important; }
 
   /* 페이지 구분 */
   .print-page {

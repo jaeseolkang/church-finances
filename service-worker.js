@@ -1,7 +1,7 @@
-// 2026-06-25 17:40 KST | 수정: CACHE_NAME v110 (엑셀 저장 버튼 추가)
+// 2026-06-25 17:40 KST | 수정: CACHE_NAME v111 (월장부 엑셀타이틀제거/인쇄결재란)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v110';
+const CACHE_NAME = 'gaegyebu-v111';
 const ASSETS = [
   './',
   './index.html',
