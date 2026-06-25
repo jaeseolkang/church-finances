@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 05:10 KST | 수정: monthSummary/월별 전년이월 제외 | cache:v99
+// v1.83 | 2026-06-25 05:15 KST | 수정: 헤더 현자산 라벨 제거 | cache:v100
 'use strict';
 
 /* =========================================================
@@ -708,8 +708,7 @@ async function renderHome() {
           <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">전년이월</span>
           <span class="total-assets-value tabular" style="font-size:16px;color:#fff;">${fmtMoney(carryover)}원</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">현자산</span>
+        <div>
           <span class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</span>
         </div>
       </div>
