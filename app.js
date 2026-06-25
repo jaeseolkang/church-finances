@@ -1,4 +1,4 @@
-// v1.87 | 2026-06-25 17:40 KST | 수정: 통계 인쇄 페이지 분리 (막대/내용/헌금피벗 각 1페이지) | cache:v103
+// v1.88 | 2026-06-25 17:40 KST | 수정: 통계 인쇄 - 수입=막대+헌금피벗, 지출=막대+내용상세 | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1467,10 +1467,10 @@ function printStats() {
       </div>
     </div>`;
 
-  // ── 3페이지: 헌금 피벗 (수입일 때만) ──
-  const page3 = pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '';
-
-  const html = page1 + page2 + page3;
+  // 수입: 막대 + 헌금피벗 / 지출: 막대 + 내용상세
+  const html = isIncome
+    ? page1 + (pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '')
+    : page1 + page2;
 
   const area = document.getElementById('print-area');
   area.innerHTML = html;
