@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 03:10 KST | 수정: 중분류 budget 합산도 DB 직접 읽기로 변경 | cache:v86
+// v1.83 | 2026-06-25 03:30 KST | 수정: 대/중/소분류 예산 입력 가능, 하위 합 우선 규칙 | cache:v87
 'use strict';
 
 /* =========================================================
@@ -3602,12 +3602,22 @@ function renderCatTree(sheet) {
   function groupBlockHTML(g, catId) {
     const gSubs = subItemsOfGroup(g.id);
     const expanded = catManageExpanded.has(g.id);
+    const subTotal = gSubs.reduce((s,x) => s+(x.budget||0), 0);
+    // 소분류 합이 있으면 소분류 합 표시, 없으면 중분류 직접 입력값
+    const grpBudgetVal = subTotal > 0 ? subTotal : (g.budget||0);
     return `<div class="cattree-group-block" data-group-id="${g.id}">
       <div class="catrow" style="padding:6px 0 6px 20px;border-bottom:1px solid var(--border);cursor:pointer;" data-toggle-group="${g.id}">
         <span style="font-size:13px;margin-right:4px;transition:transform .2s;display:inline-block;transform:rotate(${expanded?'90':'0'}deg);">›</span>
         <span style="font-size:15px;margin-right:6px;">📂</span>
         <div class="nm" style="font-size:13.5px;">${escapeHTML(g.name)}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-right:4px;">${gSubs.length > 0 ? gSubs.length+'개 소분류' : '소분류 없음'}</div>
+        <div style="display:flex;align-items:center;gap:3px;margin-right:4px;">
+          <input type="text" inputmode="numeric"
+            data-group-budget-id="${g.id}" data-cat-id="${catId}"
+            value="${grpBudgetVal ? fmtMoney(grpBudgetVal) : ''}"
+            placeholder="중분류예산"
+            ${subTotal > 0 ? 'readonly style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;background:var(--bg-2);color:var(--text-3);"' : 'style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;"'}>
+          <span style="font-size:11px;color:var(--text-3);">원</span>
+        </div>
         <button class="grip" data-rename-group="${g.id}" style="margin-left:2px;">${ICONS.edit}</button>
         <button class="grip" data-del-group="${g.id}" style="color:var(--expense);">${ICONS.trash}</button>
       </div>
@@ -3631,7 +3641,14 @@ function renderCatTree(sheet) {
         <span style="font-size:14px;margin-right:4px;transition:transform .2s;display:inline-block;transform:rotate(${expanded?'90':'0'}deg);">›</span>
         <div class="ic" style="background:${hexToLight(c.color)};">${c.icon}</div>
         <div class="nm">${escapeHTML(c.name)}${c.usePersonLevel?' <span style="font-size:11px;color:var(--primary);font-weight:700;">· 하위항목</span>':''}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-right:4px;">${c.budget?fmtMoney(c.budget)+'원':'미설정'}</div>
+        <div style="display:flex;align-items:center;gap:3px;margin-right:4px;">
+          <input type="text" inputmode="numeric"
+            data-cat-budget-id="${c.id}"
+            value="${c.budget ? fmtMoney(c.budget) : ''}"
+            placeholder="미설정"
+            ${(subGroupsOfCategory(c.id).length > 0 || subItemsOfCategory(c.id).length > 0) ? 'readonly style="width:72px;padding:2px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;background:var(--bg-2);color:var(--text-3);"' : 'style="width:72px;padding:2px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;"'}>
+          <span style="font-size:11px;color:var(--text-3);">원</span>
+        </div>
         <button class="grip" data-edit-cat="${c.id}">${ICONS.edit}</button>
         <button class="grip" data-del-cat="${c.id}" style="color:var(--expense);">${ICONS.trash}</button>
       </div>
@@ -3819,15 +3836,7 @@ function renderCatTree(sheet) {
       if (item.budget === newVal) return;
       item.budget = newVal;
       await DB.put('subItems', item);
-      if (item.subGroupId) {
-        const g = await DB.get('subGroups', item.subGroupId);
-        if (g) {
-          const allSubs = await DB.getAll('subItems');
-          const gSubs   = allSubs.filter(s => s.subGroupId === g.id);
-          const gTotal  = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
-          if (g.budget !== gTotal) { g.budget = gTotal; await DB.put('subGroups', g); }
-        }
-      }
+      await recalcGroupBudget(item.subGroupId);
       await recalcCatBudget(catId);
       await reloadData(); renderCurrentPage();
       showToast('예산 저장됐어요');
@@ -3836,6 +3845,49 @@ function renderCatTree(sheet) {
     input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
     input.addEventListener('click', e => e.stopPropagation());
   });
+
+  // 중분류 예산 입력
+  sheet.querySelectorAll('[data-group-budget-id]').forEach(input => {
+    if (input.readOnly) return;
+    attachMoneyInputFormatter(input, () => {});
+    const save = async () => {
+      const grpId = input.dataset.groupBudgetId;
+      const catId = input.dataset.catId;
+      const g = await DB.get('subGroups', grpId);
+      if (!g) return;
+      const newVal = Number(rawDigits(input.value)) || 0;
+      if (g.budget === newVal) return;
+      g.budget = newVal;
+      await DB.put('subGroups', g);
+      await recalcCatBudget(catId);
+      await reloadData(); renderCurrentPage();
+      showToast('예산 저장됐어요');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
+  });
+
+  // 대분류 예산 직접 입력 (하위 없는 경우)
+  sheet.querySelectorAll('[data-cat-budget-id]').forEach(input => {
+    if (input.readOnly) return;
+    attachMoneyInputFormatter(input, () => {});
+    const save = async () => {
+      const catId = input.dataset.catBudgetId;
+      const cat = await DB.get('categories', catId);
+      if (!cat) return;
+      const newVal = Number(rawDigits(input.value)) || 0;
+      if (cat.budget === newVal) return;
+      cat.budget = newVal;
+      await DB.put('categories', cat);
+      await reloadData(); renderCurrentPage();
+      showToast('예산 저장됐어요');
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
+  });
+
   sheet.querySelectorAll('[data-rename-sub]').forEach(b => {
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -3857,6 +3909,18 @@ function renderCatTree(sheet) {
   });
 }
 
+
+// ── 중분류 예산 재합산: 소분류 합이 있으면 소분류 합으로 업데이트 ──
+async function recalcGroupBudget(groupId) {
+  if (!groupId) return;
+  const g = await DB.get('subGroups', groupId);
+  if (!g) return;
+  const allSubs = await DB.getAll('subItems');
+  const gSubs   = allSubs.filter(s => s.subGroupId === groupId);
+  const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
+  // 소분류 합으로 중분류 예산 업데이트
+  if (g.budget !== subTotal) { g.budget = subTotal; await DB.put('subGroups', g); }
+}
 
 // ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선) ──
 async function recalcCatBudget(catId) {
