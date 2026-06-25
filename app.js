@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 03:00 KST | 수정: recalcCatBudget DB 직접 읽기로 변경 | cache:v85
+// v1.83 | 2026-06-25 03:10 KST | 수정: 중분류 budget 합산도 DB 직접 읽기로 변경 | cache:v86
 'use strict';
 
 /* =========================================================
@@ -3820,10 +3820,11 @@ function renderCatTree(sheet) {
       item.budget = newVal;
       await DB.put('subItems', item);
       if (item.subGroupId) {
-        const g = (State.subGroups||[]).find(x => x.id === item.subGroupId);
+        const g = await DB.get('subGroups', item.subGroupId);
         if (g) {
-          const gSubs = subItemsOfGroup(g.id);
-          const gTotal = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
+          const allSubs = await DB.getAll('subItems');
+          const gSubs   = allSubs.filter(s => s.subGroupId === g.id);
+          const gTotal  = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
           if (g.budget !== gTotal) { g.budget = gTotal; await DB.put('subGroups', g); }
         }
       }
@@ -3897,10 +3898,11 @@ function attachSubItemEvents(sheet, catId, groupId) {
       await DB.put('subItems', item);
       // 중분류 예산 재합산 (있는 경우)
       if (item.subGroupId) {
-        const g = (State.subGroups||[]).find(x => x.id === item.subGroupId);
+        const g = await DB.get('subGroups', item.subGroupId);
         if (g) {
-          const gSubs = subItemsOfGroup(g.id);
-          const gTotal = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
+          const allSubs = await DB.getAll('subItems');
+          const gSubs   = allSubs.filter(s => s.subGroupId === g.id);
+          const gTotal  = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
           if (g.budget !== gTotal) { g.budget = gTotal; await DB.put('subGroups', g); }
         }
       }

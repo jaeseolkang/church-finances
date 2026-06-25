@@ -1,7 +1,7 @@
-// 2026-06-25 03:00 KST | 수정: CACHE_NAME v85 (recalcCatBudget DB 직접 읽기)
+// 2026-06-25 03:10 KST | 수정: CACHE_NAME v86 (중분류 budget 합산 DB 직접 읽기)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v85';
+const CACHE_NAME = 'gaegyebu-v86';
 const ASSETS = [
   './',
   './index.html',
