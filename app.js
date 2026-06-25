@@ -1,4 +1,4 @@
-// v1.93 | 2026-06-25 17:40 KST | 수정: 설정-항목구조표 시트 + 인쇄 기능 추가 | cache:v104
+// v1.94 | 2026-06-25 17:40 KST | 수정: 항목구조표 인쇄 - 셀 폰트/패딩 축소, 열너비 조정 | cache:v104
 'use strict';
 
 /* =========================================================
@@ -1932,25 +1932,25 @@ function openItemStructureSheet() {
         let gFirst = true;
         for (const item of grp.items) {
           rows += `<tr>
-            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:11px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
-            ${gFirst ? `<td rowspan="${grp.items.length}" style="font-size:11px;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 4pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(grp.name)}</td>` : ''}
-            <td style="font-size:11px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 4pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
+            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:2pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+            ${gFirst ? `<td rowspan="${grp.items.length}" style="font-size:9px;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 3pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(grp.name)}</td>` : ''}
+            <td style="font-size:9px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
           </tr>`;
           first = false; gFirst = false;
         }
       }
       for (const item of direct) {
         rows += `<tr>
-          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:11px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
-          <td style="font-size:11px;color:#9CA3AF;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 4pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">(그룹없음)</td>
-          <td style="font-size:11px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 4pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
+          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:2pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+          <td style="font-size:9px;color:#9CA3AF;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">(그룹없음)</td>
+          <td style="font-size:9px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
         </tr>`;
         first = false;
       }
     }
     if (!rows) return '';
     return `
-      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:12px;padding:4pt 6pt;border:0.5pt solid #ccc;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
+      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:10px;padding:2pt 4pt;border:0.5pt solid #ccc;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
       ${rows}`;
   }
 
@@ -1958,13 +1958,13 @@ function openItemStructureSheet() {
   const expSection = buildSection('expense','지출 항목','#BE185D','#FCE7F3','#831843','#FDF2F8','#FFF5FB');
 
   const tableHTML = `
-    <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
-      <colgroup><col style="width:28%"><col style="width:28%"><col style="width:44%"></colgroup>
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:9px;word-break:keep-all;overflow-wrap:break-word;">
+      <colgroup><col style="width:22%"><col style="width:22%"><col style="width:56%"></colgroup>
       <thead>
         <tr style="background:#1E3A5F;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <th style="color:#fff;font-size:11px;font-weight:700;padding:4pt 4pt;border:0.5pt solid #555;text-align:center;">대분류</th>
-          <th style="color:#fff;font-size:11px;font-weight:700;padding:4pt 4pt;border:0.5pt solid #555;text-align:center;">중분류</th>
-          <th style="color:#fff;font-size:11px;font-weight:700;padding:4pt 4pt;border:0.5pt solid #555;text-align:center;">소분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:2pt 3pt;border:0.5pt solid #555;text-align:center;">대분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:2pt 3pt;border:0.5pt solid #555;text-align:center;">중분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:2pt 3pt;border:0.5pt solid #555;text-align:center;">소분류</th>
         </tr>
       </thead>
       <tbody>${incSection}${expSection}</tbody>
