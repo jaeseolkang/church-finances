@@ -1,4 +1,4 @@
-// v1.94 | 2026-06-25 17:40 KST | 수정: 항목구조표 인쇄 - 셀 폰트/패딩 축소, 열너비 조정 | cache:v104
+// v1.95 | 2026-06-25 17:40 KST | 수정: 항목구조표 행높이 축소 (padding 1pt, line-height 1.2) | cache:v104
 'use strict';
 
 /* =========================================================
@@ -1932,7 +1932,7 @@ function openItemStructureSheet() {
         let gFirst = true;
         for (const item of grp.items) {
           rows += `<tr>
-            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:2pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
             ${gFirst ? `<td rowspan="${grp.items.length}" style="font-size:9px;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 3pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(grp.name)}</td>` : ''}
             <td style="font-size:9px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
           </tr>`;
@@ -1941,7 +1941,7 @@ function openItemStructureSheet() {
       }
       for (const item of direct) {
         rows += `<tr>
-          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:2pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
           <td style="font-size:9px;color:#9CA3AF;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">(그룹없음)</td>
           <td style="font-size:9px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
         </tr>`;
@@ -1950,7 +1950,7 @@ function openItemStructureSheet() {
     }
     if (!rows) return '';
     return `
-      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:10px;padding:2pt 4pt;border:0.5pt solid #ccc;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
+      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:10px;padding:1pt 4pt;line-height:1.4;border:0.5pt solid #ccc;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
       ${rows}`;
   }
 
@@ -1958,13 +1958,13 @@ function openItemStructureSheet() {
   const expSection = buildSection('expense','지출 항목','#BE185D','#FCE7F3','#831843','#FDF2F8','#FFF5FB');
 
   const tableHTML = `
-    <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:9px;word-break:keep-all;overflow-wrap:break-word;">
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:9px;word-break:keep-all;overflow-wrap:break-word;line-height:1.2;">
       <colgroup><col style="width:22%"><col style="width:22%"><col style="width:56%"></colgroup>
       <thead>
         <tr style="background:#1E3A5F;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <th style="color:#fff;font-size:9px;font-weight:700;padding:2pt 3pt;border:0.5pt solid #555;text-align:center;">대분류</th>
-          <th style="color:#fff;font-size:9px;font-weight:700;padding:2pt 3pt;border:0.5pt solid #555;text-align:center;">중분류</th>
-          <th style="color:#fff;font-size:9px;font-weight:700;padding:2pt 3pt;border:0.5pt solid #555;text-align:center;">소분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">대분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">중분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">소분류</th>
         </tr>
       </thead>
       <tbody>${incSection}${expSection}</tbody>
