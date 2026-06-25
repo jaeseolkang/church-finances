@@ -1,4 +1,4 @@
-// v1.89 | 2026-06-25 17:40 KST | 수정: 통계 지출 인쇄 2페이지 = 월지출표 (대>중>소 3단계) | cache:v103
+// v1.90 | 2026-06-25 17:40 KST | 수정: 월지출표 인쇄 - 행높이/폰트 축소, 열너비 고정 | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1478,14 +1478,14 @@ function printStats() {
       const cs  = colspan>1 ? ` colspan="${colspan}"` : '';
       const rs  = rowspan>1 ? ` rowspan="${rowspan}"` : '';
       const vStr = typeof val==='number' ? val.toLocaleString('ko-KR') : (val||'');
-      return `<td${cs}${rs} style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;${fw}${ta}${bgc}">${escapeHTML ? escapeHTML(String(vStr)) : vStr}</td>`;
+      return `<td${cs}${rs} style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;${fw}${ta}${bgc}">${escapeHTML ? escapeHTML(String(vStr)) : vStr}</td>`;
     };
     const th = (val, opts={}) => {
       const {right=false, center=true, colspan=1, rowspan=1} = opts;
       const ta = right ? 'text-align:right;' : 'text-align:center;';
       const cs = colspan>1 ? ` colspan="${colspan}"` : '';
       const rs = rowspan>1 ? ` rowspan="${rowspan}"` : '';
-      return `<th${cs}${rs} style="padding:5pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:9pt;font-weight:700;color:#fff;background:#1F4E79;${ta}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${val}</th>`;
+      return `<th${cs}${rs} style="padding:3pt 3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;${ta}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${val}</th>`;
     };
 
     let tableRows = '';
@@ -1536,23 +1536,23 @@ function printStats() {
       const catRowspan = catRows.length + 1; // +1 소계행
       catRows.forEach((r, i) => {
         const sgTd = r.sgRowspan > 0
-          ? `<td rowspan="${r.sgRowspan}" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
-          : (r.sgRowspan === 0 && r.sgName === null ? `<td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;"></td>` : '');
+          ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
+          : (r.sgRowspan === 0 && r.sgName === null ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;"></td>` : '');
         const catTd = i===0
-          ? `<td rowspan="${catRowspan}" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
+          ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
           : '';
         tableRows += `<tr>
           ${catTd}
           ${sgTd}
-          <td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
-          <td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
-          <td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;"></td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;"></td>
         </tr>`;
       });
       // 소계행
       tableRows += `<tr>
-        <td colspan="3" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
-        <td colspan="2" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
+        <td colspan="3" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
+        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
       </tr>`;
     }
 
@@ -1560,19 +1560,26 @@ function printStats() {
       <div class="print-page">
         ${pageHeader}
         <div class="print-section-title">${range.label} 지출현황</div>
-        <table style="border-collapse:collapse;width:100%;font-size:9pt;">
+        <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">
+          <colgroup>
+            <col style="width:18%">
+            <col style="width:16%">
+            <col style="width:22%">
+            <col style="width:22%">
+            <col style="width:22%">
+          </colgroup>
           <thead><tr>
             ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고')}
           </tr></thead>
           <tbody>${tableRows}</tbody>
           <tfoot>
             <tr>
-              <td colspan="3" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
-              <td colspan="2" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
+              <td colspan="3" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
+              <td colspan="2" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
             </tr>
             <tr>
-              <td colspan="3" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
-              <td colspan="2" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
+              <td colspan="3" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
+              <td colspan="2" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
             </tr>
           </tfoot>
         </table>
