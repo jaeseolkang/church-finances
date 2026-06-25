@@ -743,12 +743,12 @@ input,textarea,select{font-family:inherit; color:inherit;}
 
   .print-no-print { display: none !important; }
 
-  /* 월장부 테이블 — thead 매 페이지 반복 */
+  /* 월장부 테이블 — thead 매 페이지 반복, 열 고정 */
+  #print-area table { width: 100% !important; font-size: 7.5pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
   #print-area table thead { display: table-header-group; }
   #print-area table tfoot { display: table-footer-group; }
-  #print-area table { width: 100% !important; font-size: 7.5pt !important; }
-  #print-area table th,
-  #print-area table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; white-space: nowrap; }
+  #print-area table th { padding: 2pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; background: #DCE6F1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #print-area table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; }
 
   /* 페이지 구분 */
   .print-page {

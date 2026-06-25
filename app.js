@@ -1,4 +1,4 @@
-// v1.99 | 2026-06-25 17:40 KST | 수정: 월장부 인쇄 타이틀 제거, thead만 반복 | cache:v107
+// v2.00 | 2026-06-25 17:40 KST | 수정: 월장부 인쇄 열 고정, thead 반복 정상화 | cache:v108
 'use strict';
 
 /* =========================================================
@@ -1992,8 +1992,8 @@ function openLedgerSheet() {
     const tableHTML = `
       <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
         <colgroup>
-          <col style="width:9%"><col style="width:12%"><col style="width:14%">
-          <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
+          <col style="width:8%"><col style="width:13%"><col style="width:13%">
+          <col style="width:15%"><col style="width:17%"><col style="width:17%"><col style="width:17%">
         </colgroup>
         <thead><tr>
           <th style="${TH}text-align:center;">일자</th>
