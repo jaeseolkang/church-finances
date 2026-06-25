@@ -1,4 +1,4 @@
-// v1.91 | 2026-06-25 17:40 KST | 수정: 수입 헌금피벗 인쇄 - 행높이/폰트 축소, 열너비 고정 | cache:v103
+// v1.92 | 2026-06-25 17:40 KST | 수정: 수입 인쇄 = 헌금피벗 1페이지만, 막대 제거 | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1595,9 +1595,9 @@ function printStats() {
       </div>`;
   }
 
-  // 수입: 막대 + 헌금피벗 / 지출: 막대 + 월지출표
+  // 수입: 헌금피벗만 / 지출: 막대 + 월지출표
   const html = isIncome
-    ? page1 + (pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '')
+    ? (pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '')
     : page1 + page2;
 
   const area = document.getElementById('print-area');
