@@ -1,4 +1,4 @@
-// v2.05 | 2026-06-25 17:40 KST | 수정: 결재란 크기 축소(4cm이내), 짤리면 다음페이지 | cache:v111
+// v2.06 | 2026-06-25 17:40 KST | 수정: 결재란 - 결재(세로) + 담당/부장/담임목사 4열 구조 | cache:v111
 'use strict';
 
 /* =========================================================
@@ -2271,19 +2271,20 @@ function openLedgerSheet() {
     const area = document.getElementById('print-area');
     const approvalBox = `
       <div style="page-break-inside:avoid;break-inside:avoid;display:flex;justify-content:flex-end;margin-top:8pt;">
-        <table style="border-collapse:collapse;font-size:8pt;width:150pt;">
+        <table style="border-collapse:collapse;font-size:8pt;">
           <thead>
             <tr>
-              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:50pt;">담 당</th>
-              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:50pt;">부 장</th>
-              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:50pt;">담임목사</th>
+              <th rowspan="2" style="border:0.5pt solid #000;padding:2pt 4pt;text-align:center;font-weight:700;writing-mode:vertical-rl;letter-spacing:4pt;width:16pt;">결재</th>
+              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">담 당</th>
+              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">부 장</th>
+              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">담임목사</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style="border:0.5pt solid #000;height:28pt;"></td>
-              <td style="border:0.5pt solid #000;height:28pt;"></td>
-              <td style="border:0.5pt solid #000;height:28pt;"></td>
+              <td style="border:0.5pt solid #000;height:30pt;"></td>
+              <td style="border:0.5pt solid #000;height:30pt;"></td>
+              <td style="border:0.5pt solid #000;height:30pt;"></td>
             </tr>
           </tbody>
         </table>
