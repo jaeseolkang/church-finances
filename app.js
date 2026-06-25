@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 04:40 KST | 수정: 헤더 배너 CSS 클래스 기반으로 정리 | cache:v94
+// v1.83 | 2026-06-25 04:50 KST | 수정: 헤더 배너 - 현재까지 누적자산 → 전년이월 | cache:v96
 'use strict';
 
 /* =========================================================
@@ -697,21 +697,21 @@ async function renderHome() {
       <button class="icon-btn" id="goSettings">${ICONS.gear}</button>
     </div>
 
-    <div class="total-assets-banner">
-      <div class="total-assets-left">
-        <div class="total-assets-carryover">
+    <div class="total-assets-banner" style="display:flex;justify-content:space-between;align-items:stretch;">
+      <div style="display:flex;flex-direction:column;justify-content:space-between;gap:6px;">
+        <div>
           <div class="total-assets-label">전년이월</div>
-          <div class="total-assets-value tabular" style="font-size:16px;">${fmtMoney(carryover)}원</div>
+          <div class="total-assets-value tabular" style="font-size:16px;color:#fff;">${fmtMoney(carryover)}원</div>
         </div>
         <div>
           <div class="total-assets-label">현자산</div>
-          <div class="total-assets-value tabular" style="color:${netColor}">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</div>
+          <div class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</div>
         </div>
       </div>
-      <div class="total-assets-right">
-        <div class="total-assets-sub"><span>총수입액</span><span class="tabular">${fmtMoney(totalIncome)}원</span></div>
-        <div class="total-assets-sub"><span>총예금액</span><span class="tabular">${fmtMoney(depositExp)}원</span></div>
-        <div class="total-assets-sub"><span>순지출액</span><span class="tabular">${fmtMoney(netExpense)}원</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;">
+        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>총수입액</span><span class="tabular">${fmtMoney(totalIncome)}원</span></div>
+        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>총예금액</span><span class="tabular">${fmtMoney(depositExp)}원</span></div>
+        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>순지출액</span><span class="tabular">${fmtMoney(netExpense)}원</span></div>
       </div>
     </div>
 
