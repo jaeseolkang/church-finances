@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 02:10 KST | 수정: 마이그레이션 - subGroupId 없는 subItem도 대분류명으로 중분류 자동 생성 | cache:v84
+// v1.83 | 2026-06-25 03:00 KST | 수정: recalcCatBudget DB 직접 읽기로 변경 | cache:v85
 'use strict';
 
 /* =========================================================
@@ -3859,19 +3859,23 @@ function renderCatTree(sheet) {
 
 // ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선) ──
 async function recalcCatBudget(catId) {
-  const cat = catById(catId);
+  // DB에서 직접 읽어 State 캐시 타이밍 이슈 방지
+  const cat = await DB.get('categories', catId);
   if (!cat) return;
-  const groups = subGroupsOfCategory(catId);
-  const ungroupedSubs = subItemsOfCategory(catId).filter(s => !s.subGroupId);
+  const allSubs   = await DB.getAll('subItems');
+  const allGroups = await DB.getAll('subGroups');
+
+  const catGroups = allGroups.filter(g => g.categoryId === catId);
+  const catSubs   = allSubs.filter(s => s.categoryId === catId);
 
   let total = 0;
-  for (const g of groups) {
-    const gSubs = subItemsOfGroup(g.id);
+  for (const g of catGroups) {
+    const gSubs    = catSubs.filter(s => s.subGroupId === g.id);
     const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
-    // 소분류 예산 합이 있으면 소분류 합 사용, 없으면 중분류 직접 입력값 사용
     total += subTotal > 0 ? subTotal : (g.budget||0);
   }
-  total += ungroupedSubs.reduce((s, x) => s + (x.budget||0), 0);
+  const ungrouped = catSubs.filter(s => !s.subGroupId);
+  total += ungrouped.reduce((s, x) => s + (x.budget||0), 0);
 
   if (cat.budget !== total) {
     cat.budget = total;

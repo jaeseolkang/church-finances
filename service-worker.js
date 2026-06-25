@@ -1,7 +1,7 @@
-// 2026-06-25 02:10 KST | 수정: CACHE_NAME v84 (마이그레이션 강화 - subGroupId 없는 subItem 자동 연결)
+// 2026-06-25 03:00 KST | 수정: CACHE_NAME v85 (recalcCatBudget DB 직접 읽기)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v84';
+const CACHE_NAME = 'gaegyebu-v85';
 const ASSETS = [
   './',
   './index.html',
