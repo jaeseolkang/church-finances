@@ -1,7 +1,7 @@
-// 2026-06-25 17:40 KST | 수정: CACHE_NAME v106 (월장부 시트 추가)
+// 2026-06-25 17:40 KST | 수정: CACHE_NAME v107 (월장부 인쇄 A4/thead 반복)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v106';
+const CACHE_NAME = 'gaegyebu-v107';
 const ASSETS = [
   './',
   './index.html',
