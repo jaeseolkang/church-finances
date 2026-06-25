@@ -1,4 +1,4 @@
-// v1.92 | 2026-06-25 17:40 KST | 수정: 수입 인쇄 = 헌금피벗 1페이지만, 막대 제거 | cache:v103
+// v1.93 | 2026-06-25 17:40 KST | 수정: 설정-항목구조표 시트 + 인쇄 기능 추가 | cache:v104
 'use strict';
 
 /* =========================================================
@@ -1897,6 +1897,108 @@ function renderStatsTabDetail(detailTx, isIncome) {
 /* =========================================================
    RENDER: SETTINGS
    ========================================================= */
+/* =========================================================
+   ITEM STRUCTURE SHEET — 설정에서 항목구조표 보기 및 인쇄
+   ========================================================= */
+function openItemStructureSheet() {
+  const sheet = document.getElementById('itemStructureSheet');
+  const cats = [...State.categories].sort((a,b)=>(a.order||0)-(b.order||0));
+
+  function buildSection(typeKey, typeLabel, titleBg, catBg, catFg, grpBg, itemBg) {
+    let rows = '';
+    const typeCats = cats.filter(c => c.type === typeKey);
+    for (const cat of typeCats) {
+      const allSubs = (State.subItems||[])
+        .filter(s => s.categoryId === cat.id)
+        .sort((a,b) => (a.order||0)-(b.order||0));
+      // subGroup별 그룹핑
+      const sgMap = new Map();
+      const direct = [];
+      for (const s of allSubs) {
+        if (s.subGroupId) {
+          const sg = (State.subGroups||[]).find(g => g.id === s.subGroupId);
+          const sgName = sg ? sg.name : s.name;
+          if (!sgMap.has(s.subGroupId)) sgMap.set(s.subGroupId, {name:sgName, items:[]});
+          sgMap.get(s.subGroupId).items.push(s);
+        } else {
+          direct.push(s);
+        }
+      }
+      if (sgMap.size === 0 && direct.length === 0) continue;
+
+      const totalRows = [...sgMap.values()].reduce((s,g)=>s+g.items.length,0) + direct.length;
+      let first = true;
+      for (const [,grp] of sgMap) {
+        let gFirst = true;
+        for (const item of grp.items) {
+          rows += `<tr>
+            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:11px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+            ${gFirst ? `<td rowspan="${grp.items.length}" style="font-size:11px;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 4pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(grp.name)}</td>` : ''}
+            <td style="font-size:11px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 4pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
+          </tr>`;
+          first = false; gFirst = false;
+        }
+      }
+      for (const item of direct) {
+        rows += `<tr>
+          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:11px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+          <td style="font-size:11px;color:#9CA3AF;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 4pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">(그룹없음)</td>
+          <td style="font-size:11px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 4pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
+        </tr>`;
+        first = false;
+      }
+    }
+    if (!rows) return '';
+    return `
+      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:12px;padding:4pt 6pt;border:0.5pt solid #ccc;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
+      ${rows}`;
+  }
+
+  const incSection = buildSection('income','수입 항목','#1D4ED8','#DBEAFE','#1E3A8A','#EFF6FF','#F8FBFF');
+  const expSection = buildSection('expense','지출 항목','#BE185D','#FCE7F3','#831843','#FDF2F8','#FFF5FB');
+
+  const tableHTML = `
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+      <colgroup><col style="width:28%"><col style="width:28%"><col style="width:44%"></colgroup>
+      <thead>
+        <tr style="background:#1E3A5F;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <th style="color:#fff;font-size:11px;font-weight:700;padding:4pt 4pt;border:0.5pt solid #555;text-align:center;">대분류</th>
+          <th style="color:#fff;font-size:11px;font-weight:700;padding:4pt 4pt;border:0.5pt solid #555;text-align:center;">중분류</th>
+          <th style="color:#fff;font-size:11px;font-weight:700;padding:4pt 4pt;border:0.5pt solid #555;text-align:center;">소분류</th>
+        </tr>
+      </thead>
+      <tbody>${incSection}${expSection}</tbody>
+    </table>`;
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="isClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+      <h3>항목구조표</h3>
+      <button id="isPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+    </div>
+    <div class="sheet-body" style="padding:12px 16px 80px;">
+      ${tableHTML}
+    </div>
+  `;
+
+  sheet.querySelector('#isClose').addEventListener('click', () => closeSheet('itemStructureSheet'));
+  sheet.querySelector('#isPrint').addEventListener('click', () => {
+    const appTitle = document.title || '교회 회계부';
+    const area = document.getElementById('print-area');
+    area.innerHTML = `
+      <div class="print-title">📋 항목구조표</div>
+      <div class="print-period">${appTitle}</div>
+      <div style="margin-top:8pt;">${tableHTML}</div>`;
+    area.style.display = 'block';
+    window.print();
+    area.style.display = 'none';
+    area.innerHTML = '';
+  });
+
+  openSheet('itemStructureSheet');
+}
+
 function renderSettings() {
   const page = document.getElementById('page-settings');
   page.innerHTML = `
@@ -1919,6 +2021,13 @@ function renderSettings() {
       <div class="settings-group-title">관리</div>
       <div class="settings-row" id="rowCats">
         <div><div class="settings-label">수입/지출 항목 관리</div></div>
+        ${ICONS.chevR}
+      </div>
+      <div class="settings-row" id="rowItemStructure">
+        <div>
+          <div class="settings-label">항목구조표</div>
+          <div class="settings-sub">대분류 · 중분류 · 소분류 구조 보기 및 인쇄</div>
+        </div>
         ${ICONS.chevR}
       </div>
     </div>
@@ -2032,6 +2141,7 @@ function renderSettings() {
     });
   });
   page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
+  page.querySelector('#rowItemStructure').addEventListener('click', () => openItemStructureSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
