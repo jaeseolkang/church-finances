@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 04:50 KST | 수정: 헤더 배너 - 현재까지 누적자산 → 전년이월 | cache:v96
+// v1.83 | 2026-06-25 04:55 KST | 수정: 헤더 좌측 전년이월/현자산 두줄 가로 배치 | cache:v97
 'use strict';
 
 /* =========================================================
@@ -698,14 +698,14 @@ async function renderHome() {
     </div>
 
     <div class="total-assets-banner" style="display:flex;justify-content:space-between;align-items:stretch;">
-      <div style="display:flex;flex-direction:column;justify-content:space-between;gap:6px;">
-        <div>
-          <div class="total-assets-label">전년이월</div>
-          <div class="total-assets-value tabular" style="font-size:16px;color:#fff;">${fmtMoney(carryover)}원</div>
+      <div style="display:flex;flex-direction:column;justify-content:center;gap:8px;">
+        <div style="display:flex;align-items:baseline;gap:10px;">
+          <span class="total-assets-label" style="margin-bottom:0;min-width:52px;">전년이월</span>
+          <span class="total-assets-value tabular" style="font-size:16px;color:#fff;">${fmtMoney(carryover)}원</span>
         </div>
-        <div>
-          <div class="total-assets-label">현자산</div>
-          <div class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</div>
+        <div style="display:flex;align-items:baseline;gap:10px;">
+          <span class="total-assets-label" style="margin-bottom:0;min-width:52px;">현자산</span>
+          <span class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</span>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;">
