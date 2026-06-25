@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 04:55 KST | 수정: 헤더 좌측 전년이월/현자산 두줄 가로 배치 | cache:v97
+// v1.83 | 2026-06-25 04:55 KST | 수정: 헤더 좌측 전년이월/현자산 두줄 가로 배치 | cache:v98
 'use strict';
 
 /* =========================================================
@@ -698,13 +698,13 @@ async function renderHome() {
     </div>
 
     <div class="total-assets-banner" style="display:flex;justify-content:space-between;align-items:stretch;">
-      <div style="display:flex;flex-direction:column;justify-content:center;gap:8px;">
-        <div style="display:flex;align-items:baseline;gap:10px;">
-          <span class="total-assets-label" style="margin-bottom:0;min-width:52px;">전년이월</span>
+      <div style="display:flex;flex-direction:column;justify-content:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">전년이월</span>
           <span class="total-assets-value tabular" style="font-size:16px;color:#fff;">${fmtMoney(carryover)}원</span>
         </div>
-        <div style="display:flex;align-items:baseline;gap:10px;">
-          <span class="total-assets-label" style="margin-bottom:0;min-width:52px;">현자산</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">현자산</span>
           <span class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</span>
         </div>
       </div>
