@@ -1,4 +1,4 @@
-// v1.97 | 2026-06-25 17:40 KST | 수정: 설정-월장부 시트 + 인쇄 기능 추가 | cache:v106
+// v1.99 | 2026-06-25 17:40 KST | 수정: 월장부 인쇄 타이틀 제거, thead만 반복 | cache:v107
 'use strict';
 
 /* =========================================================
@@ -2038,10 +2038,11 @@ function openLedgerSheet() {
   sheet.querySelector('#ldPrint').addEventListener('click', () => {
     const ym = sheet.querySelector('#ldMonthSel').value;
     const [y,m] = ym.split('-');
+    const appName = State.appName || '교회 회계부';
+    // thead repeat을 위해 table을 print-page div 없이 직접 출력
+    // @media print에서 thead가 매 페이지 반복됨
     const area = document.getElementById('print-area');
-    area.innerHTML = `
-      <div class="print-title">📒 ${y}년 ${parseInt(m)}월 장부</div>
-      <div style="margin-top:6pt;">${currentTableHTML}</div>`;
+    area.innerHTML = currentTableHTML;
     area.style.display = 'block';
     window.print();
     area.style.display = 'none';
