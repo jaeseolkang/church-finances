@@ -564,7 +564,19 @@ input,textarea,select{font-family:inherit; color:inherit;}
   background:rgba(255,255,255,0.06);
   right:-40px; top:-50px;
 }
-.total-assets-left{}
+.total-assets-left{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.total-assets-carryover{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+}
+.total-assets-carryover .total-assets-label{
+  margin-bottom:0;
+}
 .total-assets-label{
   font-size:12px;
   color:rgba(255,255,255,0.75);

@@ -1,7 +1,7 @@
-// 2026-06-25 04:30 KST | 수정: CACHE_NAME v93 (헤더 레이아웃 - 좌측 전년이월+현자산)
+// 2026-06-25 04:40 KST | 수정: CACHE_NAME v94 (헤더 배너 레이아웃 완성)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v93';
+const CACHE_NAME = 'gaegyebu-v94';
 const ASSETS = [
   './',
   './index.html',
