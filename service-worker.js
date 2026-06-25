@@ -1,7 +1,7 @@
 // 2026-06-25 05:00 KST | 수정: CACHE_NAME v94 (헤더 배너 레이아웃 완성)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v100';
+const CACHE_NAME = 'gaegyebu-v101';
 const ASSETS = [
   './',
   './index.html',

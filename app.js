@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 05:15 KST | 수정: 헤더 현자산 라벨 제거 | cache:v100
+// v1.83 | 2026-06-25 05:20 KST | 수정: explodeTxToRows - subGroups 없으면 persons에서 이름 조회 | cache:v101
 'use strict';
 
 /* =========================================================
@@ -2128,16 +2128,16 @@ function subItemDisplayName(catType, catName, subName) {
 function explodeTxToRows(t) {
   const cat = catById(t.categoryId) || { name: '삭제된 항목', usePersonLevel: false, type: t.type };
   const sgId = t.subGroupId || t.personId;
+  // subGroups 스토어에서 먼저 찾고, 없으면 persons에서 찾기
   const sg = sgId ? (State.subGroups || []).find(g => g.id === sgId) : null;
+  const person = (!sg && sgId) ? (State.persons || []).find(p => p.id === sgId) : null;
+  const sgName = sg ? sg.name : (person ? person.name : null);
   const hasGroupStructure = subGroupsOfCategory(cat.id).length > 0;
 
-  // 중분류/소분류 결정
-  // - subGroups 있는 대분류(헌금): major=이름(subGroup), minor=헌금종류(subItem)
-  // - subGroups 없는 대분류:       major=대분류명,       minor=소분류명
   let major, minor_prefix;
-  if (hasGroupStructure) {
-    major = sg ? sg.name : (cat.name + ' (이름없음)'); // 이름 필수
-    minor_prefix = '';  // 소분류명 그대로
+  if (hasGroupStructure || sgName) {
+    major = sgName || (cat.name + ' (이름없음)');
+    minor_prefix = '';
   } else {
     major = cat.name;
     minor_prefix = '';
