@@ -1,7 +1,7 @@
-// 2026-06-25 17:40 KST | 수정: CACHE_NAME v104 (항목구조표 시트 추가)
+// 2026-06-25 17:40 KST | 수정: CACHE_NAME v105 (항목구조표 열너비 auto)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v104';
+const CACHE_NAME = 'gaegyebu-v105';
 const ASSETS = [
   './',
   './index.html',
