@@ -1,4 +1,4 @@
-// v1.83 | 2026-06-25 04:55 KST | 수정: 헤더 좌측 전년이월/현자산 두줄 가로 배치 | cache:v98
+// v1.83 | 2026-06-25 05:10 KST | 수정: monthSummary/월별 전년이월 제외 | cache:v99
 'use strict';
 
 /* =========================================================
@@ -477,10 +477,15 @@ function txInCursorMonth() {
 
 function monthSummary() {
   const list = txInCursorMonth();
+  const carryoverCat = State.categories.find(c => c.name === '전년이월');
   let income = 0, expense = 0;
   for (const t of list) {
-    if (t.type === 'income') income += t.amount;
-    else expense += t.amount;
+    if (t.type === 'income') {
+      if (carryoverCat && t.categoryId === carryoverCat.id) continue;
+      income += t.amount;
+    } else {
+      expense += t.amount;
+    }
   }
   return { income, expense, balance: income - expense };
 }
