@@ -1,4 +1,4 @@
-// v1.96 | 2026-06-25 17:40 KST | 수정: 항목구조표 열너비 auto (내용에 맞게) | cache:v105
+// v1.97 | 2026-06-25 17:40 KST | 수정: 설정-월장부 시트 + 인쇄 기능 추가 | cache:v106
 'use strict';
 
 /* =========================================================
@@ -1900,6 +1900,157 @@ function renderStatsTabDetail(detailTx, isIncome) {
 /* =========================================================
    ITEM STRUCTURE SHEET — 설정에서 항목구조표 보기 및 인쇄
    ========================================================= */
+/* =========================================================
+   LEDGER SHEET — 설정에서 월장부 보기 및 인쇄
+   ========================================================= */
+function openLedgerSheet() {
+  const sheet = document.getElementById('ledgerSheet');
+
+  // 거래 있는 월 목록
+  const monthsSet = new Set(State.transactions.map(t => t.date.slice(0,7)));
+  const months = [...monthsSet].sort().reverse(); // 최신월 먼저
+  const currentYM = months[0] || `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+
+  function renderLedger(ym) {
+    const [yearStr, monthStr] = ym.split('-');
+    const year = parseInt(yearStr), month = parseInt(monthStr);
+
+    const txs = State.transactions
+      .filter(t => t.date.startsWith(ym))
+      .sort((a,b) => a.date.localeCompare(b.date) || (a.createdAt||0)-(b.createdAt||0));
+
+    // 누계 계산 (해당 월 이전 누적)
+    let running = 0;
+    const allSorted = [...State.transactions].sort((a,b) => a.date.localeCompare(b.date)||(a.createdAt||0)-(b.createdAt||0));
+    for (const t of allSorted) {
+      if (t.date >= ym) break;
+      running += t.type === 'income' ? t.amount : -t.amount;
+    }
+
+    // 데이터 행 생성
+    const rows = [];
+    for (const t of txs) {
+      const cat = catById(t.categoryId) || {name:'?', type:t.type};
+      const sgId = t.subGroupId || t.personId;
+      const sg = sgId ? (State.subGroups||[]).find(g=>g.id===sgId)||(State.persons||[]).find(p=>p.id===sgId) : null;
+      const sgName = sg ? sg.name : '';
+      const lines = (t.lines && t.lines.length > 0) ? t.lines : [{subItemId:null, amount:t.amount}];
+      for (const l of lines) {
+        const si = l.subItemId ? subItemById(l.subItemId) : null;
+        const siName = si ? subItemDisplayName(cat.type, cat.name, si.name) : '';
+        // 중분류: subGroups 있는 카테고리면 sg이름, 아니면 subGroup명
+        const hasGroups = subGroupsOfCategory(cat.id).length > 0;
+        const major = hasGroups ? sgName : (si && si.subGroupId ? ((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'' : '');
+        running += t.type === 'income' ? l.amount : -l.amount;
+        rows.push({
+          date: t.date,
+          cat: cat.name,
+          major,
+          minor: siName,
+          income: t.type === 'income' ? l.amount : null,
+          expense: t.type === 'expense' ? l.amount : null,
+          acc: running,
+        });
+      }
+    }
+
+    // 결산 계산
+    const inc = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const exp = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const tongCat = State.categories.find(c=>c.name==='통장이동');
+    const transfer = tongCat ? txs.filter(t=>t.categoryId===tongCat.id&&t.type==='income').reduce((s,t)=>s+t.amount,0) : 0;
+    const depCat = State.categories.find(c=>c.name==='예금'&&c.type==='expense');
+    const deposit = depCat ? txs.filter(t=>t.categoryId===depCat.id).reduce((s,t)=>s+t.amount,0) : 0;
+
+    const TD = 'padding:2pt 4pt;border:0.5pt solid #ccc;font-size:8pt;white-space:nowrap;';
+    const TH = 'padding:3pt 4pt;border:0.5pt solid #aaa;font-size:8pt;font-weight:700;background:#DCE6F1;';
+
+    const dataRows = rows.map(r => `<tr>
+      <td style="${TD}text-align:center;">${r.date.slice(5)}</td>
+      <td style="${TD}">${escapeHTML(r.cat)}</td>
+      <td style="${TD}">${escapeHTML(r.major)}</td>
+      <td style="${TD}">${escapeHTML(r.minor)}</td>
+      <td style="${TD}text-align:right;color:#1F497D;">${r.income ? r.income.toLocaleString('ko-KR') : ''}</td>
+      <td style="${TD}text-align:right;color:#CC0000;">${r.expense ? '-'+r.expense.toLocaleString('ko-KR') : ''}</td>
+      <td style="${TD}text-align:right;">${r.acc.toLocaleString('ko-KR')}</td>
+    </tr>`).join('');
+
+    const SUM = 'padding:3pt 4pt;border:0.5pt solid #aaa;font-size:8pt;font-weight:700;background:#FFFFF0;';
+    const summaryRows = [
+      [month+'월 결산', '수입/지출', inc, exp],
+      [null, '통장이동(선교)', transfer, null],
+      [null, '예금', null, deposit],
+      [null, '순헌금/지출', inc-transfer, exp-deposit],
+    ].map(([c1,c2,iv,ev]) => `<tr>
+      <td colspan="2" style="${SUM}font-weight:${c1?'700':'400'};">${escapeHTML(c1||'')}</td>
+      <td colspan="2" style="${SUM}">${escapeHTML(c2)}</td>
+      <td style="${SUM}text-align:right;color:#1F497D;">${iv ? iv.toLocaleString('ko-KR') : ''}</td>
+      <td style="${SUM}text-align:right;color:#CC0000;">${ev ? '-'+ev.toLocaleString('ko-KR') : ''}</td>
+      <td style="${SUM}"></td>
+    </tr>`).join('');
+
+    const tableHTML = `
+      <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+        <colgroup>
+          <col style="width:9%"><col style="width:12%"><col style="width:14%">
+          <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
+        </colgroup>
+        <thead><tr>
+          <th style="${TH}text-align:center;">일자</th>
+          <th style="${TH}">대분류</th>
+          <th style="${TH}">중분류</th>
+          <th style="${TH}">소분류</th>
+          <th style="${TH}text-align:right;">수입금액</th>
+          <th style="${TH}text-align:right;">지출금액</th>
+          <th style="${TH}text-align:right;">누계금액</th>
+        </tr></thead>
+        <tbody>${dataRows}</tbody>
+        <tbody>${summaryRows}</tbody>
+      </table>`;
+
+    const body = sheet.querySelector('#ledgerBody');
+    if (body) body.innerHTML = tableHTML;
+    return tableHTML;
+  }
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="ldClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h3>월장부</h3>
+        <select id="ldMonthSel" style="font-size:13px;padding:4px 8px;border-radius:8px;border:1px solid var(--border);background:var(--card);">
+          ${months.map(m=>`<option value="${m}"${m===currentYM?'selected':''}>${m.replace('-','년 ')}월</option>`).join('')}
+        </select>
+      </div>
+      <button id="ldPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+    </div>
+    <div class="sheet-body" id="ledgerBody" style="padding:12px 16px 80px;">
+    </div>
+  `;
+
+  let currentTableHTML = renderLedger(currentYM);
+
+  sheet.querySelector('#ldClose').addEventListener('click', () => closeSheet('ledgerSheet'));
+  sheet.querySelector('#ldMonthSel').addEventListener('change', e => {
+    currentTableHTML = renderLedger(e.target.value);
+  });
+  sheet.querySelector('#ldPrint').addEventListener('click', () => {
+    const ym = sheet.querySelector('#ldMonthSel').value;
+    const [y,m] = ym.split('-');
+    const area = document.getElementById('print-area');
+    area.innerHTML = `
+      <div class="print-title">📒 ${y}년 ${parseInt(m)}월 장부</div>
+      <div style="margin-top:6pt;">${currentTableHTML}</div>`;
+    area.style.display = 'block';
+    window.print();
+    area.style.display = 'none';
+    area.innerHTML = '';
+  });
+
+  openSheet('ledgerSheet');
+}
+
 function openItemStructureSheet() {
   const sheet = document.getElementById('itemStructureSheet');
   const cats = [...State.categories].sort((a,b)=>(a.order||0)-(b.order||0));
@@ -2029,6 +2180,13 @@ function renderSettings() {
         </div>
         ${ICONS.chevR}
       </div>
+      <div class="settings-row" id="rowLedger">
+        <div>
+          <div class="settings-label">월장부</div>
+          <div class="settings-sub">월별 거래 내역 및 결산 보기 및 인쇄</div>
+        </div>
+        ${ICONS.chevR}
+      </div>
     </div>
 
     <div class="settings-group">
@@ -2141,6 +2299,7 @@ function renderSettings() {
   });
   page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
   page.querySelector('#rowItemStructure').addEventListener('click', () => openItemStructureSheet());
+  page.querySelector('#rowLedger').addEventListener('click', () => openLedgerSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
