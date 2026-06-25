@@ -1,7 +1,7 @@
-// 2026-06-25 17:40 KST | 수정: CACHE_NAME v109 (인쇄 시 앱 UI 완전 숨김)
+// 2026-06-25 17:40 KST | 수정: CACHE_NAME v110 (엑셀 저장 버튼 추가)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v109';
+const CACHE_NAME = 'gaegyebu-v110';
 const ASSETS = [
   './',
   './index.html',

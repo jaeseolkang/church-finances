@@ -1,4 +1,4 @@
-// v2.01 | 2026-06-25 17:40 KST | 수정: 인쇄 시 앱 UI 완전 숨김 (body>* hide) | cache:v109
+// v2.02 | 2026-06-25 17:40 KST | 수정: 개인별헌금/월지출/월장부 엑셀 저장 버튼 추가 | cache:v110
 'use strict';
 
 /* =========================================================
@@ -1325,6 +1325,191 @@ function txInPeriod(start, end) {
 /* =========================================================
    PRINT: 통계 인쇄 (A4)
    ========================================================= */
+/* =========================================================
+   EXCEL EXPORT — 개인별헌금 / 월지출 / 월장부
+   ========================================================= */
+
+// 1. 개인별헌금 엑셀 (수입 통계)
+function exportPivotToExcel() {
+  const range = statsPeriodRange();
+  const list  = txInPeriod(range.start, range.end).filter(t => t.type === 'income');
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+  if (!heongCat) { alert('헌금 카테고리가 없습니다.'); return; }
+
+  const heongList = list.filter(t => t.categoryId === heongCat.id);
+  const pivot = {};
+  const colSet = new Set();
+  for (const t of heongList) {
+    const sgId = t.subGroupId || t.personId;
+    const pName = sgId ? ((State.subGroups||[]).find(p=>p.id===sgId)||(State.persons||[]).find(p=>p.id===sgId)||{}).name||'(이름없음)' : '(이름없음)';
+    if (!pivot[pName]) pivot[pName] = {};
+    for (const l of (t.lines||[])) {
+      const si = subItemById(l.subItemId);
+      const sName = si ? si.name : '(기타)';
+      pivot[pName][sName] = (pivot[pName][sName]||0) + l.amount;
+      colSet.add(sName);
+    }
+  }
+  const rows = Object.keys(pivot).sort((a,b)=>a.localeCompare(b,'ko'));
+  const orderedCols = [
+    ...TX_ENTRY_ITEM_ORDER.filter(n=>colSet.has(n)),
+    ...[...colSet].filter(n=>!TX_ENTRY_ITEM_ORDER.includes(n)).sort()
+  ];
+  const colTotals = orderedCols.map(col => rows.reduce((s,r)=>s+(pivot[r][col]||0),0));
+  const grandTotal = colTotals.reduce((s,v)=>s+v,0);
+
+  const aoa = [];
+  aoa.push([`헌금 개인별 명세 — ${range.label}`]);
+  aoa.push(['이름', ...orderedCols, '합계']);
+  for (const name of rows) {
+    const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
+    aoa.push([name, ...orderedCols.map(c=>pivot[name][c]||''), rowTotal]);
+  }
+  aoa.push(['합계', ...colTotals, grandTotal]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // 숫자 열 서식
+  const numFmt = '#,##0';
+  for (let r = 2; r < aoa.length; r++) {
+    for (let c = 1; c < aoa[r].length; c++) {
+      const addr = XLSX.utils.encode_cell({r, c});
+      if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, ws, '개인별헌금');
+  XLSX.writeFile(wb, `개인별헌금_${range.label}.xlsx`);
+}
+
+// 2. 월지출 엑셀
+function exportExpenseToExcel() {
+  const range = statsPeriodRange();
+  const list  = txInPeriod(range.start, range.end).filter(t => t.type === 'expense');
+  const expCats = State.categories.filter(c=>c.type==='expense').sort((a,b)=>(a.order||0)-(b.order||0));
+  const expPivot = {};
+  for (const t of list) {
+    if (!expPivot[t.categoryId]) expPivot[t.categoryId] = {};
+    for (const l of (t.lines||[])) {
+      expPivot[t.categoryId][l.subItemId] = (expPivot[t.categoryId][l.subItemId]||0) + l.amount;
+    }
+  }
+  const usedCats = expCats.filter(c => expPivot[c.id]);
+  const depositCat = State.categories.find(c=>c.type==='expense'&&c.name==='예금');
+  const depositTotal = depositCat && expPivot[depositCat.id]
+    ? Object.values(expPivot[depositCat.id]).reduce((s,v)=>s+v,0) : 0;
+
+  const aoa = [];
+  aoa.push([`${range.label} 지출현황`]);
+  aoa.push(['대분류','중분류','소분류','금액(원)','비고']);
+  let grandTotal = 0;
+  for (const cat of usedCats) {
+    const catPivot = expPivot[cat.id];
+    const allSubs = State.subItems.filter(s=>s.categoryId===cat.id).sort((a,b)=>(a.order||0)-(b.order||0));
+    const sgMap = new Map();
+    const direct = [];
+    for (const s of allSubs) {
+      if (!catPivot[s.id]) continue;
+      if (s.subGroupId) {
+        const sg = (State.subGroups||[]).find(g=>g.id===s.subGroupId);
+        const sgName = sg ? sg.name : s.name;
+        if (!sgMap.has(s.subGroupId)) sgMap.set(s.subGroupId, {name:sgName, items:[]});
+        sgMap.get(s.subGroupId).items.push(s);
+      } else { direct.push(s); }
+    }
+    let catTotal = 0;
+    let catFirst = true;
+    for (const [,grp] of sgMap) {
+      let grpFirst = true;
+      for (const s of grp.items) {
+        const amt = catPivot[s.id]||0;
+        aoa.push([catFirst?cat.name:'', grpFirst?grp.name:'', s.name, amt, '']);
+        catFirst = false; grpFirst = false; catTotal += amt;
+      }
+    }
+    for (const s of direct) {
+      const amt = catPivot[s.id]||0;
+      aoa.push([catFirst?cat.name:'', '', s.name, amt, '']);
+      catFirst = false; catTotal += amt;
+    }
+    aoa.push(['', '소 계', '', catTotal, '']);
+    grandTotal += catTotal;
+  }
+  aoa.push(['합  계', '', '', grandTotal, '']);
+  aoa.push(['순지출(지출-예금)', '', '', grandTotal-depositTotal, '']);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const numFmt = '#,##0';
+  for (let r = 2; r < aoa.length; r++) {
+    const addr = XLSX.utils.encode_cell({r, c:3});
+    if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
+  }
+  XLSX.utils.book_append_sheet(wb, ws, '월지출');
+  XLSX.writeFile(wb, `월지출_${range.label}.xlsx`);
+}
+
+// 3. 월장부 엑셀
+function exportLedgerToExcel(ym) {
+  const [yearStr, monthStr] = ym.split('-');
+  const month = parseInt(monthStr);
+  const txs = State.transactions.filter(t=>t.date.startsWith(ym))
+    .sort((a,b)=>a.date.localeCompare(b.date)||(a.createdAt||0)-(b.createdAt||0));
+
+  let running = 0;
+  const allSorted = [...State.transactions].sort((a,b)=>a.date.localeCompare(b.date)||(a.createdAt||0)-(b.createdAt||0));
+  for (const t of allSorted) {
+    if (t.date >= ym) break;
+    running += t.type==='income' ? t.amount : -t.amount;
+  }
+
+  const aoa = [];
+  aoa.push([`${yearStr}년 ${month}월 장부`]);
+  aoa.push(['일자','대분류','중분류','소분류','수입금액','지출금액','누계금액']);
+  for (const t of txs) {
+    const cat = catById(t.categoryId)||{name:'?',type:t.type};
+    const sgId = t.subGroupId||t.personId;
+    const sg = sgId ? (State.subGroups||[]).find(g=>g.id===sgId)||(State.persons||[]).find(p=>p.id===sgId) : null;
+    const sgName = sg ? sg.name : '';
+    const lines = (t.lines&&t.lines.length>0) ? t.lines : [{subItemId:null,amount:t.amount}];
+    for (const l of lines) {
+      const si = l.subItemId ? subItemById(l.subItemId) : null;
+      const siName = si ? si.name : '';
+      const hasGroups = subGroupsOfCategory(cat.id).length > 0;
+      const major = hasGroups ? sgName : (si&&si.subGroupId?((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'':'');
+      running += t.type==='income' ? l.amount : -l.amount;
+      aoa.push([
+        t.date.slice(5), cat.name, major, siName,
+        t.type==='income' ? l.amount : '',
+        t.type==='expense' ? l.amount : '',
+        running
+      ]);
+    }
+  }
+  // 결산
+  const inc = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const exp = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const tongCat = State.categories.find(c=>c.name==='통장이동');
+  const transfer = tongCat ? txs.filter(t=>t.categoryId===tongCat.id&&t.type==='income').reduce((s,t)=>s+t.amount,0) : 0;
+  const depCat = State.categories.find(c=>c.name==='예금'&&c.type==='expense');
+  const deposit = depCat ? txs.filter(t=>t.categoryId===depCat.id).reduce((s,t)=>s+t.amount,0) : 0;
+  aoa.push([`${month}월 결산`,'수입/지출','','',inc,exp,'']);
+  aoa.push(['','통장이동(선교)','','',transfer,'','']);
+  aoa.push(['','예금','','','',deposit,'']);
+  aoa.push(['','순헌금/지출','','',inc-transfer,exp-deposit,'']);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const numFmt = '#,##0';
+  for (let r = 2; r < aoa.length; r++) {
+    for (const c of [4,5,6]) {
+      const addr = XLSX.utils.encode_cell({r,c});
+      if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, ws, `${month}월장부`);
+  XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
+}
+
 function printStats() {
   const range = statsPeriodRange();
   const allTx  = txInPeriod(range.start, range.end);
@@ -1645,7 +1830,10 @@ function renderStats() {
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>통계</h1>
-      <button id="statsPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      <div style="display:flex;gap:6px;">
+        <button id="statsExcel" style="font-size:13px;color:#217346;font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:#E8F5E9;">📥 엑셀</button>
+        <button id="statsPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      </div>
     </div>
 
     <!-- 통계 | 내용 -->
@@ -1708,6 +1896,10 @@ function renderStats() {
   `;
 
   // 이벤트
+  page.querySelector('#statsExcel').addEventListener('click', () => {
+    if (State.statsType === 'income') exportPivotToExcel();
+    else exportExpenseToExcel();
+  });
   page.querySelector('#statsPrint').addEventListener('click', () => printStats());
 
   page.querySelectorAll('.segctrl')[0].querySelectorAll('button').forEach(b => {
@@ -2023,7 +2215,10 @@ function openLedgerSheet() {
           ${months.map(m=>`<option value="${m}"${m===currentYM?'selected':''}>${m.replace('-','년 ')}월</option>`).join('')}
         </select>
       </div>
-      <button id="ldPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      <div style="display:flex;gap:6px;">
+        <button id="ldExcel" style="font-size:13px;color:#217346;font-weight:700;padding:6px 10px;border-radius:8px;background:#E8F5E9;">📥 엑셀</button>
+        <button id="ldPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      </div>
     </div>
     <div class="sheet-body" id="ledgerBody" style="padding:12px 16px 80px;">
     </div>
@@ -2032,6 +2227,10 @@ function openLedgerSheet() {
   let currentTableHTML = renderLedger(currentYM);
 
   sheet.querySelector('#ldClose').addEventListener('click', () => closeSheet('ledgerSheet'));
+  sheet.querySelector('#ldExcel').addEventListener('click', () => {
+    const ym = sheet.querySelector('#ldMonthSel').value;
+    exportLedgerToExcel(ym);
+  });
   sheet.querySelector('#ldMonthSel').addEventListener('change', e => {
     currentTableHTML = renderLedger(e.target.value);
   });
