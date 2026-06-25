@@ -1,4 +1,4 @@
-// v1.86 | 2026-06-25 17:40 KST | 수정: 통계 인쇄 기능 추가 (A4, 막대/내용/헌금피벗 포함) | cache:v103
+// v1.87 | 2026-06-25 17:40 KST | 수정: 통계 인쇄 페이지 분리 (막대/내용/헌금피벗 각 1페이지) | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1414,7 +1414,7 @@ function printStats() {
   }
 
   const typeLabel = isIncome ? '수입' : '지출';
-  const html = `
+  const pageHeader = `
     <div class="print-title">📊 통계 — ${typeLabel}</div>
     <div class="print-period">${range.label}</div>
     <div class="print-summary">
@@ -1430,20 +1430,28 @@ function printStats() {
         <div class="print-summary-label">합계</div>
         <div class="print-summary-value">${fmtMoney(netTotal)}원</div>
       </div>
-    </div>
+    </div>`;
 
-    <div style="font-size:12pt;font-weight:800;margin-bottom:6pt;">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
-    ${statRows.map(r => {
-      const pct = statTotal > 0 ? Math.round(r.amt/statTotal*100) : 0;
-      return `<div class="print-bar-row">
-        <div class="print-bar-label">${r.icon} ${escapeHTML(r.name)}</div>
-        <div class="print-bar-pct">${pct}%</div>
-        <div class="print-bar-amt">${fmtMoney(r.amt)}원</div>
-      </div>`;
-    }).join('')}
+  // ── 1페이지: 통계 (막대) ──
+  const page1 = `
+    <div class="print-page">
+      ${pageHeader}
+      <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
+      ${statRows.map(r => {
+        const pct = statTotal > 0 ? Math.round(r.amt/statTotal*100) : 0;
+        return `<div class="print-bar-row">
+          <div class="print-bar-label">${r.icon} ${escapeHTML(r.name)}</div>
+          <div class="print-bar-pct">${pct}%</div>
+          <div class="print-bar-amt">${fmtMoney(r.amt)}원</div>
+        </div>`;
+      }).join('')}
+    </div>`;
 
-    <div style="margin-top:16pt;">
-      <div style="font-size:12pt;font-weight:800;margin-bottom:6pt;border-bottom:1pt solid #000;padding-bottom:4pt;">내용 상세</div>
+  // ── 2페이지: 내용 상세 ──
+  const page2 = `
+    <div class="print-page">
+      ${pageHeader}
+      <div class="print-section-title">내용 상세</div>
       <div style="display:flex;justify-content:space-between;font-size:9pt;color:#666;font-weight:700;padding:2pt 2pt 4pt;border-bottom:0.5pt solid #aaa;">
         <span style="flex:1;">항목</span><span style="min-width:36pt;text-align:right;">건수</span><span style="min-width:80pt;text-align:right;">금액</span>
       </div>
@@ -1457,10 +1465,12 @@ function printStats() {
         <span>합계</span>
         <span>${fmtMoney(aggRows.reduce((s,r)=>s+r.amount,0))}원</span>
       </div>
-    </div>
+    </div>`;
 
-    ${pivotHTML}
-  `;
+  // ── 3페이지: 헌금 피벗 (수입일 때만) ──
+  const page3 = pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '';
+
+  const html = page1 + page2 + page3;
 
   const area = document.getElementById('print-area');
   area.innerHTML = html;

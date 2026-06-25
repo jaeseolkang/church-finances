@@ -742,6 +742,24 @@ input,textarea,select{font-family:inherit; color:inherit;}
   .print-total-row { display: flex; justify-content: space-between; padding: 6pt 2pt; font-weight: 800; font-size: 11pt; border-top: 1.5pt solid #000; margin-top: 2pt; }
 
   .print-no-print { display: none !important; }
+
+  /* 페이지 구분 */
+  .print-page {
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .print-section-title {
+    font-size: 12pt;
+    font-weight: 800;
+    margin-bottom: 6pt;
+    border-bottom: 1pt solid #000;
+    padding-bottom: 4pt;
+    margin-top: 4pt;
+  }
 }
 </style>
 </head>
