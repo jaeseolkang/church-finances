@@ -1,7 +1,7 @@
-// 2026-06-25 03:30 KST | 수정: CACHE_NAME v87 (대/중/소분류 예산 입력, 하위 합 우선)
+// 2026-06-25 03:50 KST | 수정: CACHE_NAME v88 (대/중/소 예산 모두 직접 입력 가능)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v87';
+const CACHE_NAME = 'gaegyebu-v88';
 const ASSETS = [
   './',
   './index.html',

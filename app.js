@@ -3615,7 +3615,7 @@ function renderCatTree(sheet) {
             data-group-budget-id="${g.id}" data-cat-id="${catId}"
             value="${grpBudgetVal ? fmtMoney(grpBudgetVal) : ''}"
             placeholder="중분류예산"
-            ${subTotal > 0 ? 'readonly style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;background:var(--bg-2);color:var(--text-3);"' : 'style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;"'}>
+            style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;${subTotal > 0 ? 'background:var(--bg-2);' : ''}">
           <span style="font-size:11px;color:var(--text-3);">원</span>
         </div>
         <button class="grip" data-rename-group="${g.id}" style="margin-left:2px;">${ICONS.edit}</button>
@@ -3646,7 +3646,7 @@ function renderCatTree(sheet) {
             data-cat-budget-id="${c.id}"
             value="${c.budget ? fmtMoney(c.budget) : ''}"
             placeholder="미설정"
-            ${(subGroupsOfCategory(c.id).length > 0 || subItemsOfCategory(c.id).length > 0) ? 'readonly style="width:72px;padding:2px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;background:var(--bg-2);color:var(--text-3);"' : 'style="width:72px;padding:2px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;"'}>
+            style="width:72px;padding:2px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;${(subGroupsOfCategory(c.id).length > 0 || subItemsOfCategory(c.id).length > 0) ? 'background:var(--bg-2);' : ''}">
           <span style="font-size:11px;color:var(--text-3);">원</span>
         </div>
         <button class="grip" data-edit-cat="${c.id}">${ICONS.edit}</button>
@@ -3848,7 +3848,6 @@ function renderCatTree(sheet) {
 
   // 중분류 예산 입력
   sheet.querySelectorAll('[data-group-budget-id]').forEach(input => {
-    if (input.readOnly) return;
     attachMoneyInputFormatter(input, () => {});
     const save = async () => {
       const grpId = input.dataset.groupBudgetId;
@@ -3868,9 +3867,8 @@ function renderCatTree(sheet) {
     input.addEventListener('click', e => e.stopPropagation());
   });
 
-  // 대분류 예산 직접 입력 (하위 없는 경우)
+  // 대분류 예산 입력
   sheet.querySelectorAll('[data-cat-budget-id]').forEach(input => {
-    if (input.readOnly) return;
     attachMoneyInputFormatter(input, () => {});
     const save = async () => {
       const catId = input.dataset.catBudgetId;
@@ -3915,34 +3913,38 @@ async function recalcGroupBudget(groupId) {
   if (!groupId) return;
   const g = await DB.get('subGroups', groupId);
   if (!g) return;
-  const allSubs = await DB.getAll('subItems');
-  const gSubs   = allSubs.filter(s => s.subGroupId === groupId);
+  const allSubs  = await DB.getAll('subItems');
+  const gSubs    = allSubs.filter(s => s.subGroupId === groupId);
   const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
-  // 소분류 합으로 중분류 예산 업데이트
-  if (g.budget !== subTotal) { g.budget = subTotal; await DB.put('subGroups', g); }
+  // 소분류에 값이 있을 때만 중분류를 소분류 합으로 업데이트
+  if (subTotal > 0 && g.budget !== subTotal) {
+    g.budget = subTotal;
+    await DB.put('subGroups', g);
+  }
 }
 
 // ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선) ──
 async function recalcCatBudget(catId) {
-  // DB에서 직접 읽어 State 캐시 타이밍 이슈 방지
   const cat = await DB.get('categories', catId);
   if (!cat) return;
   const allSubs   = await DB.getAll('subItems');
   const allGroups = await DB.getAll('subGroups');
-
   const catGroups = allGroups.filter(g => g.categoryId === catId);
   const catSubs   = allSubs.filter(s => s.categoryId === catId);
 
-  let total = 0;
+  // 중분류별 유효 예산: 소분류 합이 있으면 소분류 합, 없으면 중분류 직접값
+  let grpTotal = 0;
   for (const g of catGroups) {
     const gSubs    = catSubs.filter(s => s.subGroupId === g.id);
     const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
-    total += subTotal > 0 ? subTotal : (g.budget||0);
+    grpTotal += subTotal > 0 ? subTotal : (g.budget||0);
   }
-  const ungrouped = catSubs.filter(s => !s.subGroupId);
-  total += ungrouped.reduce((s, x) => s + (x.budget||0), 0);
+  const directTotal = catSubs.filter(s => !s.subGroupId).reduce((s,x) => s+(x.budget||0), 0);
+  const total = grpTotal + directTotal;
 
-  if (cat.budget !== total) {
+  // 중분류/소분류에 값이 있을 때만 대분류를 합산값으로 업데이트
+  // 값이 없으면 대분류 직접값 유지
+  if (total > 0 && cat.budget !== total) {
     cat.budget = total;
     await DB.put('categories', cat);
   }
