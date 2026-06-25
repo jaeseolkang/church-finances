@@ -1,4 +1,4 @@
-// v1.88 | 2026-06-25 17:40 KST | 수정: 통계 인쇄 - 수입=막대+헌금피벗, 지출=막대+내용상세 | cache:v103
+// v1.89 | 2026-06-25 17:40 KST | 수정: 통계 지출 인쇄 2페이지 = 월지출표 (대>중>소 3단계) | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1447,27 +1447,139 @@ function printStats() {
       }).join('')}
     </div>`;
 
-  // ── 2페이지: 내용 상세 ──
-  const page2 = `
-    <div class="print-page">
-      ${pageHeader}
-      <div class="print-section-title">내용 상세</div>
-      <div style="display:flex;justify-content:space-between;font-size:9pt;color:#666;font-weight:700;padding:2pt 2pt 4pt;border-bottom:0.5pt solid #aaa;">
-        <span style="flex:1;">항목</span><span style="min-width:36pt;text-align:right;">건수</span><span style="min-width:80pt;text-align:right;">금액</span>
-      </div>
-      ${aggRows.map(r=>`
-        <div class="print-detail-row">
-          <div class="print-detail-label">${escapeHTML(r.label)}</div>
-          <div class="print-detail-count">${r.count}건</div>
-          <div class="print-detail-amt">${fmtMoney(r.amount)}원</div>
-        </div>`).join('')}
-      <div class="print-total-row">
-        <span>합계</span>
-        <span>${fmtMoney(aggRows.reduce((s,r)=>s+r.amount,0))}원</span>
-      </div>
-    </div>`;
+  // ── 2페이지: 월지출 (지출일 때) ──
+  // 월지출.py 동일 구조: 대분류 > 중분류(subGroup) > 소분류 3단계 테이블
+  let page2 = '';
+  if (!isIncome) {
+    const expCats = State.categories
+      .filter(c => c.type === 'expense')
+      .sort((a,b) => (a.order||99)-(b.order||99));
 
-  // 수입: 막대 + 헌금피벗 / 지출: 막대 + 내용상세
+    // 대분류별 집계: {catId: {subItemId: amount}}
+    const expPivot = {};
+    for (const t of list) {
+      if (!expPivot[t.categoryId]) expPivot[t.categoryId] = {};
+      for (const l of (t.lines||[])) {
+        expPivot[t.categoryId][l.subItemId] = (expPivot[t.categoryId][l.subItemId]||0) + l.amount;
+      }
+    }
+    const usedCats = expCats.filter(c => expPivot[c.id]);
+
+    // 예금 카테고리 합계 (순지출 계산용)
+    const depositCat = State.categories.find(c => c.type==='expense' && c.name==='예금');
+    const depositTotal = depositCat && expPivot[depositCat.id]
+      ? Object.values(expPivot[depositCat.id]).reduce((s,v)=>s+v, 0) : 0;
+
+    const td  = (val, opts={}) => {
+      const {bold=false, bg='', right=false, center=false, colspan=1, rowspan=1} = opts;
+      const fw  = bold ? 'font-weight:700;' : '';
+      const ta  = right ? 'text-align:right;' : center ? 'text-align:center;' : 'text-align:left;padding-left:6pt;';
+      const bgc = bg ? `background:${bg};-webkit-print-color-adjust:exact;print-color-adjust:exact;` : '';
+      const cs  = colspan>1 ? ` colspan="${colspan}"` : '';
+      const rs  = rowspan>1 ? ` rowspan="${rowspan}"` : '';
+      const vStr = typeof val==='number' ? val.toLocaleString('ko-KR') : (val||'');
+      return `<td${cs}${rs} style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;${fw}${ta}${bgc}">${escapeHTML ? escapeHTML(String(vStr)) : vStr}</td>`;
+    };
+    const th = (val, opts={}) => {
+      const {right=false, center=true, colspan=1, rowspan=1} = opts;
+      const ta = right ? 'text-align:right;' : 'text-align:center;';
+      const cs = colspan>1 ? ` colspan="${colspan}"` : '';
+      const rs = rowspan>1 ? ` rowspan="${rowspan}"` : '';
+      return `<th${cs}${rs} style="padding:5pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:9pt;font-weight:700;color:#fff;background:#1F4E79;${ta}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${val}</th>`;
+    };
+
+    let tableRows = '';
+    let grandTotal = 0;
+    let sumRows = '';
+
+    for (const cat of usedCats) {
+      const catPivot = expPivot[cat.id];
+      const allSubs = State.subItems
+        .filter(s => s.categoryId === cat.id)
+        .sort((a,b) => (a.order||0)-(b.order||0));
+
+      // subGroup별 그룹핑
+      const sgMap = new Map();
+      const direct = [];
+      for (const s of allSubs) {
+        if (!catPivot[s.id]) continue; // 금액 없는 소분류 제외
+        const sg = s.subGroupId
+          ? (State.subGroups||[]).find(g=>g.id===s.subGroupId) : null;
+        if (sg) {
+          if (!sgMap.has(sg.id)) sgMap.set(sg.id, {name:sg.name, items:[]});
+          sgMap.get(sg.id).items.push(s);
+        } else {
+          direct.push(s);
+        }
+      }
+
+      const catRows = [];
+      // 중분류별
+      for (const [,grp] of sgMap) {
+        const items = grp.items;
+        items.forEach((s, i) => {
+          const amt = catPivot[s.id]||0;
+          catRows.push({
+            sgName: i===0 ? grp.name : null, sgRowspan: i===0 ? items.length : 0,
+            subName: s.name, amt
+          });
+        });
+      }
+      // 직속 소분류 (중분류 없는 것)
+      for (const s of direct) {
+        catRows.push({ sgName: null, sgRowspan: 0, subName: s.name, amt: catPivot[s.id]||0 });
+      }
+
+      const catTotal = catRows.reduce((s,r)=>s+r.amt, 0);
+      grandTotal += catTotal;
+
+      const catRowspan = catRows.length + 1; // +1 소계행
+      catRows.forEach((r, i) => {
+        const sgTd = r.sgRowspan > 0
+          ? `<td rowspan="${r.sgRowspan}" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
+          : (r.sgRowspan === 0 && r.sgName === null ? `<td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;"></td>` : '');
+        const catTd = i===0
+          ? `<td rowspan="${catRowspan}" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
+          : '';
+        tableRows += `<tr>
+          ${catTd}
+          ${sgTd}
+          <td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
+          <td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
+          <td style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;"></td>
+        </tr>`;
+      });
+      // 소계행
+      tableRows += `<tr>
+        <td colspan="3" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
+        <td colspan="2" style="padding:4pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
+      </tr>`;
+    }
+
+    page2 = `
+      <div class="print-page">
+        ${pageHeader}
+        <div class="print-section-title">${range.label} 지출현황</div>
+        <table style="border-collapse:collapse;width:100%;font-size:9pt;">
+          <thead><tr>
+            ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고')}
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
+              <td colspan="2" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
+            </tr>
+            <tr>
+              <td colspan="3" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
+              <td colspan="2" style="padding:5pt 4pt;border:0.5pt solid #bbb;font-size:9pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+  }
+
+  // 수입: 막대 + 헌금피벗 / 지출: 막대 + 월지출표
   const html = isIncome
     ? page1 + (pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '')
     : page1 + page2;
