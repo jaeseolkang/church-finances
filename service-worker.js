@@ -1,7 +1,7 @@
-// 2026-06-25 03:50 KST | 수정: CACHE_NAME v88 (대/중/소 예산 모두 직접 입력 가능)
+// 2026-06-25 04:15 KST | 수정: CACHE_NAME v91 (헤더 전년이월/총수입/총예금/순지출)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v88';
+const CACHE_NAME = 'gaegyebu-v91';
 const ASSETS = [
   './',
   './index.html',

@@ -486,20 +486,33 @@ function monthSummary() {
 }
 
 async function totalAssets() {
-  let income = 0, expense = 0;
+  const carryoverCat = State.categories.find(c => c.name === '전년이월');
+  const depositCat   = State.categories.find(c => c.name === '예금');
+  let income = 0, expense = 0, carryoverTx = 0, depositExp = 0;
   for (const t of State.transactions) {
-    if (t.type === 'income') income += t.amount;
-    else expense += t.amount;
+    if (t.type === 'income') {
+      if (carryoverCat && t.categoryId === carryoverCat.id) {
+        carryoverTx += t.amount;
+      } else {
+        income += t.amount;
+      }
+    } else {
+      if (depositCat && t.categoryId === depositCat.id) {
+        depositExp += t.amount; // 예금 지출 별도 집계
+      }
+      expense += t.amount;     // 총지출에는 포함
+    }
   }
-  // 거래 내역에 등장하는 모든 연도의 전년이월 합산 (미입력 연도는 0으로 처리)
   const years = new Set(State.transactions.map(t => Number(t.date.slice(0, 4))));
-  let carryover = 0;
+  let carryoverSetting = 0;
   for (const y of years) {
     const amt = await getYearCarryover(y);
-    if (amt !== null) carryover += amt;
+    if (amt !== null) carryoverSetting += amt;
   }
+  const carryover  = carryoverSetting + carryoverTx;
+  const netExpense = expense - depositExp; // 순지출 = 총지출 - 예금
   const net = carryover + income - expense;
-  return { totalIncome: income, totalExpense: expense, carryover, net };
+  return { totalIncome: income, totalExpense: expense, depositExp, netExpense, carryover, net };
 }
 
 /* =========================================================
@@ -689,10 +702,19 @@ async function renderHome() {
         <div class="total-assets-label">현재까지 누적 자산</div>
         <div class="total-assets-value tabular" style="color:${netColor}">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</div>
       </div>
-      <div class="total-assets-right">
-        ${carryover !== 0 ? `<div class="total-assets-sub">전년이월 <span class="tabular">${fmtMoney(carryover)}원</span></div>` : ''}
-        <div class="total-assets-sub">총 수입 <span class="tabular">${fmtMoney(totalIncome)}원</span></div>
-        <div class="total-assets-sub">총 지출 <span class="tabular">${fmtMoney(totalExpense)}원</span></div>
+      <div class="total-assets-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+        <div class="total-assets-sub" style="display:flex;justify-content:space-between;gap:8px;width:100%;">
+          <span>전년이월</span><span class="tabular">${fmtMoney(carryover)}원</span>
+        </div>
+        <div class="total-assets-sub" style="display:flex;justify-content:space-between;gap:8px;width:100%;">
+          <span>총수입액</span><span class="tabular">${fmtMoney(totalIncome)}원</span>
+        </div>
+        <div class="total-assets-sub" style="display:flex;justify-content:space-between;gap:8px;width:100%;">
+          <span>총예금액</span><span class="tabular">${fmtMoney(depositExp)}원</span>
+        </div>
+        <div class="total-assets-sub" style="display:flex;justify-content:space-between;gap:8px;width:100%;">
+          <span>순지출액</span><span class="tabular">${fmtMoney(netExpense)}원</span>
+        </div>
       </div>
     </div>
 
@@ -799,9 +821,11 @@ function renderHomeDaily() {
 }
 
 function renderHomeMonthly() {
-  // 전체 거래에서 연-월 목록 추출
   const allTx = State.transactions;
   if (allTx.length === 0) return emptyStateHTML('내역이 없어요', '＋ 버튼으로 거래를 추가해보세요');
+
+  // 전년이월 카테고리
+  const carryoverCat = State.categories.find(c => c.name === '전년이월');
 
   const monthSet = new Set(allTx.map(t => t.date.slice(0, 7)));
   const months = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
@@ -809,10 +833,18 @@ function renderHomeMonthly() {
   return months.map(ym => {
     const [y, m] = ym.split('-').map(Number);
     const txs = allTx.filter(t => t.date.startsWith(ym));
-    let inc = 0, exp = 0;
+    let inc = 0, exp = 0, carryoverAmt = 0;
     for (const t of txs) {
-      if (t.type === 'income') inc += t.amount;
-      else exp += t.amount;
+      if (t.type === 'income') {
+        // 1월이고 전년이월 카테고리면 별도 집계
+        if (m === 1 && carryoverCat && t.categoryId === carryoverCat.id) {
+          carryoverAmt += t.amount;
+        } else {
+          inc += t.amount;
+        }
+      } else {
+        exp += t.amount;
+      }
     }
     const bal = inc - exp;
     return `
@@ -822,6 +854,7 @@ function renderHomeMonthly() {
           <div class="tabular" style="font-size:15px; font-weight:800; color:${bal<0?'var(--expense)':'var(--text-1)'};">${bal<0?'-':''}${fmtMoney(Math.abs(bal))}원</div>
         </div>
         <div style="display:flex; gap:14px; margin-top:6px;">
+          ${m === 1 && carryoverAmt > 0 ? `<span style="font-size:12.5px; color:var(--text-3); font-weight:500;">이월 <b class="tabular">${fmtMoney(carryoverAmt)}</b></span>` : ''}
           <span style="font-size:12.5px; color:var(--primary); font-weight:600;">수입 <b class="tabular">${fmtMoney(inc)}</b></span>
           <span style="font-size:12.5px; color:var(--expense); font-weight:600;">지출 <b class="tabular">${fmtMoney(exp)}</b></span>
           <span style="font-size:12.5px; color:var(--text-3); font-weight:500;">${txs.length}건</span>
