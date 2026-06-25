@@ -1,4 +1,4 @@
-// v1.90 | 2026-06-25 17:40 KST | 수정: 월지출표 인쇄 - 행높이/폰트 축소, 열너비 고정 | cache:v103
+// v1.91 | 2026-06-25 17:40 KST | 수정: 수입 헌금피벗 인쇄 - 행높이/폰트 축소, 열너비 고정 | cache:v103
 'use strict';
 
 /* =========================================================
@@ -1383,10 +1383,19 @@ function printStats() {
       if (rows.length > 0) {
         const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
         const grandTotal = colTotals.reduce((s,v)=>s+v,0);
+        // 열 너비: 이름 고정(14%), 헌금종류 균등 분배, 합계 고정(11%)
+        const colCount = orderedCols.length + 2; // 이름 + 종류들 + 합계
+        const midPct = Math.floor(75 / (colCount - 2)); // 이름14%, 합계11% 제외
+        const colgroup = `<colgroup>
+          <col style="width:14%">
+          ${orderedCols.map(()=>`<col style="width:${midPct}%">`).join('')}
+          <col style="width:11%">
+        </colgroup>`;
         pivotHTML = `
-          <div style="margin-top:16pt;">
-            <div style="font-size:12pt;font-weight:800;margin-bottom:6pt;border-bottom:1pt solid #000;padding-bottom:4pt;">🙏 헌금 개인별 명세</div>
+          <div style="margin-top:8pt;">
+            <div style="font-size:11pt;font-weight:800;margin-bottom:4pt;border-bottom:1pt solid #000;padding-bottom:3pt;">🙏 헌금 개인별 명세</div>
             <table>
+              ${colgroup}
               <thead><tr>
                 <th class="left">이름</th>
                 ${orderedCols.map(c=>`<th>${escapeHTML(c)}</th>`).join('')}
