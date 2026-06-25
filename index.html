@@ -703,7 +703,8 @@ input,textarea,select{font-family:inherit; color:inherit;}
   body { position: static !important; background: #fff !important; overflow: visible !important; height: auto !important; }
 
   /* 앱 UI 전체 숨김, print-area만 표시 */
-  #app { display: none !important; }
+  body > * { display: none !important; }
+  body > #print-area { display: block !important; }
 
   #print-area {
     display: block !important;
