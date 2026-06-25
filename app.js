@@ -1,4 +1,4 @@
-// v1.95 | 2026-06-25 17:40 KST | 수정: 항목구조표 행높이 축소 (padding 1pt, line-height 1.2) | cache:v104
+// v1.96 | 2026-06-25 17:40 KST | 수정: 항목구조표 열너비 auto (내용에 맞게) | cache:v104
 'use strict';
 
 /* =========================================================
@@ -1958,8 +1958,7 @@ function openItemStructureSheet() {
   const expSection = buildSection('expense','지출 항목','#BE185D','#FCE7F3','#831843','#FDF2F8','#FFF5FB');
 
   const tableHTML = `
-    <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:9px;word-break:keep-all;overflow-wrap:break-word;line-height:1.2;">
-      <colgroup><col style="width:22%"><col style="width:22%"><col style="width:56%"></colgroup>
+    <table style="border-collapse:collapse;width:auto;table-layout:auto;font-size:9px;line-height:1.2;">
       <thead>
         <tr style="background:#1E3A5F;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
           <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">대분류</th>
