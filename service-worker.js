@@ -1,7 +1,7 @@
-// 2026-06-26 23:55 KST | 수정: CACHE_NAME v130 (날짜패널 계정별 필터링)
+// 2026-06-27 00:20 KST | 수정: CACHE_NAME v132 (홈 집계 재정계정만)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v130';
+const CACHE_NAME = 'gaegyebu-v132';
 const ASSETS = [
   './',
   './index.html',

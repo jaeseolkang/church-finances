@@ -1,4 +1,4 @@
-// v2.26 | 2026-06-26 23:55 KST | 수정: 날짜패널 계정별 거래 필터링 + 계정변경시 목록갱신 | cache:v130
+// v2.28 | 2026-06-27 00:20 KST | 수정: 홈 수입/지출 집계를 재정계정 거래만 포함 | cache:v132
 'use strict';
 
 /* =========================================================
@@ -476,8 +476,16 @@ async function setYearCarryover(year, amount) {
   await DB.put('settings', { key: `yearCarryover:${year}`, amount: Number(amount) || 0 });
 }
 
+// 재정계정(대표계정) 거래만 반환 — accountId가 null이거나 대표계정 id인 거래
+function mainAcctTxs() {
+  const defAcct = (State.linkedAccounts || []).find(a => a.isDefault);
+  return State.transactions.filter(t =>
+    !t.accountId || (defAcct && t.accountId === defAcct.id)
+  );
+}
+
 function txInCursorMonth() {
-  return State.transactions.filter(t => isSameMonth(t.date, State.cursorDate));
+  return mainAcctTxs().filter(t => isSameMonth(t.date, State.cursorDate));
 }
 
 function monthSummary() {
@@ -499,7 +507,7 @@ async function totalAssets() {
   const carryoverCat = State.categories.find(c => c.name === '전년이월');
   const depositCat   = State.categories.find(c => c.name === '예금');
   let income = 0, expense = 0, carryoverTx = 0, depositExp = 0;
-  for (const t of State.transactions) {
+  for (const t of mainAcctTxs()) {
     if (t.type === 'income') {
       if (carryoverCat && t.categoryId === carryoverCat.id) {
         carryoverTx += t.amount;
@@ -508,19 +516,19 @@ async function totalAssets() {
       }
     } else {
       if (depositCat && t.categoryId === depositCat.id) {
-        depositExp += t.amount; // 예금 지출 별도 집계
+        depositExp += t.amount;
       }
-      expense += t.amount;     // 총지출에는 포함
+      expense += t.amount;
     }
   }
-  const years = new Set(State.transactions.map(t => Number(t.date.slice(0, 4))));
+  const years = new Set(mainAcctTxs().map(t => Number(t.date.slice(0, 4))));
   let carryoverSetting = 0;
   for (const y of years) {
     const amt = await getYearCarryover(y);
     if (amt !== null) carryoverSetting += amt;
   }
   const carryover  = carryoverSetting + carryoverTx;
-  const netExpense = expense - depositExp; // 순지출 = 총지출 - 예금
+  const netExpense = expense - depositExp;
   const net = carryover + income - expense;
   return { totalIncome: income, totalExpense: expense, depositExp, netExpense, carryover, net };
 }
@@ -4070,6 +4078,7 @@ function closeSheet(id) {
 function closeTxSheet() {
   if (State.dayDetailDate) {
     document.getElementById('txSheet').classList.remove('show');
+    // selectedAccountId는 유지한 채로 복귀 (계정 선택 상태 보존)
     openDayDetail(State.dayDetailDate);
   } else if (State.catStatDetailId) {
     document.getElementById('txSheet').classList.remove('show');
@@ -4674,7 +4683,8 @@ function renderDayDetail(dateStr) {
   // 계좌 목록 및 현재 선택 계좌 결정
   const accounts = State.linkedAccounts || [];
   const defaultAcct = accounts.find(a => a.isDefault) || accounts[0] || null;
-  if (accounts.length > 0 && !accounts.find(a => a.id === State.selectedAccountId)) {
+  // selectedAccountId가 유효한 계좌가 아닐 때만 대표계정으로 초기화
+  if (!State.selectedAccountId || !accounts.find(a => a.id === State.selectedAccountId)) {
     State.selectedAccountId = defaultAcct ? defaultAcct.id : null;
   }
   const selAcct = accounts.find(a => a.id === State.selectedAccountId) || defaultAcct || null;
