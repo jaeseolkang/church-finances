@@ -1,7 +1,7 @@
-// 2026-06-26 18:10 KST | 수정: CACHE_NAME v113 (월장부 엑셀 헤더파란색/열너비/테두리/반복헤더/결재란이미지)
+// 2026-06-26 18:40 KST | 수정: CACHE_NAME v114 (월장부 엑셀 인쇄용과 동일 구조)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v113';
+const CACHE_NAME = 'gaegyebu-v114';
 const ASSETS = [
   './',
   './index.html',
