@@ -1,4 +1,4 @@
-// v2.54 | 2026-06-27 06:30 KST | 수정: 헌금 인쇄 페이지 분할 제거, 전체 1페이지로 | cache:v158
+// v2.56 | 2026-06-27 06:50 KST | 수정: 헌금 인쇄 JS scale로 45명 1장 강제, 테두리 진하게 | cache:v160
 'use strict';
 
 /* =========================================================
@@ -582,7 +582,7 @@ function doPrint(html) {
     }
     td{
       padding:2pt 4pt;
-      border:0.7pt solid #888!important;
+      border:1pt solid #666!important;
       font-size:8pt;
     }
     tr:nth-child(even) td{background:#f7f9fc!important;}
@@ -620,24 +620,23 @@ function doPrint(html) {
   `;
 
   if (isIOS) {
-    // iOS Safari: page-break CSS 미동작 → JS로 .print-page를 @page 크기로 분리
     const printHTML = `<!DOCTYPE html><html lang="ko"><head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       <title>인쇄</title>
       <style>
         ${printCSS}
-        html,body{margin:0;padding:0;}
+        html,body{margin:0;padding:0;background:#f0f0f0;}
         .print-page{
           width:210mm;
-          min-height:277mm;
-          margin:0 auto 0 auto;
-          padding:15mm 12mm;
+          margin:8px auto;
+          padding:12mm 10mm;
           box-sizing:border-box;
           background:#fff;
           display:block;
           page-break-after:always!important;
           break-after:page!important;
+          box-shadow:0 2px 8px rgba(0,0,0,0.15);
         }
         .print-page:last-child{
           page-break-after:avoid!important;
@@ -650,13 +649,13 @@ function doPrint(html) {
           border-radius:10px;cursor:pointer;position:sticky;top:0;z-index:99;
         }
         @media print{
-          html,body{margin:0;padding:0;}
+          html,body{margin:0;padding:0;background:#fff;}
           .btn{display:none!important;}
           .print-page{
             width:100%!important;
             margin:0!important;
             padding:0!important;
-            min-height:0!important;
+            box-shadow:none!important;
             page-break-after:always!important;
             break-after:page!important;
           }
@@ -664,9 +663,31 @@ function doPrint(html) {
             page-break-after:avoid!important;
             break-after:avoid!important;
           }
-          @page{size:A4 portrait;margin:15mm 12mm;}
+          @page{size:A4 portrait;margin:12mm 10mm;}
         }
       </style>
+      <script>
+        // 인쇄 시 각 .print-page가 정확히 1장에 맞도록 scale 조정
+        window.addEventListener('load', () => {
+          const pages = document.querySelectorAll('.print-page');
+          pages.forEach(page => {
+            const A4_H = 1122; // 297mm at 96dpi
+            const A4_W = 794;  // 210mm at 96dpi
+            const margin = 120; // 여백 보정
+            const contentH = page.scrollHeight;
+            const contentW = page.scrollWidth;
+            const scaleH = (A4_H - margin) / contentH;
+            const scaleW = A4_W / contentW;
+            const scale = Math.min(scaleH, scaleW, 1); // 1 이하만 축소
+            if (scale < 1) {
+              page.style.transformOrigin = 'top left';
+              page.style.transform = 'scale(' + scale + ')';
+              page.style.width = (100/scale) + '%';
+              page.style.marginBottom = ((contentH * scale) - contentH) + 'px';
+            }
+          });
+        });
+      </script>
     </head><body>
       <button class="btn" onclick="window.print()">🖨️ 프린트</button>
       ${html}
@@ -5356,12 +5377,12 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
     </div>`;
 
   // ── 공통 테이블 스타일 ──
-  const TS = 'border-collapse:collapse;width:100%;font-size:7pt;table-layout:fixed;border:1pt solid #555;';
+  const TS = 'border-collapse:collapse;width:100%;font-size:7pt;table-layout:fixed;border:1.5pt solid #333;line-height:1.4;';
   const TH = (txt, right=false, w='') =>
-    `<th style="padding:3pt 4pt;border:0.7pt solid #1a3a5c;font-size:7pt;background:#1F4E79;color:#fff;text-align:${right?'right':'left'};${w?'width:'+w+';':''}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</th>`;
+    `<th style="padding:3pt 4pt;border:1pt solid #1a3a5c;font-size:7pt;background:#1F4E79;color:#fff;text-align:${right?'right':'left'};${w?'width:'+w+';':''}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</th>`;
   const TD = (txt, opts={}) => {
     const {right=false,bold=false,bg=''} = opts;
-    return `<td style="padding:2pt 4pt;border:0.5pt solid #888;font-size:7pt;text-align:${right?'right':'left'};font-weight:${bold?'700':'400'};${bg?'background:'+bg+';-webkit-print-color-adjust:exact;print-color-adjust:exact;':''}">${txt}</td>`;
+    return `<td style="padding:2.5pt 4pt;border:0.8pt solid #555;font-size:7pt;text-align:${right?'right':'left'};font-weight:${bold?'700':'400'};${bg?'background:'+bg+';-webkit-print-color-adjust:exact;print-color-adjust:exact;':''}">${txt}</td>`;
   };
 
   // ── 페이지 분할 헬퍼: rows 배열을 ROWS_PER_PAGE씩 잘라 페이지 HTML 반환 ──
