@@ -1,4 +1,4 @@
-// v2.13 | 2026-06-26 20:00 KST | 수정: 월장부 엑셀 반복인쇄헤더 xlsx-js-style 호환(DefinedNames 방식) | cache:v117
+// v2.14 | 2026-06-26 20:20 KST | 수정: 월장부 엑셀 반복인쇄헤더 Defined Name $1:$2 방식 재수정 | cache:v118
 'use strict';
 
 /* =========================================================
@@ -1733,19 +1733,20 @@ function exportLedgerToExcel(ym) {
     }
   }
 
-  // ── 인쇄 설정: 1~2행 반복, A4 세로 ──
+  // ── 인쇄 설정: A4 세로 ──
   ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
 
-  XLSX.utils.book_append_sheet(wb, ws, `${month}월장부`);
+  const sheetName = `${month}월장부`;
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-  // 반복 인쇄 헤더 (xlsx-js-style 방식: workbook DefinedNames로 설정)
-  const sheetIdx = wb.SheetNames.indexOf(`${month}월장부`);
+  // 반복 인쇄 헤더: SheetNames 기반 Defined Name으로 $1:$2 반복
   if (!wb.Workbook) wb.Workbook = {};
   if (!wb.Workbook.Names) wb.Workbook.Names = [];
+  // 기존 Print_Titles 제거 후 추가
+  wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== 'Print_Titles');
   wb.Workbook.Names.push({
     Name: 'Print_Titles',
-    Ref: `'${month}월장부'!$1:$2`,
-    Sheet: sheetIdx
+    Ref: `${sheetName}!$1:$2`
   });
 
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
