@@ -1,4 +1,4 @@
-// v2.43 | 2026-06-27 04:00 KST | 수정: iOS PWA 인쇄 새탭 방식으로 변경 | cache:v147
+// v2.44 | 2026-06-27 04:10 KST | 수정: iOS 전체 인쇄 새탭 방식 (standalone 조건 제거) | cache:v148
 'use strict';
 
 /* =========================================================
@@ -568,9 +568,8 @@ const TABS = [
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isPWA = window.navigator.standalone === true;
 
-  if (isIOS && isPWA) {
+  if (isIOS) {
     // iOS PWA: window.print() 미동작 → 새 탭에서 인쇄 페이지 열기
     const printHTML = `<!DOCTYPE html><html lang="ko"><head>
       <meta charset="UTF-8">
