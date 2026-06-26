@@ -1,7 +1,7 @@
-// 2026-06-27 03:00 KST | 수정: CACHE_NAME v144 (비고/잔액 오른쪽 정렬)
+// 2026-06-27 03:20 KST | 수정: CACHE_NAME v145 (인쇄 afterprint 이벤트 방식)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v144';
+const CACHE_NAME = 'gaegyebu-v145';
 const ASSETS = [
   './',
   './index.html',

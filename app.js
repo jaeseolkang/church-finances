@@ -1,4 +1,4 @@
-// v2.40 | 2026-06-27 03:00 KST | 수정: 월지출 비고/잔액 오른쪽 정렬 | cache:v144
+// v2.41 | 2026-06-27 03:20 KST | 수정: 인쇄 afterprint 이벤트 방식으로 통일 | cache:v145
 'use strict';
 
 /* =========================================================
@@ -564,6 +564,20 @@ const TABS = [
   { key: 'members',  label: '명부' },
   { key: 'settings', label: '설정' },
 ];
+
+/* ── 공통 인쇄 헬퍼 ── */
+function doPrint(html) {
+  const area = document.getElementById('print-area');
+  area.innerHTML = html;
+  area.style.display = 'block';
+  const afterPrint = () => {
+    area.style.display = 'none';
+    area.innerHTML = '';
+    window.removeEventListener('afterprint', afterPrint);
+  };
+  window.addEventListener('afterprint', afterPrint);
+  setTimeout(() => window.print(), 150);
+}
 
 /* =========================================================
    RENDER: APP SHELL
@@ -2057,10 +2071,7 @@ function printStats() {
 
   const area = document.getElementById('print-area');
   area.innerHTML = html;
-  area.style.display = 'block';
-  window.print();
-  area.style.display = 'none';
-  area.innerHTML = '';
+  doPrint(html);
 }
 
 function renderStats() {
@@ -2620,11 +2631,7 @@ function openLedgerSheet() {
           </tbody>
         </table>
       </div>`;
-    area.innerHTML = currentTableHTML + approvalBox;
-    area.style.display = 'block';
-    window.print();
-    area.style.display = 'none';
-    area.innerHTML = '';
+    doPrint(currentTableHTML + approvalBox);
   });
 
   openSheet('ledgerSheet');
@@ -2718,15 +2725,7 @@ function openItemStructureSheet() {
   sheet.querySelector('#isClose').addEventListener('click', () => closeSheet('itemStructureSheet'));
   sheet.querySelector('#isPrint').addEventListener('click', () => {
     const appTitle = document.title || '교회 회계부';
-    const area = document.getElementById('print-area');
-    area.innerHTML = `
-      <div class="print-title">📋 항목구조표</div>
-      <div class="print-period">${appTitle}</div>
-      <div style="margin-top:8pt;">${tableHTML}</div>`;
-    area.style.display = 'block';
-    window.print();
-    area.style.display = 'none';
-    area.innerHTML = '';
+    doPrint(`<div class="print-title">📋 항목구조표</div><div class="print-period">${appTitle}</div><div style="margin-top:8pt;">${tableHTML}</div>`);
   });
 
   openSheet('itemStructureSheet');
@@ -3057,10 +3056,7 @@ function printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, sh
 
   const area = document.getElementById('print-area');
   area.innerHTML = html;
-  area.style.display = 'block';
-  window.print();
-  area.style.display = 'none';
-  area.innerHTML = '';
+  doPrint(html);
 }
 
 // ── 계정 상세 엑셀 내보내기 ──
