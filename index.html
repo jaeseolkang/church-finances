@@ -891,13 +891,17 @@ input,textarea,select{font-family:inherit; color:inherit;}
 
   /* 페이지 구분 */
   .print-page {
-    page-break-after: always;
-    break-after: page;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    display: block !important;
   }
   .print-page:last-child {
-    page-break-after: avoid;
-    break-after: avoid;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
+  table { page-break-inside: auto !important; }
+  tr { page-break-inside: avoid !important; }
   .print-section-title {
     font-size: 12pt;
     font-weight: 800;

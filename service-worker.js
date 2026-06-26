@@ -1,7 +1,7 @@
-// 2026-06-27 04:50 KST | 수정: CACHE_NAME v151 (헌금 상세 인쇄/엑셀 추가)
+// 2026-06-27 05:00 KST | 수정: CACHE_NAME v152 (doPrint 공통CSS, 페이지구분 강화)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v151';
+const CACHE_NAME = 'gaegyebu-v152';
 const ASSETS = [
   './',
   './index.html',
