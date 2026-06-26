@@ -1,4 +1,4 @@
-// v2.32 | 2026-06-27 01:10 KST | 수정: 지출현황표 소계행 colspan 수정 | cache:v136
+// v2.33 | 2026-06-27 01:20 KST | 수정: 통계/항목구조표 화면 꽉 차게 | cache:v137
 'use strict';
 
 /* =========================================================
@@ -2298,7 +2298,7 @@ function renderExpenseTableA4(list, range) {
 
   return `
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px;margin-bottom:16px;">
-      <div style="min-width:600px;max-width:794px;margin:0 auto;">
+      <div style="width:100%;">
         <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:6px;padding:0 2px;">📋 ${range.label} 지출현황</div>
         <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">
           <colgroup>
@@ -2694,7 +2694,7 @@ function openItemStructureSheet() {
     </div>
     <div class="sheet-body" style="padding:12px 16px 80px;">
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-        <div style="min-width:297mm;max-width:297mm;margin:0 auto;box-sizing:border-box;">
+        <div style="width:100%;box-sizing:border-box;">
           ${tableHTML}
         </div>
       </div>

@@ -1,7 +1,7 @@
-// 2026-06-27 01:10 KST | 수정: CACHE_NAME v136 (소계행 colspan 수정)
+// 2026-06-27 01:20 KST | 수정: CACHE_NAME v137 (통계/항목구조표 화면 꽉 차게)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v136';
+const CACHE_NAME = 'gaegyebu-v137';
 const ASSETS = [
   './',
   './index.html',
