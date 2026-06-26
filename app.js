@@ -1,4 +1,4 @@
-// v2.38 | 2026-06-27 02:25 KST | 수정: 계정 상세 엑셀/인쇄 버튼 통일 | cache:v142
+// v2.39 | 2026-06-27 02:40 KST | 수정: 월지출 엑셀 예금 비고란에 계정별 현잔액, 헤더 비고/잔액 | cache:v143
 'use strict';
 
 /* =========================================================
@@ -1422,10 +1422,13 @@ function exportExpenseToExcel() {
 
   const aoa = [];
   aoa.push([`${range.label} 지출현황`]);
-  aoa.push(['대분류','중분류','소분류','금액(원)','비고']);
+  aoa.push(['대분류','중분류','소분류','금액(원)','비고/잔액']);
+  const acctBalanceMap = calcAcctBalanceMap();
+
   let grandTotal = 0;
   for (const cat of usedCats) {
     const catPivot = expPivot[cat.id];
+    const isDepositCat = depositCat && cat.id === depositCat.id;
     const allSubs = State.subItems.filter(s=>s.categoryId===cat.id).sort((a,b)=>(a.order||0)-(b.order||0));
     const sgMap = new Map();
     const direct = [];
@@ -1444,13 +1447,17 @@ function exportExpenseToExcel() {
       let grpFirst = true;
       for (const s of grp.items) {
         const amt = catPivot[s.id]||0;
-        aoa.push([catFirst?cat.name:'', grpFirst?grp.name:'', s.name, amt, '']);
+        const remark = isDepositCat && acctBalanceMap[s.name] !== undefined
+          ? acctBalanceMap[s.name].toLocaleString('ko-KR') + '원' : '';
+        aoa.push([catFirst?cat.name:'', grpFirst?grp.name:'', s.name, amt, remark]);
         catFirst = false; grpFirst = false; catTotal += amt;
       }
     }
     for (const s of direct) {
       const amt = catPivot[s.id]||0;
-      aoa.push([catFirst?cat.name:'', '', s.name, amt, '']);
+      const remark = isDepositCat && acctBalanceMap[s.name] !== undefined
+        ? acctBalanceMap[s.name].toLocaleString('ko-KR') + '원' : '';
+      aoa.push([catFirst?cat.name:'', '', s.name, amt, remark]);
       catFirst = false; catTotal += amt;
     }
     aoa.push(['', '소 계', '', catTotal, '']);
@@ -1921,6 +1928,7 @@ function printStats() {
     const depositCat = State.categories.find(c => c.type==='expense' && c.name==='예금');
     const depositTotal = depositCat && expPivot[depositCat.id]
       ? Object.values(expPivot[depositCat.id]).reduce((s,v)=>s+v, 0) : 0;
+    const acctBalanceMap = calcAcctBalanceMap(); // 예금 비고란 잔액용
 
     const td  = (val, opts={}) => {
       const {bold=false, bg='', right=false, center=false, colspan=1, rowspan=1} = opts;
@@ -1982,6 +1990,7 @@ function printStats() {
         catRows.push({ sgName: null, sgRowspan: 0, subName: s.name, amt: catPivot[s.id]||0, isDirect: true });
       }
 
+      const isDepCat = depositCat && cat.id === depositCat.id;
       const catTotal = catRows.reduce((s,r)=>s+r.amt, 0);
       grandTotal += catTotal;
 
@@ -1993,12 +2002,15 @@ function printStats() {
         const catTd = i===0
           ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
           : '';
+        const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
+          ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
+        const remarkColor = remark && acctBalanceMap[r.subName] < 0 ? '#CC0000' : '#1F497D';
         tableRows += `<tr>
           ${catTd}
           ${sgTd}
           <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
           <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
-          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;"></td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
         </tr>`;
       });
       // 소계행
@@ -2021,7 +2033,7 @@ function printStats() {
             <col style="width:22%">
           </colgroup>
           <thead><tr>
-            ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고')}
+            ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
           </tr></thead>
           <tbody>${tableRows}</tbody>
           <tfoot>
@@ -2246,6 +2258,7 @@ function renderExpenseTableA4(list, range) {
   const usedCats = expCats.filter(c => expPivot[c.id]);
   if (usedCats.length === 0) return '';
   const depositCat = State.categories.find(c=>c.type==='expense'&&c.name==='예금');
+  const acctBalanceMap = calcAcctBalanceMap(); // 예금 비고란 잔액용
   const depositTotal = depositCat && expPivot[depositCat.id]
     ? Object.values(expPivot[depositCat.id]).reduce((s,v)=>s+v,0) : 0;
 
@@ -2273,6 +2286,7 @@ function renderExpenseTableA4(list, range) {
         sgMap.get(sg.id).items.push(s);
       } else { direct.push(s); }
     }
+    const isDepCat = depositCat && cat.id === depositCat.id;
     const catRows = [];
     for (const [,grp] of sgMap) {
       grp.items.forEach((s,i)=>catRows.push({sgName:i===0?grp.name:null,sgRowspan:i===0?grp.items.length:0,subName:s.name,amt:catPivot[s.id]||0,isDirect:false}));
@@ -2283,13 +2297,12 @@ function renderExpenseTableA4(list, range) {
     const catRowspan = catRows.length + 1;
     catRows.forEach((r,i) => {
       const catTd = i===0 ? `<td rowspan="${catRowspan}" style="${cellStyle({bold:true,center:true,bg:'#EBF3FB'})}vertical-align:middle;">${escapeHTML(cat.name)}</td>` : '';
-      // sgRowspan>0: 중분류 첫행(rowspan셀 생성)
-      // isDirect===true: 중분류 없는 직접 소분류 → 빈셀
-      // 나머지(중분류 2번째 이후 행): td 없음(rowspan으로 이미 처리)
       const sgTd = r.sgRowspan > 0
         ? `<td rowspan="${r.sgRowspan}" style="${cellStyle({bg:'#DEEAF1'})}vertical-align:middle;">${escapeHTML(r.sgName)}</td>`
         : r.isDirect ? `<td style="${cellStyle()}"></td>` : '';
-      tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle()}"></td></tr>`;
+      const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
+        ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
+      tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle({color:remark&&acctBalanceMap[r.subName]<0?'#CC0000':'#1F497D'})}">${escapeHTML(remark)}</td></tr>`;
     });
     tableRows += `<tr><td colspan="2" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
   }
@@ -2306,7 +2319,7 @@ function renderExpenseTableA4(list, range) {
             <col style="width:16%"><col style="width:14%"><col style="width:22%"><col style="width:24%"><col style="width:24%">
           </colgroup>
           <thead><tr>
-            <th style="${thStyle}">대분류</th><th style="${thStyle}">중분류</th><th style="${thStyle}">소분류</th><th style="${thStyle}text-align:right;">금액(원)</th><th style="${thStyle}">비고</th>
+            <th style="${thStyle}">대분류</th><th style="${thStyle}">중분류</th><th style="${thStyle}">소분류</th><th style="${thStyle}text-align:right;">금액(원)</th><th style="${thStyle}">비고/잔액</th>
           </tr></thead>
           <tbody>${tableRows}</tbody>
           <tfoot>
@@ -2725,6 +2738,42 @@ function openItemStructureSheet() {
    예금(지출) subItem명 = 계정지출
    linkedAccounts의 name과 subItem name을 매칭하여 집계
    ========================================================= */
+function calcAcctBalanceMap() {
+  // 계정별 현잔액 계산 (subItemName → 잔액)
+  const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
+  const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
+  const incomeSubIds = {}, expenseSubIds = {};
+  for (const si of (State.subItems||[])) {
+    if (expCat  && si.categoryId === expCat.id)  incomeSubIds[si.id]  = si.name;
+    if (tongCat && si.categoryId === tongCat.id) expenseSubIds[si.id] = si.name;
+  }
+  const idToName = {};
+  for (const a of (State.linkedAccounts||[])) idToName[a.id] = a.name;
+  const acctIncome = {}, acctExpense = {};
+  for (const t of (State.transactions||[])) {
+    if (t.accountId && idToName[t.accountId]) {
+      const n = idToName[t.accountId];
+      const a = (State.linkedAccounts||[]).find(x=>x.id===t.accountId);
+      if (a && !a.isDefault) {
+        if (t.type==='income')  acctIncome[n]  = (acctIncome[n]||0)  + t.amount;
+        if (t.type==='expense') acctExpense[n] = (acctExpense[n]||0) + t.amount;
+        continue;
+      }
+    }
+    for (const line of (t.lines||[])) {
+      const sid = line.subItemId, amt = line.amount||0;
+      if (incomeSubIds[sid])  acctIncome[incomeSubIds[sid]]   = (acctIncome[incomeSubIds[sid]]||0)   + amt;
+      if (expenseSubIds[sid]) acctExpense[expenseSubIds[sid]] = (acctExpense[expenseSubIds[sid]]||0) + amt;
+    }
+  }
+  const map = {};
+  for (const a of (State.linkedAccounts||[])) {
+    if (a.isDefault) continue;
+    map[a.name] = (a.carryover||0) + (acctIncome[a.name]||0) - (acctExpense[a.name]||0);
+  }
+  return map;
+}
+
 function calcAcctTotals() {
   const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
   const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');

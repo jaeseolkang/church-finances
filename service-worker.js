@@ -1,7 +1,7 @@
-// 2026-06-27 02:25 KST | 수정: CACHE_NAME v142 (버튼 스타일 통일)
+// 2026-06-27 02:40 KST | 수정: CACHE_NAME v143 (월지출 예금 비고란 잔액)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v142';
+const CACHE_NAME = 'gaegyebu-v143';
 const ASSETS = [
   './',
   './index.html',
