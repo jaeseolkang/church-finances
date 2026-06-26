@@ -1,4 +1,4 @@
-// v2.44 | 2026-06-27 04:10 KST | 수정: iOS 전체 인쇄 새탭 방식 (standalone 조건 제거) | cache:v148
+// v2.45 | 2026-06-27 04:20 KST | 수정: 인쇄 페이지 구분 강화, area.innerHTML 중복 제거 | cache:v149
 'use strict';
 
 /* =========================================================
@@ -592,7 +592,15 @@ function doPrint(html) {
         .print-bar-label{flex:1;}
         .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
         .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
-        @media print{@page{size:A4 portrait;margin:15mm 12mm;}}
+        .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
+        .print-page{page-break-after:always;break-after:page;}
+        .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+        @media print{
+          @page{size:A4 portrait;margin:15mm 12mm;}
+          .print-page{page-break-after:always!important;break-after:page!important;}
+          .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
+          th{background:#1F4E79!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+        }
         .btn{display:block;width:100%;padding:14px;background:#1d4ed8;color:#fff;text-align:center;font-size:16px;font-weight:700;border:none;border-radius:10px;margin-bottom:16px;cursor:pointer;}
       </style>
     </head><body>
@@ -2110,8 +2118,6 @@ function printStats() {
     ? (pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '')
     : page1 + page2;
 
-  const area = document.getElementById('print-area');
-  area.innerHTML = html;
   doPrint(html);
 }
 

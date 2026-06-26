@@ -1,7 +1,7 @@
-// 2026-06-27 04:10 KST | 수정: CACHE_NAME v148 (iOS 전체 새탭 인쇄)
+// 2026-06-27 04:20 KST | 수정: CACHE_NAME v149 (인쇄 페이지구분 강화)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v148';
+const CACHE_NAME = 'gaegyebu-v149';
 const ASSETS = [
   './',
   './index.html',
