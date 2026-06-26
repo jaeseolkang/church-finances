@@ -1,7 +1,7 @@
-// 2026-06-26 21:00 KST | 수정: CACHE_NAME v120 (월장부 제목행 제거)
+// 2026-06-26 21:40 KST | 수정: CACHE_NAME v122 (연결계좌 관리 + 날짜패널 연동)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v120';
+const CACHE_NAME = 'gaegyebu-v122';
 const ASSETS = [
   './',
   './index.html',
