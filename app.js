@@ -1,4 +1,4 @@
-// v2.14 | 2026-06-26 20:20 KST | 수정: 월장부 엑셀 반복인쇄헤더 Defined Name $1:$2 방식 재수정 | cache:v118
+// v2.15 | 2026-06-26 20:40 KST | 수정: 월장부 엑셀 반복인쇄헤더 _xlnm.Print_Titles + Sheet:0 방식 | cache:v119
 'use strict';
 
 /* =========================================================
@@ -1739,14 +1739,14 @@ function exportLedgerToExcel(ym) {
   const sheetName = `${month}월장부`;
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-  // 반복 인쇄 헤더: SheetNames 기반 Defined Name으로 $1:$2 반복
+  // 반복 인쇄 헤더: _xlnm.Print_Titles + Sheet 인덱스 (xlsx-js-style 방식)
   if (!wb.Workbook) wb.Workbook = {};
   if (!wb.Workbook.Names) wb.Workbook.Names = [];
-  // 기존 Print_Titles 제거 후 추가
-  wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== 'Print_Titles');
+  wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== '_xlnm.Print_Titles');
   wb.Workbook.Names.push({
-    Name: 'Print_Titles',
-    Ref: `${sheetName}!$1:$2`
+    Name: '_xlnm.Print_Titles',
+    Ref: `'${sheetName}'!$1:$2`,   // 따옴표 필수 (localSheetId=0 대응)
+    Sheet: 0
   });
 
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
