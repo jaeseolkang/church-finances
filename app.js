@@ -1,4 +1,4 @@
-// v2.31 | 2026-06-27 01:00 KST | 수정: 지출현황표 isDirect 플래그로 열밀림 완전수정 | cache:v135
+// v2.32 | 2026-06-27 01:10 KST | 수정: 지출현황표 소계행 colspan 수정 | cache:v136
 'use strict';
 
 /* =========================================================
@@ -2002,7 +2002,7 @@ function printStats() {
       });
       // 소계행
       tableRows += `<tr>
-        <td colspan="3" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
+        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
         <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
       </tr>`;
     }
@@ -2290,7 +2290,7 @@ function renderExpenseTableA4(list, range) {
         : r.isDirect ? `<td style="${cellStyle()}"></td>` : '';
       tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle()}"></td></tr>`;
     });
-    tableRows += `<tr><td colspan="3" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
+    tableRows += `<tr><td colspan="2" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
   }
 
   const thStyle = `padding:4pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;

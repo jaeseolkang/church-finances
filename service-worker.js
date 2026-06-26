@@ -1,7 +1,7 @@
-// 2026-06-27 01:00 KST | 수정: CACHE_NAME v135 (지출현황 isDirect 완전수정)
+// 2026-06-27 01:10 KST | 수정: CACHE_NAME v136 (소계행 colspan 수정)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v135';
+const CACHE_NAME = 'gaegyebu-v136';
 const ASSETS = [
   './',
   './index.html',
