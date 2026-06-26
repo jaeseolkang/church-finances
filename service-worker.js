@@ -1,7 +1,7 @@
-// 2026-06-27 01:20 KST | 수정: CACHE_NAME v137 (통계/항목구조표 화면 꽉 차게)
+// 2026-06-27 01:30 KST | 수정: CACHE_NAME v138 (인쇄 결재란CSS 분리)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v137';
+const CACHE_NAME = 'gaegyebu-v138';
 const ASSETS = [
   './',
   './index.html',

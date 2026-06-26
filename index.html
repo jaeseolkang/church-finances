@@ -853,11 +853,14 @@ input,textarea,select{font-family:inherit; color:inherit;}
   #print-area > table tfoot { display: table-footer-group; }
   #print-area > table th { padding: 2pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; background: #DCE6F1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   #print-area > table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; }
-  /* 결재란 테이블 — 반복 없음, 잘리면 다음 페이지로 */
-  #print-area div { page-break-inside: avoid; break-inside: avoid; }
-  #print-area div table { width: 150pt !important; font-size: 8pt !important; table-layout: fixed !important; }
-  #print-area div table th { background: none !important; font-size: 8pt !important; padding: 2pt 0 !important; width: 50pt !important; }
-  #print-area div table td { font-size: 8pt !important; padding: 0 !important; height: 28pt !important; width: 50pt !important; }
+  /* 페이지 나눔 방지 */
+  #print-area .print-page { page-break-inside: avoid; break-inside: avoid; }
+  /* 결재란 테이블 전용 — .approval-table 클래스로 한정 */
+  #print-area .approval-table { width: 150pt !important; font-size: 8pt !important; table-layout: fixed !important; }
+  #print-area .approval-table th { background: none !important; font-size: 8pt !important; padding: 2pt 0 !important; width: 50pt !important; }
+  #print-area .approval-table td { font-size: 8pt !important; padding: 0 !important; height: 28pt !important; width: 50pt !important; }
+  /* 지출현황/항목구조 등 일반 div 내 테이블 */
+  #print-area div table { width: 100% !important; font-size: 8pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
 
   /* 페이지 구분 */
   .print-page {
