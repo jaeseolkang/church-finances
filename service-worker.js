@@ -1,12 +1,12 @@
-// 2026-06-26 19:10 KST | 수정: CACHE_NAME v115 (월장부 엑셀 일자형식/정렬/헤더/결산컬러/결재란제거)
+// 2026-06-26 19:30 KST | 수정: CACHE_NAME v116 (xlsx-js-style 교체 - 엑셀 스타일 지원)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v115';
+const CACHE_NAME = 'gaegyebu-v116';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
-  './xlsx.full.min.js',
+  './xlsx-js-style.min.js',
   './manifest.json'
 ];
 

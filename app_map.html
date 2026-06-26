@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>가계부 앱 구조도</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0F172A; font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; overflow:hidden; }
+canvas { display:block; cursor:grab; }
+canvas:active { cursor:grabbing; }
+#info {
+  position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+  background:rgba(30,41,59,0.9); color:#94A3B8; font-size:12px;
+  padding:6px 16px; border-radius:20px; border:1px solid #334155;
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+<div id="info">드래그 이동 · 스크롤 확대/축소 · 클릭으로 노드 선택</div>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── 색상 팔레트 ────────────────────────────────────────────
+const C = {
+  root:    '#2563EB',
+  home:    '#0EA5E9',
+  budget:  '#8B5CF6',
+  stats:   '#10B981',
+  members: '#F59E0B',
+  settings:'#EF4444',
+  db:      '#475569',
+  sub:     '#1E40AF',
+};
+
+// ── 노드 정의 ──────────────────────────────────────────────
+// label: 굵은 첫줄, lines: 작은 설명줄들
+const nodes = [
+  // 루트
+  { id:'app', label:'가계부 앱', lines:['IndexedDB 기반 PWA','5개 탭 구조'],
+    x:0, y:0, w:160, h:70, color:C.root, root:true },
+
+  // 탭
+  { id:'home',     label:'🏠 홈',     lines:['현재 달 수입·지출 요약'],
+    x:-560, y:0, w:130, h:60, color:C.home },
+  { id:'budget',   label:'💳 예산',   lines:['연간 예산 설정·진행률'],
+    x:-200, y:320, w:130, h:60, color:C.budget },
+  { id:'stats',    label:'📊 통계',   lines:['기간별 수입·지출 분석'],
+    x:200,  y:320, w:130, h:60, color:C.stats },
+  { id:'members',  label:'👥 명부',   lines:['교인 등록·가족·세대'],
+    x:560,  y:0,   w:130, h:60, color:C.members },
+  { id:'settings', label:'⚙️ 설정',  lines:['앱 환경설정·데이터'],
+    x:200,  y:-320, w:130, h:60, color:C.settings },
+
+  // DB
+  { id:'db', label:'🗄️ IndexedDB', lines:['categories · subGroups','subItems · persons','transactions'],
+    x:-200, y:-320, w:160, h:80, color:C.db },
+
+  // 홈 하위
+  { id:'h_banner',  label:'헤더 배너', lines:['전년이월 · 현자산','총수입 · 총예금 · 순지출'],
+    x:-820, y:-160, w:150, h:70, color:C.home },
+  { id:'h_cal',     label:'달력 뷰',   lines:['월별 달력','일별 금액 표시'],
+    x:-820, y:0,    w:130, h:60, color:C.home },
+  { id:'h_daily',   label:'일일 뷰',   lines:['날짜별 거래 목록'],
+    x:-820, y:120,  w:130, h:60, color:C.home },
+  { id:'h_monthly', label:'월별 뷰',   lines:['월간 수입·지출 합계','1월 전년이월 제외'],
+    x:-820, y:250,  w:150, h:70, color:C.home },
+  { id:'tx_sheet',  label:'거래 입력', lines:['날짜 → 대분류','→ 중분류 → 소분류','→ 금액 입력'],
+    x:-1060, y:80,  w:150, h:80, color:'#1D4ED8' },
+  { id:'day_det',   label:'일별 상세', lines:['해당일 거래 목록','거래 수정·삭제'],
+    x:-1060, y:-60, w:140, h:60, color:'#1D4ED8' },
+
+  // 예산 하위
+  { id:'b_exp',  label:'지출 예산', lines:['대/중/소 3단계 입력','하위 합 자동 반영'],
+    x:-360, y:490, w:150, h:70, color:C.budget },
+  { id:'b_inc',  label:'수입 예산', lines:['수입 항목별 예산'],
+    x:-120, y:490, w:130, h:60, color:C.budget },
+
+  // 통계 하위
+  { id:'s_month', label:'월간 통계', lines:['이번 달 카테고리별 비율'],
+    x:60,  y:490, w:130, h:60, color:C.stats },
+  { id:'s_year',  label:'연간 통계', lines:['월별 추이 바 차트'],
+    x:220, y:490, w:130, h:60, color:C.stats },
+  { id:'s_item',  label:'항목별 상세', lines:['카테고리 클릭 시 열림'],
+    x:380, y:490, w:130, h:60, color:C.stats },
+  { id:'s_pivot', label:'헌금 피벗표', lines:['개인별 × 헌금종류','합계 표 형식'],
+    x:500, y:390, w:140, h:70, color:'#065F46' },
+
+  // 명부 하위
+  { id:'m_list', label:'교인 목록', lines:['가족·세대 그룹핑','검색 지원'],
+    x:700, y:-100, w:130, h:60, color:C.members },
+  { id:'m_edit', label:'교인 등록/수정', lines:['이름·연락처·주소','가족·세대 설정'],
+    x:700, y:80,   w:140, h:70, color:C.members },
+
+  // 설정 하위
+  { id:'set_name',   label:'앱 이름',      lines:['교회명 변경'],
+    x:400, y:-460, w:120, h:55, color:C.settings },
+  { id:'set_cat',    label:'항목 관리',    lines:['대/중/소분류 추가·수정','예산 입력'],
+    x:560, y:-460, w:140, h:70, color:C.settings },
+  { id:'set_backup', label:'자동 백업',    lines:['매주 일요일 자동','폴더 지정'],
+    x:700, y:-360, w:130, h:60, color:C.settings },
+  { id:'set_excel',  label:'엑셀 내보내기', lines:['기간 선택 후 xlsx'],
+    x:700, y:-220, w:140, h:60, color:C.settings },
+  { id:'set_json',   label:'JSON 백업/복원', lines:['전체 데이터 백업','가져오기 복원'],
+    x:580, y:-220, w:140, h:60, color:C.settings },
+
+  // 마이그레이션
+  { id:'mig', label:'자동 마이그레이션', lines:['앱 시작 시 실행','subGroups 복구','예산 재계산'],
+    x:-440, y:-320, w:150, h:75, color:'#1E293B', textColor:'#94A3B8' },
+];
+
+// ── 엣지 ───────────────────────────────────────────────────
+const edges = [
+  ['app','home'],['app','budget'],['app','stats'],['app','members'],['app','settings'],
+  ['app','db'],['db','mig'],
+  ['home','h_banner'],['home','h_cal'],['home','h_daily'],['home','h_monthly'],
+  ['h_cal','tx_sheet'],['h_daily','tx_sheet'],['h_cal','day_det'],
+  ['budget','b_exp'],['budget','b_inc'],
+  ['stats','s_month'],['stats','s_year'],['stats','s_item'],['s_item','s_pivot'],
+  ['members','m_list'],['members','m_edit'],
+  ['settings','set_name'],['settings','set_cat'],['settings','set_backup'],
+  ['settings','set_excel'],['settings','set_json'],
+];
+
+// ── 상태 ───────────────────────────────────────────────────
+let scale = 0.55, tx = 0, ty = 0;
+let dragging = false, lastX, lastY, selected = null;
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  tx = canvas.width  / 2;
+  ty = canvas.height / 2 + 30;
+  draw();
+}
+
+function s2w(sx, sy) { return [(sx - tx) / scale, (sy - ty) / scale]; }
+function w2s(wx, wy) { return [wx * scale + tx, wy * scale + ty]; }
+
+function hitTest(mx, my) {
+  const [wx, wy] = s2w(mx, my);
+  for (const n of [...nodes].reverse()) {
+    const hw = n.w / 2, hh = n.h / 2;
+    if (wx >= n.x - hw && wx <= n.x + hw && wy >= n.y - hh && wy <= n.y + hh) return n.id;
+  }
+  return null;
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function hexAlpha(hex, a) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 격자 배경
+  ctx.strokeStyle = 'rgba(148,163,184,0.05)';
+  ctx.lineWidth = 1;
+  const gs = 60 * scale;
+  const ox = ((tx % gs) + gs) % gs;
+  const oy = ((ty % gs) + gs) % gs;
+  for (let x = ox; x < canvas.width; x += gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
+  for (let y = oy; y < canvas.height; y += gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+
+  // 엣지
+  for (const [aid, bid] of edges) {
+    const a = nodes.find(n=>n.id===aid);
+    const b = nodes.find(n=>n.id===bid);
+    if (!a || !b) continue;
+    const [ax, ay] = w2s(a.x, a.y);
+    const [bx, by] = w2s(b.x, b.y);
+    const isSel = selected === aid || selected === bid;
+    ctx.beginPath();
+    // 베지어 곡선
+    const cpx = (ax + bx) / 2, cpy = (ay + by) / 2;
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const bend = Math.min(len * 0.15, 40 * scale);
+    ctx.moveTo(ax, ay);
+    ctx.bezierCurveTo(ax + bend, ay + bend, bx - bend, by - bend, bx, by);
+    ctx.strokeStyle = isSel ? '#60A5FA' : hexAlpha(a.color || '#64748B', 0.4);
+    ctx.lineWidth = isSel ? 2.5 : 1.5;
+    ctx.stroke();
+  }
+
+  // 노드
+  for (const n of nodes) {
+    const [sx, sy] = w2s(n.x, n.y);
+    const sw = n.w * scale, sh = n.h * scale;
+    const x = sx - sw/2, y = sy - sh/2;
+    const r = 12 * scale;
+    const isSel = selected === n.id;
+
+    // 그림자
+    ctx.shadowColor = hexAlpha(n.color, 0.6);
+    ctx.shadowBlur  = isSel ? 24 * scale : 10 * scale;
+    ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 3 * scale;
+
+    // 배경
+    roundRect(x, y, sw, sh, r);
+    const grad = ctx.createLinearGradient(x, y, x, y + sh);
+    grad.addColorStop(0, hexAlpha(n.color, isSel ? 1 : 0.92));
+    grad.addColorStop(1, hexAlpha(n.color, isSel ? 0.85 : 0.75));
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 테두리
+    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    if (isSel) {
+      roundRect(x, y, sw, sh, r);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // 텍스트
+    const tc = n.textColor || '#fff';
+    const lbSize = Math.max(scale * (n.root ? 15 : 13), 7);
+    const subSize = Math.max(scale * 10.5, 5.5);
+
+    // 라벨
+    ctx.font = `700 ${lbSize}px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
+    ctx.fillStyle = tc;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const lines = n.lines || [];
+    const totalH = lbSize + lines.length * (subSize + 1);
+    let cy = sy - totalH/2 + lbSize/2;
+
+    ctx.fillText(n.label, sx, cy);
+    cy += lbSize * 1.1;
+
+    // 설명줄
+    ctx.font = `400 ${subSize}px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
+    ctx.fillStyle = hexAlpha(tc, 0.75);
+    for (const line of lines) {
+      ctx.fillText(line, sx, cy + subSize/2);
+      cy += subSize + 2;
+    }
+  }
+}
+
+// ── 이벤트 ─────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  const hit = hitTest(e.clientX, e.clientY);
+  selected = (hit === selected) ? null : hit;
+  draw();
+});
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  tx += e.clientX - lastX; ty += e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  draw();
+});
+canvas.addEventListener('mouseup',   () => dragging = false);
+canvas.addEventListener('mouseleave',() => dragging = false);
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = e.deltaY > 0 ? 0.88 : 1.14;
+  tx = e.clientX - (e.clientX - tx) * f;
+  ty = e.clientY - (e.clientY - ty) * f;
+  scale *= f;
+  draw();
+}, { passive: false });
+
+// 터치
+let lastDist = 0, touchDragging = false;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) { lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; touchDragging = true; }
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastDist = Math.sqrt(dx*dx+dy*dy);
+  }
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && touchDragging) {
+    tx += e.touches[0].clientX - lastX; ty += e.touches[0].clientY - lastY;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const d = Math.sqrt(dx*dx+dy*dy);
+    const f = d / lastDist;
+    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const cy2 = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    tx = cx - (cx - tx) * f; ty = cy2 - (cy2 - ty) * f;
+    scale *= f; lastDist = d;
+  }
+  draw();
+}, { passive: false });
+canvas.addEventListener('touchend', () => touchDragging = false);
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
