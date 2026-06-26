@@ -1,7 +1,7 @@
-// 2026-06-27 01:30 KST | 수정: CACHE_NAME v138 (인쇄 결재란CSS 분리)
+// 2026-06-27 01:40 KST | 수정: CACHE_NAME v139 (항목구조표 width 100%)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v138';
+const CACHE_NAME = 'gaegyebu-v139';
 const ASSETS = [
   './',
   './index.html',

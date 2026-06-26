@@ -1,4 +1,4 @@
-// v2.34 | 2026-06-27 01:30 KST | 수정: 인쇄 결재란 CSS 분리로 지출현황표 너비 정상화 | cache:v138
+// v2.35 | 2026-06-27 01:40 KST | 수정: 항목구조표 테이블 width:100% | cache:v139
 'use strict';
 
 /* =========================================================
@@ -2674,12 +2674,12 @@ function openItemStructureSheet() {
   const expSection = buildSection('expense','지출 항목','#BE185D','#FCE7F3','#831843','#FDF2F8','#FFF5FB');
 
   const tableHTML = `
-    <table style="border-collapse:collapse;width:auto;table-layout:auto;font-size:9px;line-height:1.2;">
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:9px;line-height:1.2;">
       <thead>
         <tr style="background:#1E3A5F;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">대분류</th>
-          <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">중분류</th>
-          <th style="color:#fff;font-size:9px;font-weight:700;padding:1pt 3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;">소분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;width:25%;">대분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;width:25%;">중분류</th>
+          <th style="color:#fff;font-size:9px;font-weight:700;padding:3pt;line-height:1.2;border:0.5pt solid #555;text-align:center;width:50%;">소분류</th>
         </tr>
       </thead>
       <tbody>${incSection}${expSection}</tbody>
