@@ -1,7 +1,7 @@
-// 2026-06-27 03:20 KST | 수정: CACHE_NAME v145 (인쇄 afterprint 이벤트 방식)
+// 2026-06-27 03:40 KST | 수정: CACHE_NAME v146 (iOS 인쇄 백지 수정)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v145';
+const CACHE_NAME = 'gaegyebu-v146';
 const ASSETS = [
   './',
   './index.html',

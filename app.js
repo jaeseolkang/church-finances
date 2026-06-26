@@ -1,4 +1,4 @@
-// v2.41 | 2026-06-27 03:20 KST | 수정: 인쇄 afterprint 이벤트 방식으로 통일 | cache:v145
+// v2.42 | 2026-06-27 03:40 KST | 수정: iOS Safari 인쇄 백지 수정 (focus/visibilitychange 복원) | cache:v146
 'use strict';
 
 /* =========================================================
@@ -570,13 +570,25 @@ function doPrint(html) {
   const area = document.getElementById('print-area');
   area.innerHTML = html;
   area.style.display = 'block';
-  const afterPrint = () => {
+
+  // iOS Safari: afterprint 미지원 → focusin/visibilitychange로 복원
+  const cleanup = () => {
     area.style.display = 'none';
     area.innerHTML = '';
-    window.removeEventListener('afterprint', afterPrint);
+    window.removeEventListener('afterprint', cleanup);
+    window.removeEventListener('focus', cleanup);
+    document.removeEventListener('visibilitychange', onVisible);
   };
-  window.addEventListener('afterprint', afterPrint);
-  setTimeout(() => window.print(), 150);
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') cleanup();
+  };
+
+  window.addEventListener('afterprint', cleanup);          // PC Chrome/Firefox
+  window.addEventListener('focus', cleanup, {once: true}); // iOS Safari 복귀 시
+  document.addEventListener('visibilitychange', onVisible); // iOS 탭 전환 복귀
+
+  // DOM 렌더링 후 인쇄 (iOS는 충분한 딜레이 필요)
+  setTimeout(() => window.print(), 300);
 }
 
 /* =========================================================
