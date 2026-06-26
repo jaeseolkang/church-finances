@@ -1,7 +1,7 @@
-// 2026-06-27 02:40 KST | 수정: CACHE_NAME v143 (월지출 예금 비고란 잔액)
+// 2026-06-27 03:00 KST | 수정: CACHE_NAME v144 (비고/잔액 오른쪽 정렬)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v143';
+const CACHE_NAME = 'gaegyebu-v144';
 const ASSETS = [
   './',
   './index.html',

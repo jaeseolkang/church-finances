@@ -1,4 +1,4 @@
-// v2.39 | 2026-06-27 02:40 KST | 수정: 월지출 엑셀 예금 비고란에 계정별 현잔액, 헤더 비고/잔액 | cache:v143
+// v2.40 | 2026-06-27 03:00 KST | 수정: 월지출 비고/잔액 오른쪽 정렬 | cache:v144
 'use strict';
 
 /* =========================================================
@@ -2010,7 +2010,7 @@ function printStats() {
           ${sgTd}
           <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
           <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
-          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;text-align:right;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
         </tr>`;
       });
       // 소계행
@@ -2302,7 +2302,7 @@ function renderExpenseTableA4(list, range) {
         : r.isDirect ? `<td style="${cellStyle()}"></td>` : '';
       const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
         ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
-      tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle({color:remark&&acctBalanceMap[r.subName]<0?'#CC0000':'#1F497D'})}">${escapeHTML(remark)}</td></tr>`;
+      tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle({right:true,color:remark&&acctBalanceMap[r.subName]<0?'#CC0000':'#1F497D'})}">${escapeHTML(remark)}</td></tr>`;
     });
     tableRows += `<tr><td colspan="2" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
   }
