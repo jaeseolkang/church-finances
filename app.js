@@ -1,4 +1,4 @@
-// v2.07 | 2026-06-25 17:40 KST | 수정: 결재란 - 결재 세로텍스트/병합 인쇄+엑셀 수정 | cache:v111
+// v2.08 | 2026-06-26 17:40 KST | 수정: 월지출 A4스크롤표+엑셀스타일(헤더파란색/열너비/테두리/반복헤더/결재란이미지), 항목구조표 A4스크롤 | cache:v112
 'use strict';
 
 /* =========================================================
@@ -1439,12 +1439,129 @@ function exportExpenseToExcel() {
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const numFmt = '#,##0';
-  for (let r = 2; r < aoa.length; r++) {
-    const addr = XLSX.utils.encode_cell({r, c:3});
-    if (ws[addr] && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
+
+  // ── 열 너비 (문자 길이 기반 고정) ──
+  ws['!cols'] = [
+    {wch: 14},  // 대분류
+    {wch: 14},  // 중분류
+    {wch: 22},  // 소분류
+    {wch: 16},  // 금액(원)
+    {wch: 18},  // 비고
+  ];
+
+  // ── 스타일 헬퍼 ──
+  const borderStyle = { style: 'thin', color: { rgb: 'CCCCCC' } };
+  const allBorder = { top: borderStyle, bottom: borderStyle, left: borderStyle, right: borderStyle };
+
+  const headerFill   = { patternType: 'solid', fgColor: { rgb: '1F4E79' } }; // 진파란
+  const subHdrFill   = { patternType: 'solid', fgColor: { rgb: '2E74B5' } }; // 중간파란
+  const catFill      = { patternType: 'solid', fgColor: { rgb: 'EBF3FB' } }; // 연파란
+  const grpFill      = { patternType: 'solid', fgColor: { rgb: 'DEEAF1' } };
+  const itemFill     = { patternType: 'solid', fgColor: { rgb: 'BDD7EE' } };
+  const subtotalFill = { patternType: 'solid', fgColor: { rgb: 'D6E4F0' } };
+  const totalFill    = { patternType: 'solid', fgColor: { rgb: '1F4E79' } };
+
+  const whiteFont  = { bold: true, color: { rgb: 'FFFFFF' } };
+  const boldFont   = { bold: true };
+  const numFmt     = '#,##0';
+
+  const makeStyle = (fill, font={}, right=false, numFmtStr='') => ({
+    fill, font,
+    alignment: { horizontal: right ? 'right' : 'center', vertical: 'center', wrapText: false },
+    border: allBorder,
+    numFmt: numFmtStr || undefined
+  });
+
+  // ── 셀 스타일 적용 ──
+  const totalRowCount = aoa.length;
+
+  for (let r = 0; r < totalRowCount; r++) {
+    for (let c = 0; c < 5; c++) {
+      const addr = XLSX.utils.encode_cell({r, c});
+      if (!ws[addr]) ws[addr] = {t:'s', v:''};
+
+      if (r === 0) {
+        // 제목행
+        ws[addr].s = { font: { bold:true, sz:14 }, alignment: { horizontal:'center' } };
+      } else if (r === 1) {
+        // 헤더행
+        ws[addr].s = { fill: headerFill, font: whiteFont, border: allBorder,
+          alignment: { horizontal:'center', vertical:'center' } };
+      } else {
+        const rowData = aoa[r];
+        const isTotal   = rowData[0] === '합  계' || rowData[0] === '순지출(지출-예금)';
+        const isSubtotal = rowData[1] === '소 계';
+        if (isTotal) {
+          ws[addr].s = { fill: totalFill, font: whiteFont, border: allBorder,
+            alignment: { horizontal: c===3 ? 'right':'center', vertical:'center' },
+            numFmt: c===3 ? numFmt : undefined };
+        } else if (isSubtotal) {
+          ws[addr].s = { fill: subtotalFill, font: boldFont, border: allBorder,
+            alignment: { horizontal: c===3 ? 'right':'left', vertical:'center' },
+            numFmt: c===3 ? numFmt : undefined };
+        } else {
+          // 데이터행
+          let fill = {};
+          if (c===0 && rowData[0]) fill = catFill;
+          else if (c===1 && rowData[1]) fill = grpFill;
+          else if (c===2) fill = itemFill;
+          ws[addr].s = { fill, border: allBorder,
+            alignment: { horizontal: c===3 ? 'right':'left', vertical:'center' },
+            numFmt: c===3 ? numFmt : undefined };
+        }
+        if (c===3 && typeof ws[addr].v === 'number') ws[addr].z = numFmt;
+      }
+    }
   }
+
+  // ── 제목행 병합 ──
+  ws['!merges'] = ws['!merges'] || [];
+  ws['!merges'].push({ s:{r:0,c:0}, e:{r:0,c:4} });
+
+  // ── 인쇄 설정: 반복 헤더(row 1), A4 맞춤 ──
+  ws['!printHeader'] = { firstRow: 1, lastRow: 1 };
+  ws['!pageSetup'] = {
+    paperSize: 9,           // A4
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+  };
+  ws['!sheetPr'] = { pageSetup: { fitToPage: true } };
+
+  // ── 결재란 이미지 삽입 ──
+  const approvalB64 = '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';
+
+  if (wb.Workbook) wb.Workbook.Sheets = wb.Workbook.Sheets || [];
+  // 이미지 삽입 (xlsx-js-style 또는 SheetJS Pro 전용이므로 대체: 이미지 데이터를 별도 시트 메타로 저장)
+  // SheetJS community edition은 이미지 직접 삽입 미지원 → 결재란을 마지막 행 아래 텍스트로 처리
+  // 단, 이미지를 별도 PNG 파일로 함께 제공하고 결재란 위치 안내 주석 삽입
+  const lastDataRow = aoa.length; // 0-indexed 마지막 데이터행 다음
+  // 결재란 안내 텍스트 (이미지는 엑셀에서 수동 삽입 필요 시 참고)
+  const approvalRow = lastDataRow + 2; // 2행 띄움
+  const apAddr = XLSX.utils.encode_cell({r: approvalRow, c: 3});
+  ws[apAddr] = { t: 's', v: '※ 결재란 이미지는 파일과 함께 제공된 approval_stamp.png 를 삽입하세요', s: { font: { color: { rgb: '888888' }, italic: true }, alignment: { horizontal: 'left' } } };
+
+  if (!ws['!ref']) ws['!ref'] = 'A1:E1';
+  const ref = XLSX.utils.decode_range(ws['!ref']);
+  ref.e.r = Math.max(ref.e.r, approvalRow);
+  ws['!ref'] = XLSX.utils.encode_range(ref);
+
   XLSX.utils.book_append_sheet(wb, ws, '월지출');
+
+  // 결재란 이미지를 별도 PNG로도 저장 (Blob URL 다운로드)
+  try {
+    const byteChars = atob(approvalB64);
+    const byteArr = new Uint8Array(byteChars.length);
+    for (let i=0; i<byteChars.length; i++) byteArr[i]=byteChars.charCodeAt(i);
+    const blob = new Blob([byteArr], {type:'image/png'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'approval_stamp.png';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch(e) {}
+
   XLSX.writeFile(wb, `월지출_${range.label}.xlsx`);
 }
 
@@ -1929,6 +2046,7 @@ function renderStats() {
     </div>
 
     ${State.statsView === 'stats' ? renderStatsTabBars(statRows, statTotal, isIncome) : renderStatsTabDetail(detailTx, isIncome)}
+    ${State.statsView === 'stats' && !isIncome ? renderExpenseTableA4(list, range) : ''}
   `;
 
   // 이벤트
@@ -2010,6 +2128,88 @@ function renderStats() {
 }
 
 // [통계] 탭: 막대 차트형 요약 (수입=개인별 헌금 합계 / 지출=대분류별 합계)
+// 통계 탭 지출 모드 - 화면 월지출 상세표 (A4 맞춤 + 좌우 스크롤)
+function renderExpenseTableA4(list, range) {
+  const expCats = State.categories.filter(c=>c.type==='expense').sort((a,b)=>(a.order||0)-(b.order||0));
+  const expPivot = {};
+  for (const t of list) {
+    if (!expPivot[t.categoryId]) expPivot[t.categoryId] = {};
+    for (const l of (t.lines||[])) {
+      expPivot[t.categoryId][l.subItemId] = (expPivot[t.categoryId][l.subItemId]||0) + l.amount;
+    }
+  }
+  const usedCats = expCats.filter(c => expPivot[c.id]);
+  if (usedCats.length === 0) return '';
+  const depositCat = State.categories.find(c=>c.type==='expense'&&c.name==='예금');
+  const depositTotal = depositCat && expPivot[depositCat.id]
+    ? Object.values(expPivot[depositCat.id]).reduce((s,v)=>s+v,0) : 0;
+
+  const cellStyle = (opts={}) => {
+    const {bold=false,bg='',right=false,center=false,color=''}=opts;
+    const fw=bold?'font-weight:700;':'';
+    const ta=right?'text-align:right;':center?'text-align:center;':'text-align:left;padding-left:6pt;';
+    const bgc=bg?`background:${bg};`:'';
+    const fg=color?`color:${color};`:'';
+    return `padding:3pt 4pt;border:0.5pt solid #ccc;font-size:8pt;${fw}${ta}${bgc}${fg}`;
+  };
+
+  let tableRows = '';
+  let grandTotal = 0;
+  for (const cat of usedCats) {
+    const catPivot = expPivot[cat.id];
+    const allSubs = State.subItems.filter(s=>s.categoryId===cat.id).sort((a,b)=>(a.order||0)-(b.order||0));
+    const sgMap = new Map();
+    const direct = [];
+    for (const s of allSubs) {
+      if (!catPivot[s.id]) continue;
+      const sg = s.subGroupId ? (State.subGroups||[]).find(g=>g.id===s.subGroupId) : null;
+      if (sg) {
+        if (!sgMap.has(sg.id)) sgMap.set(sg.id, {name:sg.name, items:[]});
+        sgMap.get(sg.id).items.push(s);
+      } else { direct.push(s); }
+    }
+    const catRows = [];
+    for (const [,grp] of sgMap) {
+      grp.items.forEach((s,i)=>catRows.push({sgName:i===0?grp.name:null,sgRowspan:i===0?grp.items.length:0,subName:s.name,amt:catPivot[s.id]||0}));
+    }
+    for (const s of direct) catRows.push({sgName:null,sgRowspan:0,subName:s.name,amt:catPivot[s.id]||0});
+    const catTotal = catRows.reduce((s,r)=>s+r.amt,0);
+    grandTotal += catTotal;
+    const catRowspan = catRows.length + 1;
+    catRows.forEach((r,i) => {
+      const catTd = i===0 ? `<td rowspan="${catRowspan}" style="${cellStyle({bold:true,center:true,bg:'#EBF3FB'})}vertical-align:middle;">${escapeHTML(cat.name)}</td>` : '';
+      const sgTd = r.sgRowspan>0
+        ? `<td rowspan="${r.sgRowspan}" style="${cellStyle({bg:'#DEEAF1'})}vertical-align:middle;">${escapeHTML(r.sgName)}</td>`
+        : (r.sgRowspan===0&&r.sgName===null ? `<td style="${cellStyle()}"></td>` : '');
+      tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle()}"></td></tr>`;
+    });
+    tableRows += `<tr><td colspan="3" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
+  }
+
+  const thStyle = `padding:4pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+  const ftStyle = (right=false) => `padding:3pt 4pt;border:0.5pt solid #ccc;font-size:8pt;font-weight:700;text-align:${right?'right':'center'};background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+
+  return `
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px;margin-bottom:16px;">
+      <div style="min-width:600px;max-width:794px;margin:0 auto;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:6px;padding:0 2px;">📋 ${range.label} 지출현황</div>
+        <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">
+          <colgroup>
+            <col style="width:16%"><col style="width:14%"><col style="width:22%"><col style="width:24%"><col style="width:24%">
+          </colgroup>
+          <thead><tr>
+            <th style="${thStyle}">대분류</th><th style="${thStyle}">중분류</th><th style="${thStyle}">소분류</th><th style="${thStyle}text-align:right;">금액(원)</th><th style="${thStyle}">비고</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+          <tfoot>
+            <tr><td colspan="3" style="${ftStyle()}">합  계</td><td style="${ftStyle(true)}">${grandTotal.toLocaleString('ko-KR')}</td><td style="${ftStyle()}"></td></tr>
+            <tr><td colspan="3" style="${ftStyle()}">순지출(지출-예금)</td><td style="${ftStyle(true)}">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td><td style="${ftStyle()}"></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
 function renderStatsTabBars(rows, total, isIncome) {
   if (rows.length === 0) {
     return `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', `선택한 기간의 ${isIncome?'수입':'지출'} 내역이 없습니다`)}</div>`;
@@ -2386,7 +2586,11 @@ function openItemStructureSheet() {
       <button id="isPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
     </div>
     <div class="sheet-body" style="padding:12px 16px 80px;">
-      ${tableHTML}
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <div style="min-width:297mm;max-width:297mm;margin:0 auto;box-sizing:border-box;">
+          ${tableHTML}
+        </div>
+      </div>
     </div>
   `;
 

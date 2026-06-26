@@ -1,7 +1,7 @@
-// 2026-06-25 17:40 KST | 수정: CACHE_NAME v111 (월장부 엑셀타이틀제거/인쇄결재란)
+// 2026-06-26 17:40 KST | 수정: CACHE_NAME v112 (월지출 A4스크롤/엑셀스타일/결재란이미지/항목구조표스크롤)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v111';
+const CACHE_NAME = 'gaegyebu-v112';
 const ASSETS = [
   './',
   './index.html',
