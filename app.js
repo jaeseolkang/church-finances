@@ -1,4 +1,4 @@
-// v2.48 | 2026-06-27 05:00 KST | 수정: doPrint 공통CSS 통일, iOS 페이지구분 강화 | cache:v152
+// v2.50 | 2026-06-27 05:40 KST | 수정: 헌금 인쇄 페이지 자동 분할 (1페이지 22행, 이후 35행) | cache:v154
 'use strict';
 
 /* =========================================================
@@ -606,14 +606,21 @@ function doPrint(html) {
   `;
 
   if (isIOS) {
-    // iOS: 새 탭에서 열기 + 프린트 버튼
+    // iOS Safari: page-break CSS 미동작 → JS로 .print-page를 @page 크기로 분리
     const printHTML = `<!DOCTYPE html><html lang="ko"><head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       <title>인쇄</title>
       <style>
         ${printCSS}
+        html,body{margin:0;padding:0;}
         .print-page{
+          width:210mm;
+          min-height:277mm;
+          margin:0 auto 0 auto;
+          padding:15mm 12mm;
+          box-sizing:border-box;
+          background:#fff;
           display:block;
           page-break-after:always!important;
           break-after:page!important;
@@ -623,13 +630,28 @@ function doPrint(html) {
           break-after:avoid!important;
         }
         .btn{
-          display:block;width:100%;padding:14px;
+          display:block;width:calc(100% - 24px);margin:12px auto;padding:14px;
           background:#1d4ed8;color:#fff;text-align:center;
           font-size:16px;font-weight:700;border:none;
-          border-radius:10px;margin:12px 0;cursor:pointer;
-          -webkit-print-color-adjust:exact;
+          border-radius:10px;cursor:pointer;position:sticky;top:0;z-index:99;
         }
-        @media print{.btn{display:none!important;}}
+        @media print{
+          html,body{margin:0;padding:0;}
+          .btn{display:none!important;}
+          .print-page{
+            width:100%!important;
+            margin:0!important;
+            padding:0!important;
+            min-height:0!important;
+            page-break-after:always!important;
+            break-after:page!important;
+          }
+          .print-page:last-child{
+            page-break-after:avoid!important;
+            break-after:avoid!important;
+          }
+          @page{size:A4 portrait;margin:15mm 12mm;}
+        }
       </style>
     </head><body>
       <button class="btn" onclick="window.print()">🖨️ 프린트</button>
@@ -5319,9 +5341,37 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
       </div>
     </div>`;
 
-  let tableHTML = '';
+  // ── 공통 테이블 스타일 ──
+  const TS = 'border-collapse:collapse;width:100%;font-size:7pt;table-layout:fixed;';
+  const TH = (txt, right=false, w='') =>
+    `<th style="padding:2pt 3pt;border:0.5pt solid #1F4E79;font-size:7pt;background:#1F4E79;color:#fff;text-align:${right?'right':'left'};${w?'width:'+w+';':''}">${txt}</th>`;
+  const TD = (txt, opts={}) => {
+    const {right=false,bold=false,bg=''} = opts;
+    return `<td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:${right?'right':'left'};font-weight:${bold?'700':'400'};${bg?'background:'+bg+';':''}">${txt}</td>`;
+  };
+
+  // ── 페이지 분할 헬퍼: rows 배열을 ROWS_PER_PAGE씩 잘라 페이지 HTML 반환 ──
+  const makePages = (rowsPerPage, headerHTML, makeRowHTML, rows, footerRow='') => {
+    const pages = [];
+    for (let i=0; i<rows.length; i+=rowsPerPage) {
+      const chunk = rows.slice(i, i+rowsPerPage);
+      const isLast = i+rowsPerPage >= rows.length;
+      pages.push(`<div class="print-page">
+        ${i===0 ? pageHeader : ''}
+        <table style="${TS}">
+          <thead>${headerHTML}</thead>
+          <tbody>${chunk.map(makeRowHTML).join('')}</tbody>
+          ${isLast && footerRow ? `<tfoot>${footerRow}</tfoot>` : ''}
+        </table>
+      </div>`);
+    }
+    return pages.join('');
+  };
+
+  let pagesHTML = '';
+
   if (isHeon) {
-    // 피벗 테이블
+    // 피벗 집계
     const pivot = {}, colSet = new Set();
     for (const t of list) {
       const sgId = t.subGroupId || t.personId;
@@ -5338,56 +5388,78 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
     const orderedCols = [...TX_ENTRY_ITEM_ORDER.filter(n=>colSet.has(n)), ...[...colSet].filter(n=>!TX_ENTRY_ITEM_ORDER.includes(n)).sort()];
     const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
     const grandTotal = colTotals.reduce((s,v)=>s+v,0);
-    const midPct = Math.floor(72/Math.max(orderedCols.length,1));
 
-    tableHTML = `<table style="border-collapse:collapse;width:100%;font-size:7pt;table-layout:fixed;">
-      <colgroup><col style="width:14%">${orderedCols.map(()=>`<col style="width:${midPct}%">`).join('')}<col style="width:11%"></colgroup>
-      <thead><tr>
-        <th class="left" style="padding:2pt 3pt;border:0.5pt solid #555;font-size:7pt;text-align:left;">이름</th>
-        ${orderedCols.map(c=>`<th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:7pt;text-align:right;">${escapeHTML(c)}</th>`).join('')}
-        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:7pt;text-align:right;">합계</th>
-      </tr></thead>
-      <tbody>
-        ${rows.map(name=>{
-          const rowTotal=orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
-          return `<tr>
-            <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:left;font-weight:600;">${escapeHTML(name)}</td>
-            ${orderedCols.map(c=>{const v=pivot[name][c]||0;return `<td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;">${v?v.toLocaleString('ko-KR'):''}</td>`;}).join('')}
-            <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;font-weight:700;">${rowTotal.toLocaleString('ko-KR')}</td>
-          </tr>`;
-        }).join('')}
-        <tr style="background:#eee;">
-          <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;font-weight:700;">합계</td>
-          ${colTotals.map(v=>`<td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;font-weight:700;">${v.toLocaleString('ko-KR')}</td>`).join('')}
-          <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;font-weight:700;">${grandTotal.toLocaleString('ko-KR')}</td>
-        </tr>
-      </tbody>
-    </table>`;
+    // 열 수에 따라 글씨 크기 조정
+    const fontSize = orderedCols.length > 8 ? '6pt' : '7pt';
+    const nameW = orderedCols.length > 8 ? '12%' : '14%';
+    const totalW = '10%';
+    const midPct = Math.floor((100 - parseInt(nameW) - parseInt(totalW)) / Math.max(orderedCols.length,1));
+
+    const colgroup = `<colgroup>
+      <col style="width:${nameW}">
+      ${orderedCols.map(()=>`<col style="width:${midPct}%">`).join('')}
+      <col style="width:${totalW}">
+    </colgroup>`;
+
+    const headerRow = `<tr>
+      ${TH('이름', false, nameW)}
+      ${orderedCols.map(c=>TH(escapeHTML(c), true)).join('')}
+      ${TH('합계', true, totalW)}
+    </tr>`;
+
+    const footerRow = `<tr>
+      ${TD('합계', {bold:true, bg:'#E8F0FE'})}
+      ${colTotals.map(v=>TD(v?v.toLocaleString('ko-KR'):'', {right:true, bold:true, bg:'#E8F0FE'})).join('')}
+      ${TD(grandTotal.toLocaleString('ko-KR'), {right:true, bold:true, bg:'#E8F0FE'})}
+    </tr>`;
+
+    // A4 세로 기준 헤더(약 12줄) 제외 가용 행 수: 1페이지는 22행, 이후 35행
+    const ROWS_1ST = 22, ROWS_REST = 35;
+    const pages = [];
+    let i = 0;
+    while (i < rows.length) {
+      const rowsPerPage = pages.length === 0 ? ROWS_1ST : ROWS_REST;
+      const chunk = rows.slice(i, i + rowsPerPage);
+      const isLast = i + rowsPerPage >= rows.length;
+      const makeRow = name => {
+        const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
+        return `<tr>
+          ${TD(escapeHTML(name), {bold:true})}
+          ${orderedCols.map(c=>{const v=pivot[name][c]||0; return TD(v?v.toLocaleString('ko-KR'):'',{right:true});}).join('')}
+          ${TD(rowTotal.toLocaleString('ko-KR'),{right:true,bold:true})}
+        </tr>`;
+      };
+      pages.push(`<div class="print-page">
+        ${pages.length === 0 ? pageHeader : ''}
+        <table style="${TS.replace('font-size:7pt','font-size:'+fontSize)}">
+          ${colgroup}
+          <thead>${headerRow}</thead>
+          <tbody>${chunk.map(makeRow).join('')}</tbody>
+          ${isLast ? `<tfoot>${footerRow}</tfoot>` : ''}
+        </table>
+      </div>`);
+      i += rowsPerPage;
+    }
+    pagesHTML = pages.join('');
+
   } else {
-    // 날짜별 목록
-    const rows = list.sort((a,b)=>a.date.localeCompare(b.date)).map(t=>{
-      const cat2 = catById(t.categoryId);
-      return `<tr>
-        <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:8pt;">${t.date}</td>
-        <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:8pt;">${escapeHTML(txDisplayTitle(t))}</td>
-        <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:8pt;text-align:right;font-weight:700;">${t.amount.toLocaleString('ko-KR')}</td>
-      </tr>`;
-    }).join('');
-    tableHTML = `<table style="border-collapse:collapse;width:100%;font-size:8pt;">
-      <thead><tr>
-        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;text-align:left;width:22%;">날짜</th>
-        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;text-align:left;">내용</th>
-        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;text-align:right;width:25%;">금액</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr>
-        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;text-align:center;background:#eee;">합계</td>
-        <td style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;text-align:right;background:#eee;">${total.toLocaleString('ko-KR')}</td>
-      </tfoot>
-    </table>`;
+    // 날짜별 목록 (페이지당 40행)
+    const sortedList = list.slice().sort((a,b)=>a.date.localeCompare(b.date));
+    const headerRow = `<tr>
+      ${TH('날짜', false, '22%')}${TH('내용', false)}${TH('금액', true, '25%')}
+    </tr>`;
+    const footerRow = `<tr>
+      ${TD('합계',{bold:true,bg:'#eee'})}
+      ${TD('',{bg:'#eee'})}
+      ${TD(total.toLocaleString('ko-KR'),{right:true,bold:true,bg:'#eee'})}
+    </tr>`;
+    const makeRow = t => `<tr>
+      ${TD(t.date)}${TD(escapeHTML(txDisplayTitle(t)))}${TD(t.amount.toLocaleString('ko-KR'),{right:true,bold:true})}
+    </tr>`;
+    pagesHTML = makePages(40, headerRow, makeRow, sortedList, footerRow);
   }
 
-  doPrint(`<div class="print-page">${pageHeader}${tableHTML}</div>`);
+  doPrint(pagesHTML || `<div class="print-page">${pageHeader}<p>내역이 없습니다.</p></div>`);
 }
 
 // ── 헌금 피벗 엑셀 내보내기 ──
