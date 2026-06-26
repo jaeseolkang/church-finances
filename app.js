@@ -1,4 +1,4 @@
-// v2.15 | 2026-06-26 20:40 KST | 수정: 월장부 엑셀 반복인쇄헤더 _xlnm.Print_Titles + Sheet:0 방식 | cache:v119
+// v2.16 | 2026-06-26 21:00 KST | 수정: 월장부 엑셀 제목행 제거, 헤더만 1행으로 단순화 | cache:v120
 'use strict';
 
 /* =========================================================
@@ -1613,9 +1613,8 @@ function exportLedgerToExcel(ym) {
 
   // ── AOA ──
   const aoa = [];
-  aoa.push([`${month}월 장부`,'','','','','','']);
   aoa.push(['일자','대분류','중분류','소분류','수입금액','지출금액','누계금액']);
-  const dataStartRow = 2;
+  const dataStartRow = 1;
   for (const r of rows) {
     aoa.push([r.date, r.cat, r.major, r.minor,
       r.income ?? '', r.expense ?? '', r.acc]);
@@ -1661,15 +1660,10 @@ function exportLedgerToExcel(ym) {
 
   if(!ws['!merges']) ws['!merges']=[];
 
-  // row0: 제목 (A~G 병합)
-  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:6}});
-  sc(0,0,{s:{fill:TITLE_FILL,font:whiteFont,border:allGray,
-    alignment:{horizontal:'center',vertical:'center'}}});
-
-  // row1: 헤더 (옅은 파랑, 가운데, 일자/수입/지출/누계 정렬)
+  // row0: 헤더 (옅은 파랑)
   const hdrAligns = ['center','left','left','left','right','right','right'];
   for(let c=0;c<7;c++) {
-    const addr=XLSX.utils.encode_cell({r:1,c});
+    const addr=XLSX.utils.encode_cell({r:0,c});
     if(!ws[addr]) ws[addr]={t:'s',v:''};
     ws[addr].s={fill:HDR_FILL,font:boldFont,border:allGray,
       alignment:{horizontal:hdrAligns[c],vertical:'center'}};
@@ -1745,7 +1739,7 @@ function exportLedgerToExcel(ym) {
   wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== '_xlnm.Print_Titles');
   wb.Workbook.Names.push({
     Name: '_xlnm.Print_Titles',
-    Ref: `'${sheetName}'!$1:$2`,   // 따옴표 필수 (localSheetId=0 대응)
+    Ref: `'${sheetName}'!$1:$1`,   // 헤더 1행만 반복
     Sheet: 0
   });
 

@@ -1,7 +1,7 @@
-// 2026-06-26 20:40 KST | 수정: CACHE_NAME v119 (월장부 반복인쇄헤더 _xlnm.Print_Titles 따옴표 수정)
+// 2026-06-26 21:00 KST | 수정: CACHE_NAME v120 (월장부 제목행 제거)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v119';
+const CACHE_NAME = 'gaegyebu-v120';
 const ASSETS = [
   './',
   './index.html',
