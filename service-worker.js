@@ -1,7 +1,7 @@
-// 2026-06-26 22:00 KST | 수정: CACHE_NAME v123 (SyntaxError 수정)
+// 2026-06-26 22:20 KST | 수정: CACHE_NAME v124 (대표계정 체크박스, 버튼크기)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v123';
+const CACHE_NAME = 'gaegyebu-v124';
 const ASSETS = [
   './',
   './index.html',

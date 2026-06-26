@@ -697,13 +697,13 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .day-add-btn svg{width:16px;height:16px;}
 
 /* ── 계정선택 ── */
-.acct-selector{margin-bottom:14px;}
+.acct-selector{margin-bottom:10px;}
 .acct-current{
   display:flex; align-items:center; justify-content:space-between;
-  padding:10px 14px; border-radius:12px;
+  padding:13px 16px; border-radius:14px;
   background:var(--primary); color:#fff;
-  font-size:14px; font-weight:700; cursor:pointer;
-  user-select:none;
+  font-size:14.5px; font-weight:800; cursor:pointer;
+  user-select:none; width:100%; box-sizing:border-box;
 }
 .acct-current .acct-arrow{font-size:11px; transition:transform 0.2s;}
 .acct-current.open .acct-arrow{transform:rotate(180deg);}
@@ -722,6 +722,17 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .acct-item:hover{background:var(--primary-light); color:var(--primary);}
 .acct-item.active{background:var(--primary-light); color:var(--primary);}
 .acct-empty{font-size:12.5px;color:var(--text-3);padding:10px 4px;margin-bottom:12px;}
+.la-default-badge{
+  display:inline-block; margin-left:7px;
+  padding:2px 7px; border-radius:6px;
+  background:var(--primary); color:#fff;
+  font-size:11px; font-weight:700; vertical-align:middle;
+}
+.la-default-row{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-top:20px; margin-bottom:6px;
+}
+.la-default-label{font-size:14px; font-weight:600; color:var(--text-1);}
 
 /* ── 연결계좌 관리 시트 ── */
 .la-list{display:flex; flex-direction:column; gap:8px; margin-bottom:20px;}

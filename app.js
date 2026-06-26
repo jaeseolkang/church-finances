@@ -1,4 +1,4 @@
-// v2.19 | 2026-06-26 22:00 KST | 수정: SyntaxError 백틱 이스케이프 수정 | cache:v123
+// v2.20 | 2026-06-26 22:20 KST | 수정: 계정선택 버튼 크기, 대표계정 체크박스, 대표계정 디폴트 | cache:v124
 'use strict';
 
 /* =========================================================
@@ -4549,11 +4549,12 @@ function renderDayDetail(dateStr) {
 
   // 계좌 목록: linkedAccounts에서 동적으로 (없으면 기본 안내)
   const accounts = State.linkedAccounts || [];
-  // 현재 선택된 계좌가 목록에 없으면 첫 번째로 리셋
+  // 현재 선택된 계좌가 목록에 없으면 대표계정 → 첫번째 순으로 리셋
+  const defaultAcct = accounts.find(a => a.isDefault) || accounts[0] || null;
   if (accounts.length > 0 && !accounts.find(a => a.id === State.selectedAccountId)) {
-    State.selectedAccountId = accounts[0].id;
+    State.selectedAccountId = defaultAcct ? defaultAcct.id : null;
   }
-  const selAcct = accounts.find(a => a.id === State.selectedAccountId) || accounts[0] || null;
+  const selAcct = accounts.find(a => a.id === State.selectedAccountId) || defaultAcct || null;
   const acctLabel = selAcct ? selAcct.name : '계좌 없음';
 
   const acctSelectorHTML = accounts.length === 0
@@ -4896,10 +4897,11 @@ function renderLinkedAccountsSheet() {
 
 function laItemHTML(a) {
   const carry = a.carryover ? `이월 ${Number(a.carryover).toLocaleString('ko-KR')}원` : '이월 없음';
+  const badge = a.isDefault ? `<span class="la-default-badge">대표</span>` : '';
   return `
     <div class="la-item" data-id="${a.id}">
       <div class="la-item-info">
-        <div class="la-item-name">${escapeHTML(a.name)}</div>
+        <div class="la-item-name">${escapeHTML(a.name)}${badge}</div>
         <div class="la-item-sub">${carry}</div>
       </div>
       <button class="la-del-btn" data-id="${a.id}" title="삭제">✕</button>
@@ -4910,6 +4912,7 @@ function laItemHTML(a) {
 function openLinkedAccountEditSheet(acct) {
   const isNew = !acct;
   const sheet = document.getElementById('linkedAccountsSheet');
+  const isDefault = !isNew && !!acct.isDefault;
 
   const editHTML = `
     <div class="sheet-handle"></div>
@@ -4930,6 +4933,14 @@ function openLinkedAccountEditSheet(acct) {
           value="${isNew ? '' : (acct.carryover||0)}">
         <div style="font-size:12px;color:var(--text-3);margin-top:4px;">이 계좌의 이전기간 이월금액을 입력하세요</div>
       </div>
+      <div class="la-default-row">
+        <label class="la-default-label" for="laeDefaultChk">대표계정으로 설정</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="laeDefaultChk" ${isDefault ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:20px;">대표계정은 날짜 패널에서 기본으로 선택돼요</div>
       <button class="la-save-btn" id="laeSaveBtn">${isNew ? '계좌 추가' : '저장'}</button>
       ${!isNew ? `<button class="la-del-full-btn" id="laeDelBtn">계좌 삭제</button>` : ''}
     </div>
@@ -4944,19 +4955,31 @@ function openLinkedAccountEditSheet(acct) {
   sheet.querySelector('#laeSaveBtn').addEventListener('click', async () => {
     const name = sheet.querySelector('#laeNameInput').value.trim();
     const carryover = parseInt(sheet.querySelector('#laeCarryInput').value) || 0;
+    const isDefaultChk = sheet.querySelector('#laeDefaultChk').checked;
     if (!name) { alert('계좌 이름을 입력해주세요.'); return; }
-    // 중복 이름 체크
     const dup = (State.linkedAccounts||[]).find(a => a.name === name && (!acct || a.id !== acct.id));
     if (dup) { alert('같은 이름의 계좌가 이미 있어요.'); return; }
+
+    // 대표계정 설정 시 기존 대표계정 해제
+    if (isDefaultChk) {
+      for (const a of (State.linkedAccounts||[])) {
+        if (a.isDefault && (!acct || a.id !== acct.id)) {
+          await DB.put('linkedAccounts', { ...a, isDefault: false });
+        }
+      }
+    }
 
     const record = {
       id: isNew ? ('la_' + Date.now()) : acct.id,
       name,
       carryover,
+      isDefault: isDefaultChk,
       createdAt: isNew ? Date.now() : acct.createdAt
     };
     await DB.put('linkedAccounts', record);
     await reloadData();
+    // 대표계정이면 selectedAccountId도 업데이트
+    if (isDefaultChk) State.selectedAccountId = record.id;
     renderLinkedAccountsSheet();
   });
 
@@ -4969,7 +4992,6 @@ function openLinkedAccountEditSheet(acct) {
     });
   }
 
-  // 이름 입력 포커스
   setTimeout(() => sheet.querySelector('#laeNameInput').focus(), 100);
 }
 
