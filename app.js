@@ -1,4 +1,4 @@
-// v2.25 | 2026-06-26 23:40 KST | 수정: 거래에 accountId 저장 (계정별 수입/지출 연동) | cache:v129
+// v2.26 | 2026-06-26 23:55 KST | 수정: 날짜패널 계정별 거래 필터링 + 계정변경시 목록갱신 | cache:v130
 'use strict';
 
 /* =========================================================
@@ -4670,23 +4670,33 @@ function openDayDetail(dateStr) {
 
 function renderDayDetail(dateStr) {
   const sheet = document.getElementById('dayDetailSheet');
-  const list = State.transactions
-    .filter(t => t.date === dateStr)
-    .sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'income' ? -1 : 1;
-      return txDisplayTitle(a).localeCompare(txDisplayTitle(b), 'ko');
-    });
-  let income = 0, expense = 0;
-  for (const t of list) { if (t.type === 'income') income += t.amount; else expense += t.amount; }
 
-  // 계좌 목록: linkedAccounts에서 동적으로 (없으면 기본 안내)
+  // 계좌 목록 및 현재 선택 계좌 결정
   const accounts = State.linkedAccounts || [];
-  // 현재 선택된 계좌가 목록에 없으면 대표계정 → 첫번째 순으로 리셋
   const defaultAcct = accounts.find(a => a.isDefault) || accounts[0] || null;
   if (accounts.length > 0 && !accounts.find(a => a.id === State.selectedAccountId)) {
     State.selectedAccountId = defaultAcct ? defaultAcct.id : null;
   }
   const selAcct = accounts.find(a => a.id === State.selectedAccountId) || defaultAcct || null;
+
+  // 선택된 계좌에 해당하는 거래만 필터링
+  // 대표계정(재정계정): accountId가 null이거나 대표계정 id인 거래
+  // 다른 계정: accountId가 해당 계정 id인 거래
+  const isDefault = selAcct && selAcct.isDefault;
+  const list = State.transactions
+    .filter(t => {
+      if (t.date !== dateStr) return false;
+      if (isDefault) return !t.accountId || t.accountId === selAcct.id;
+      return t.accountId === (selAcct ? selAcct.id : null);
+    })
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'income' ? -1 : 1;
+      return txDisplayTitle(a).localeCompare(txDisplayTitle(b), 'ko');
+    });
+
+  let income = 0, expense = 0;
+  for (const t of list) { if (t.type === 'income') income += t.amount; else expense += t.amount; }
+
   const acctLabel = selAcct ? selAcct.name : '계좌 없음';
 
   const acctSelectorHTML = accounts.length === 0
@@ -4729,7 +4739,7 @@ function renderDayDetail(dateStr) {
 
   sheet.querySelector('#ddClose').addEventListener('click', closeAllSheets);
 
-  // 계정선택 토글
+  // 계정선택 토글 — 변경 시 목록 즉시 갱신
   if (accounts.length > 0) {
     const acctBtn  = sheet.querySelector('#ddAcctBtn');
     const acctList = sheet.querySelector('#ddAcctList');
@@ -4740,12 +4750,8 @@ function renderDayDetail(dateStr) {
     acctList.querySelectorAll('.acct-item').forEach(el => {
       el.addEventListener('click', () => {
         State.selectedAccountId = el.dataset.id;
-        const found = accounts.find(a => a.id === el.dataset.id);
-        sheet.querySelector('#ddAcctLabel').textContent = found ? found.name : '';
-        acctList.querySelectorAll('.acct-item').forEach(i => i.classList.remove('active'));
-        el.classList.add('active');
-        acctList.classList.remove('open');
-        acctBtn.classList.remove('open');
+        // 계정 바뀌면 목록 전체 다시 렌더링
+        renderDayDetail(dateStr);
       });
     });
   }
