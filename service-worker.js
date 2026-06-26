@@ -1,7 +1,7 @@
-// 2026-06-26 18:40 KST | 수정: CACHE_NAME v114 (월장부 엑셀 인쇄용과 동일 구조)
+// 2026-06-26 19:10 KST | 수정: CACHE_NAME v115 (월장부 엑셀 일자형식/정렬/헤더/결산컬러/결재란제거)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v114';
+const CACHE_NAME = 'gaegyebu-v115';
 const ASSETS = [
   './',
   './index.html',

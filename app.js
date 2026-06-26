@@ -1,4 +1,4 @@
-// v2.10 | 2026-06-26 18:40 KST | 수정: 월장부 엑셀 인쇄용과 동일 구조(헤더DCE6F1,결산FFFFF0,수입파란,지출빨간,결산병합,subItemDisplayName) | cache:v114
+// v2.11 | 2026-06-26 19:10 KST | 수정: 월장부 엑셀 일자YY-MM-DD/정렬/셀축소/헤더옅은파랑/A4반복헤더/결재란삭제/결산컬러/회색테두리 | cache:v115
 'use strict';
 
 /* =========================================================
@@ -1565,10 +1565,10 @@ function exportExpenseToExcel() {
   XLSX.writeFile(wb, `월지출_${range.label}.xlsx`);
 }
 
-// 3. 월장부 엑셀  (인쇄용 renderLedger와 동일 구조)
+// 3. 월장부 엑셀
 function exportLedgerToExcel(ym) {
   const [yearStr, monthStr] = ym.split('-');
-  const month = parseInt(monthStr);
+  const year = parseInt(yearStr), month = parseInt(monthStr);
   const txs = State.transactions.filter(t=>t.date.startsWith(ym))
     .sort((a,b)=>a.date.localeCompare(b.date)||(a.createdAt||0)-(b.createdAt||0));
 
@@ -1579,7 +1579,7 @@ function exportLedgerToExcel(ym) {
     running += t.type==='income' ? t.amount : -t.amount;
   }
 
-  // ── rows 구성 (인쇄용 renderLedger와 동일) ──
+  // ── rows 구성 (renderLedger와 동일) ──
   const rows = [];
   for (const t of txs) {
     const cat = catById(t.categoryId)||{name:'?',type:t.type};
@@ -1593,12 +1593,13 @@ function exportLedgerToExcel(ym) {
       const hasGroups = subGroupsOfCategory(cat.id).length > 0;
       const major = hasGroups ? sgName : (si&&si.subGroupId?((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'':'');
       running += t.type==='income' ? l.amount : -l.amount;
-      rows.push({
-        date: t.date.slice(5), cat: cat.name, major, minor: siName,
+      // 일자: YY-MM-DD 형식  (2026-06-04 → 26-06-04)
+      const yy = String(year).slice(2);
+      const dateFmt = `${yy}-${t.date.slice(5,7)}-${t.date.slice(8,10)}`;
+      rows.push({ date:dateFmt, cat:cat.name, major, minor:siName,
         income:  t.type==='income'  ? l.amount : null,
         expense: t.type==='expense' ? l.amount : null,
-        acc: running,
-      });
+        acc: running });
     }
   }
 
@@ -1610,135 +1611,132 @@ function exportLedgerToExcel(ym) {
   const depCat = State.categories.find(c=>c.name==='예금'&&c.type==='expense');
   const deposit = depCat ? txs.filter(t=>t.categoryId===depCat.id).reduce((s,t)=>s+t.amount,0) : 0;
 
-  // ── AOA (열: 일자0 대분류1 중분류2 소분류3 수입4 지출5 누계6) ──
+  // ── AOA ──
   const aoa = [];
-  aoa.push([`${month}월 장부`,'','','','','','']);         // row0: 제목
-  aoa.push(['일자','대분류','중분류','소분류','수입금액','지출금액','누계금액']); // row1: 헤더
+  aoa.push([`${month}월 장부`,'','','','','','']);
+  aoa.push(['일자','대분류','중분류','소분류','수입금액','지출금액','누계금액']);
   const dataStartRow = 2;
   for (const r of rows) {
     aoa.push([r.date, r.cat, r.major, r.minor,
       r.income ?? '', r.expense ?? '', r.acc]);
   }
   const summaryStartRow = aoa.length;
-  // 결산: col0+1 병합 / col2+3 병합  (인쇄용 summaryRows와 동일 구조)
-  aoa.push([`${month}월 결산`,'','수입/지출','',  inc,           exp,          '']);
-  aoa.push(['',               '','통장이동(선교)','',transfer,    '',           '']);
-  aoa.push(['',               '','예금',       '', '',            deposit,      '']);
-  aoa.push(['',               '','순헌금/지출', '', inc-transfer, exp-deposit,  '']);
-  aoa.push([]);  // 빈행
-  const approvalStartRow = aoa.length;
-  aoa.push(['','','','결재','담 당','부 장','담임목사']);
-  aoa.push(['','','','',   '',     '',     '']);
-  aoa.push(['','','','',   '',     '',     '']);
+  aoa.push([`${month}월 결산`,'','수입/지출','',  inc,          exp,         '']);
+  aoa.push(['',               '','통장이동(선교)','',transfer,   '',          '']);
+  aoa.push(['',               '','예금',       '', '',           deposit,     '']);
+  aoa.push(['',               '','순헌금/지출', '', inc-transfer, exp-deposit, '']);
   const totalRows = aoa.length;
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  // ── 열 너비 ──
-  ws['!cols'] = [
-    {wch:8},{wch:13},{wch:14},{wch:16},{wch:14},{wch:14},{wch:15}
-  ];
+  // ── 열 너비 (줄임) ──
+  ws['!cols'] = [{wch:8},{wch:11},{wch:11},{wch:14},{wch:11},{wch:11},{wch:13}];
 
-  // ── 스타일 상수 (인쇄용과 동일 색상) ──
+  // ── 스타일 상수 ──
   const numFmt   = '#,##0';
-  const grayBdr  = {style:'thin',color:{rgb:'CCCCCC'}};
-  const blackBdr = {style:'thin',color:{rgb:'000000'}};
-  const allGray  = {top:grayBdr, bottom:grayBdr, left:grayBdr, right:grayBdr};
-  const allBlack = {top:blackBdr,bottom:blackBdr,left:blackBdr,right:blackBdr};
-  const hdrFill  = {patternType:'solid',fgColor:{rgb:'DCE6F1'}}; // 인쇄용 TH #DCE6F1
-  const sumFill  = {patternType:'solid',fgColor:{rgb:'FFFFF0'}}; // 인쇄용 SUM #FFFFF0
-  const blueFnt  = {color:{rgb:'1F497D'}};  // 수입 파란
-  const redFnt   = {color:{rgb:'CC0000'}};  // 지출 빨간
-  const boldFnt  = {bold:true};
+  const gBdr = {style:'thin',color:{rgb:'CCCCCC'}};
+  const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
 
-  const sc = (r,c,style) => {
+  // 색상
+  const TITLE_FILL = {patternType:'solid',fgColor:{rgb:'1F4E79'}};
+  const HDR_FILL   = {patternType:'solid',fgColor:{rgb:'BDD7EE'}}; // 옅은 파랑
+  const SUM_FILLS  = [
+    {patternType:'solid',fgColor:{rgb:'2E75B6'}},  // 수입/지출 파랑
+    {patternType:'solid',fgColor:{rgb:'E2EFDA'}},  // 통장이동 연두
+    {patternType:'solid',fgColor:{rgb:'FCE4D6'}},  // 예금 연주황
+    {patternType:'solid',fgColor:{rgb:'FFF2CC'}},  // 순헌금 연노랑
+  ];
+  const whiteFont  = {bold:true, color:{rgb:'FFFFFF'}};
+  const boldFont   = {bold:true};
+  const blueFont   = {color:{rgb:'1F497D'}};
+  const redFont    = {color:{rgb:'CC0000'}};
+  const normFont   = {};
+
+  const sc = (r,c,v) => {
     const addr = XLSX.utils.encode_cell({r,c});
-    if (!ws[addr]) ws[addr]={t:'s',v:''};
-    ws[addr].s = style;
+    if(!ws[addr]) ws[addr]={t:'s',v:''};
+    if(v!==undefined) Object.assign(ws[addr], v);
   };
 
-  // row0: 제목
-  sc(0,0,{font:{bold:true,sz:13},alignment:{horizontal:'center'}});
-
-  // row1: 헤더 (#DCE6F1, 굵게 — 인쇄용 TH와 동일)
-  for (let c=0;c<7;c++) {
-    const isRight=(c>=4);
-    sc(1,c,{fill:hdrFill,font:boldFnt,border:allGray,
-      alignment:{horizontal:isRight?'right':'center',vertical:'center'}});
-  }
-
-  // 데이터행: 수입 파란/지출 빨간/누계 기본 (인쇄용과 동일)
-  for (let r=dataStartRow;r<summaryStartRow;r++) {
-    for (let c=0;c<7;c++) {
-      const addr=XLSX.utils.encode_cell({r,c});
-      if(!ws[addr]) ws[addr]={t:'s',v:''};
-      let font={};
-      if(c===4&&ws[addr].v!=='') font=blueFnt;
-      if(c===5&&ws[addr].v!=='') font=redFnt;
-      const isNum=(c>=4)&&typeof ws[addr].v==='number';
-      ws[addr].s={font,border:allGray,
-        alignment:{horizontal:c>=4?'right':c===0?'center':'left',vertical:'center'},
-        ...(isNum?{numFmt}:{})};
-      if(isNum) ws[addr].z=numFmt;
-    }
-  }
-
-  // 결산행: #FFFFF0, col0+1 병합, col2+3 병합 (인쇄용 summaryRows와 동일)
   if(!ws['!merges']) ws['!merges']=[];
-  for (let r=summaryStartRow;r<approvalStartRow-1;r++) {
-    ws['!merges'].push({s:{r,c:0},e:{r,c:1}});
-    ws['!merges'].push({s:{r,c:2},e:{r,c:3}});
-    const isFirst=(r===summaryStartRow);
-    for (let c=0;c<7;c++) {
+
+  // row0: 제목 (A~G 병합)
+  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:6}});
+  sc(0,0,{s:{fill:TITLE_FILL,font:whiteFont,border:allGray,
+    alignment:{horizontal:'center',vertical:'center'}}});
+
+  // row1: 헤더 (옅은 파랑, 가운데, 일자/수입/지출/누계 정렬)
+  const hdrAligns = ['center','left','left','left','right','right','right'];
+  for(let c=0;c<7;c++) {
+    const addr=XLSX.utils.encode_cell({r:1,c});
+    if(!ws[addr]) ws[addr]={t:'s',v:''};
+    ws[addr].s={fill:HDR_FILL,font:boldFont,border:allGray,
+      alignment:{horizontal:hdrAligns[c],vertical:'center'}};
+  }
+
+  // 데이터행
+  for(let r=dataStartRow;r<summaryStartRow;r++) {
+    for(let c=0;c<7;c++) {
       const addr=XLSX.utils.encode_cell({r,c});
       if(!ws[addr]) ws[addr]={t:'s',v:''};
-      let font=isFirst?boldFnt:{};
-      if(c===4&&ws[addr].v!=='') font={...(isFirst?boldFnt:{}),color:{rgb:'1F497D'}};
-      if(c===5&&ws[addr].v!=='') font={...(isFirst?boldFnt:{}),color:{rgb:'CC0000'}};
-      const isNum=(c===4||c===5)&&typeof ws[addr].v==='number';
-      ws[addr].s={fill:sumFill,font,border:allGray,
-        alignment:{horizontal:c>=4?'right':'left',vertical:'center'},
+      const v=ws[addr].v;
+      const isNum=typeof v==='number';
+      let font=normFont, halign='left';
+      if(c===0) halign='center';
+      if(c===4) { font=blueFont; halign='right'; }
+      if(c===5) { font=redFont;  halign='right'; }
+      if(c===6) halign='right';
+      ws[addr].s={font,border:allGray,
+        alignment:{horizontal:halign,vertical:'center'},
+        ...(isNum&&c>=4?{numFmt}:{})};
+      if(isNum&&c>=4) ws[addr].z=numFmt;
+    }
+  }
+
+  // 결산행 (4행): A+B 병합, C+D 병합, 색상 시각화
+  const sumLabels  = ['수입/지출','통장이동(선교)','예금','순헌금/지출'];
+  const sumMonths  = [`${month}월 결산`,'','',''];
+  for(let si=0;si<4;si++) {
+    const r=summaryStartRow+si;
+    const fill=SUM_FILLS[si];
+    const isHdr=(si===0);
+    const fnt=isHdr?whiteFont:boldFont;
+    // A+B 병합
+    ws['!merges'].push({s:{r,c:0},e:{r,c:1}});
+    const addrA=XLSX.utils.encode_cell({r,c:0});
+    if(!ws[addrA]) ws[addrA]={t:'s',v:sumMonths[si]};
+    ws[addrA].s={fill,font:fnt,border:allGray,
+      alignment:{horizontal:'left',vertical:'center'}};
+    // C+D 병합
+    ws['!merges'].push({s:{r,c:2},e:{r,c:3}});
+    const addrC=XLSX.utils.encode_cell({r,c:2});
+    if(!ws[addrC]) ws[addrC]={t:'s',v:sumLabels[si]};
+    ws[addrC].s={fill,font:fnt,border:allGray,
+      alignment:{horizontal:'left',vertical:'center'}};
+    // B셀(병합 뒤) 빈 스타일
+    const addrB=XLSX.utils.encode_cell({r,c:1});
+    if(!ws[addrB]) ws[addrB]={t:'s',v:''};
+    ws[addrB].s={fill,border:allGray};
+    const addrD=XLSX.utils.encode_cell({r,c:3});
+    if(!ws[addrD]) ws[addrD]={t:'s',v:''};
+    ws[addrD].s={fill,border:allGray};
+    // E: 수입, F: 지출, G: 빈
+    for(const [ci,fntCol] of [[4,isHdr?'FFFFFF':'1F497D'],[5,isHdr?'FFFFFF':'CC0000'],[6,isHdr?'FFFFFF':'000000']]) {
+      const addr=XLSX.utils.encode_cell({r,c:ci});
+      if(!ws[addr]) ws[addr]={t:'s',v:''};
+      const isNum=typeof ws[addr].v==='number';
+      ws[addr].s={fill,font:{bold:isHdr,color:{rgb:fntCol}},border:allGray,
+        alignment:{horizontal:'right',vertical:'center'},
         ...(isNum?{numFmt}:{})};
       if(isNum) ws[addr].z=numFmt;
     }
   }
 
-  // 결재란 (인쇄용 approvalBox와 동일)
-  ws['!merges'].push({s:{r:approvalStartRow,c:3},e:{r:totalRows-1,c:3}});
-  const keolAddr=XLSX.utils.encode_cell({r:approvalStartRow,c:3});
-  ws[keolAddr]={t:'s',v:'결재',s:{font:boldFnt,
-    alignment:{horizontal:'center',vertical:'center',textRotation:90},border:allBlack}};
-  for (let r=approvalStartRow;r<totalRows;r++) {
-    for (let c=3;c<=6;c++) {
-      const addr=XLSX.utils.encode_cell({r,c});
-      if(!ws[addr]) ws[addr]={t:'s',v:''};
-      if(c===3&&r===approvalStartRow) continue;
-      const isHdr=(r===approvalStartRow);
-      ws[addr].s={...(isHdr?{font:boldFnt}:{}),
-        border:allBlack,alignment:{horizontal:'center',vertical:'center'}};
-    }
-  }
-  if(!ws['!rows']) ws['!rows']=[];
-  for (let r=approvalStartRow+1;r<totalRows;r++) ws['!rows'][r]={hpt:32};
-
-  // 제목행 병합
-  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:6}});
-
-  // 인쇄 설정
-  ws['!printHeader']={firstRow:1,lastRow:1};
+  // ── 인쇄 설정: 1~2행 반복, A4 세로 ──
+  ws['!printHeader']={firstRow:0,lastRow:1};  // 0-based
   ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
   ws['!sheetPr']={pageSetup:{fitToPage:true}};
-
-  // 결재란 이미지 별도 PNG 다운로드
-  const approvalB64='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';
-  try {
-    const bc=atob(approvalB64); const ba=new Uint8Array(bc.length);
-    for(let i=0;i<bc.length;i++) ba[i]=bc.charCodeAt(i);
-    const blob=new Blob([ba],{type:'image/png'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download='approval_stamp.png'; a.click(); URL.revokeObjectURL(a.href);
-  } catch(e){}
 
   XLSX.utils.book_append_sheet(wb, ws, `${month}월장부`);
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
