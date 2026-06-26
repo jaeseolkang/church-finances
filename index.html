@@ -734,6 +734,30 @@ input,textarea,select{font-family:inherit; color:inherit;}
 }
 .la-default-label{font-size:14px; font-weight:600; color:var(--text-1);}
 
+/* ── 계정 탭 ── */
+.acct-summary-card{
+  background:var(--primary); color:#fff;
+  border-radius:18px; padding:20px 20px 18px;
+  margin-bottom:20px;
+}
+.acct-summary-title{font-size:13px; opacity:0.8; margin-bottom:6px;}
+.acct-summary-amount{font-size:28px; font-weight:900; margin-bottom:10px;}
+.acct-summary-row{display:flex; gap:16px; font-size:12.5px; opacity:0.9;}
+.acct-summary-row b{font-weight:700;}
+.acct-summary-row b.income{color:#a8d8ff;}
+.acct-summary-row b.expense{color:#ffb3b3;}
+.acct-tbl-wrap{border-radius:14px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.08);}
+.acct-tbl{width:100%; border-collapse:collapse; font-size:13.5px; background:var(--card);}
+.acct-tbl thead tr{background:var(--primary); color:#fff;}
+.acct-tbl th{padding:10px 8px; font-weight:700; font-size:12px;}
+.acct-tbl td{padding:11px 8px; border-bottom:1px solid var(--border);}
+.acct-tbl tbody tr:last-child td{border-bottom:none;}
+.acct-tbl tbody tr:active{background:var(--primary-light);}
+.acct-tbl-name{text-align:left; padding-left:14px !important; font-weight:600;}
+.acct-tbl-num{text-align:right; padding-right:12px !important;}
+.acct-tbl-num.income{color:var(--primary);}
+.acct-tbl-num.expense{color:var(--expense);}
+
 /* ── 연결계좌 관리 시트 ── */
 .la-list{display:flex; flex-direction:column; gap:8px; margin-bottom:20px;}
 .la-item{

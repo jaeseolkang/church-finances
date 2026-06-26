@@ -1,7 +1,7 @@
-// 2026-06-26 22:20 KST | 수정: CACHE_NAME v124 (대표계정 체크박스, 버튼크기)
+// 2026-06-26 22:40 KST | 수정: CACHE_NAME v125 (계정 탭 추가)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v124';
+const CACHE_NAME = 'gaegyebu-v125';
 const ASSETS = [
   './',
   './index.html',

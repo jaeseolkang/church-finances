@@ -1,4 +1,4 @@
-// v2.20 | 2026-06-26 22:20 KST | 수정: 계정선택 버튼 크기, 대표계정 체크박스, 대표계정 디폴트 | cache:v124
+// v2.21 | 2026-06-26 22:40 KST | 수정: 계정 탭 추가 (연결계좌 합계표) | cache:v125
 'use strict';
 
 /* =========================================================
@@ -533,6 +533,7 @@ const ICONS = {
   members: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>`,
   budget: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 14.5h4"/></svg>`,
   stats: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>`,
+  accounts: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>`,
   settings: (active) => `<svg viewBox="0 0 24 24" fill="none" stroke="${active?'var(--primary)':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l1.9-1.5-2-3.4-2.2.9a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.5a7.6 7.6 0 0 0-2.6 1.5l-2.2-.9-2 3.4L4.6 10a7.7 7.7 0 0 0 0 3l-1.9 1.5 2 3.4 2.2-.9c.77.65 1.65 1.16 2.6 1.5L10 22h4l.5-2.5a7.6 7.6 0 0 0 2.6-1.5l2.2.9 2-3.4z"/></svg>`,
   chevLeft: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`,
   chevRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>`,
@@ -551,6 +552,7 @@ const TABS = [
   { key: 'budget',   label: '예산' },
   { key: 'stats',    label: '통계' },
   { key: 'members',  label: '명부' },
+  { key: 'accounts', label: '계정' },
   { key: 'settings', label: '설정' },
 ];
 
@@ -565,6 +567,7 @@ function renderShell() {
       <div class="page" id="page-budget"></div>
       <div class="page" id="page-stats"></div>
       <div class="page" id="page-members"></div>
+      <div class="page" id="page-accounts"></div>
       <div class="page" id="page-settings"></div>
     </div>
     <button class="fab" id="fabAdd">${ICONS.plus}</button>
@@ -606,7 +609,7 @@ function switchTab(key) {
   document.getElementById('page-' + key).classList.add('active');
   renderTabbar();
   renderCurrentPage();
-  document.getElementById('fabAdd').style.display = (key === 'settings' || key === 'members') ? 'none' : 'flex';
+  document.getElementById('fabAdd').style.display = (key === 'settings' || key === 'members' || key === 'accounts') ? 'none' : 'flex';
   // 홈 탭 보조 상태 초기화는 renderHome에서 처리
 }
 
@@ -615,6 +618,7 @@ function renderCurrentPage() {
   else if (State.tab === 'budget') renderBudget();
   else if (State.tab === 'stats') renderStats();
   else if (State.tab === 'members') renderMembers();
+  else if (State.tab === 'accounts') renderAccounts();
   else if (State.tab === 'settings') renderSettings();
 }
 
@@ -2700,6 +2704,85 @@ function openItemStructureSheet() {
   });
 
   openSheet('itemStructureSheet');
+}
+
+/* =========================================================
+   ACCOUNTS TAB — 계정 현황
+   재정계정 제외 모든 연결계좌의 합계 + 개별 표
+   ========================================================= */
+function renderAccounts() {
+  const page = document.getElementById('page-accounts');
+  const accounts = (State.linkedAccounts || []).filter(a => !a.isDefault);
+  const allTx = State.transactions;
+
+  // 계좌별 수입/지출 집계 (accountId 필드 기준 — 현재는 selectedAccountId로 태깅 예정)
+  // 현재는 linkedAccounts에 연결된 tx가 없으므로 0으로 표시, 추후 tx.accountId 연동 시 업데이트
+  function acctTotals(acctId) {
+    const txs = allTx.filter(t => t.accountId === acctId);
+    const income  = txs.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
+    const expense = txs.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
+    return { income, expense };
+  }
+
+  // 전체 합계 (재정계정 제외)
+  let totalCarry = 0, totalIncome = 0, totalExpense = 0;
+  for (const a of accounts) {
+    const { income, expense } = acctTotals(a.id);
+    totalCarry   += (a.carryover || 0);
+    totalIncome  += income;
+    totalExpense += expense;
+  }
+  const totalNet = totalCarry + totalIncome - totalExpense;
+
+  const rowsHTML = accounts.length === 0
+    ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">
+        등록된 계정이 없어요<br>
+        <span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>
+      </td></tr>`
+    : accounts.map(a => {
+        const { income, expense } = acctTotals(a.id);
+        const carry = a.carryover || 0;
+        const net   = carry + income - expense;
+        const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
+        return `<tr class="acct-tbl-row">
+          <td class="acct-tbl-name">${escapeHTML(a.name)}</td>
+          <td class="acct-tbl-num">${carry ? carry.toLocaleString('ko-KR') : '-'}</td>
+          <td class="acct-tbl-num income">${income ? income.toLocaleString('ko-KR') : '-'}</td>
+          <td class="acct-tbl-num expense">${expense ? expense.toLocaleString('ko-KR') : '-'}</td>
+          <td class="acct-tbl-num" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
+        </tr>`;
+      }).join('');
+
+  page.innerHTML = `
+    <div class="appbar" style="padding-left:0;padding-right:0;">
+      <h1>계정</h1>
+    </div>
+
+    <div class="acct-summary-card">
+      <div class="acct-summary-title">계좌 합계</div>
+      <div class="acct-summary-amount">${totalNet.toLocaleString('ko-KR')}원</div>
+      <div class="acct-summary-row">
+        <span>이월 <b>${totalCarry.toLocaleString('ko-KR')}원</b></span>
+        <span>수입 <b class="income">${totalIncome.toLocaleString('ko-KR')}원</b></span>
+        <span>지출 <b class="expense">${totalExpense.toLocaleString('ko-KR')}원</b></span>
+      </div>
+    </div>
+
+    <div class="acct-tbl-wrap">
+      <table class="acct-tbl">
+        <thead>
+          <tr>
+            <th class="acct-tbl-name">계좌이름</th>
+            <th class="acct-tbl-num">이월금</th>
+            <th class="acct-tbl-num">수입금</th>
+            <th class="acct-tbl-num">지출금</th>
+            <th class="acct-tbl-num">합계</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHTML}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function renderSettings() {
