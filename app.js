@@ -1,4 +1,4 @@
-// v2.30 | 2026-06-27 00:50 KST | 수정: 지출현황표 중분류 sgTd 열밀림 버그 수정 | cache:v134
+// v2.31 | 2026-06-27 01:00 KST | 수정: 지출현황표 isDirect 플래그로 열밀림 완전수정 | cache:v135
 'use strict';
 
 /* =========================================================
@@ -1972,13 +1972,13 @@ function printStats() {
           const amt = catPivot[s.id]||0;
           catRows.push({
             sgName: i===0 ? grp.name : null, sgRowspan: i===0 ? items.length : 0,
-            subName: s.name, amt
+            subName: s.name, amt, isDirect: false
           });
         });
       }
       // 직속 소분류 (중분류 없는 것)
       for (const s of direct) {
-        catRows.push({ sgName: null, sgRowspan: 0, subName: s.name, amt: catPivot[s.id]||0 });
+        catRows.push({ sgName: null, sgRowspan: 0, subName: s.name, amt: catPivot[s.id]||0, isDirect: true });
       }
 
       const catTotal = catRows.reduce((s,r)=>s+r.amt, 0);
@@ -1988,7 +1988,7 @@ function printStats() {
       catRows.forEach((r, i) => {
         const sgTd = r.sgRowspan > 0
           ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
-          : r.sgName === null ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;"></td>` : '';
+          : r.isDirect ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;"></td>` : '';
         const catTd = i===0
           ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
           : '';
@@ -2274,20 +2274,20 @@ function renderExpenseTableA4(list, range) {
     }
     const catRows = [];
     for (const [,grp] of sgMap) {
-      grp.items.forEach((s,i)=>catRows.push({sgName:i===0?grp.name:null,sgRowspan:i===0?grp.items.length:0,subName:s.name,amt:catPivot[s.id]||0}));
+      grp.items.forEach((s,i)=>catRows.push({sgName:i===0?grp.name:null,sgRowspan:i===0?grp.items.length:0,subName:s.name,amt:catPivot[s.id]||0,isDirect:false}));
     }
-    for (const s of direct) catRows.push({sgName:null,sgRowspan:0,subName:s.name,amt:catPivot[s.id]||0});
+    for (const s of direct) catRows.push({sgName:null,sgRowspan:0,subName:s.name,amt:catPivot[s.id]||0,isDirect:true});
     const catTotal = catRows.reduce((s,r)=>s+r.amt,0);
     grandTotal += catTotal;
     const catRowspan = catRows.length + 1;
     catRows.forEach((r,i) => {
       const catTd = i===0 ? `<td rowspan="${catRowspan}" style="${cellStyle({bold:true,center:true,bg:'#EBF3FB'})}vertical-align:middle;">${escapeHTML(cat.name)}</td>` : '';
       // sgRowspan>0: 중분류 첫행(rowspan셀 생성)
-      // sgRowspan===0&&sgName===null: 중분류 없는 직접 소분류 → 빈셀
-      // sgRowspan===0&&sgName!==null: 중분류 2번째 이후 행 → td 없음(rowspan으로 이미 처리)
+      // isDirect===true: 중분류 없는 직접 소분류 → 빈셀
+      // 나머지(중분류 2번째 이후 행): td 없음(rowspan으로 이미 처리)
       const sgTd = r.sgRowspan > 0
         ? `<td rowspan="${r.sgRowspan}" style="${cellStyle({bg:'#DEEAF1'})}vertical-align:middle;">${escapeHTML(r.sgName)}</td>`
-        : r.sgName === null ? `<td style="${cellStyle()}"></td>` : '';
+        : r.isDirect ? `<td style="${cellStyle()}"></td>` : '';
       tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle()}"></td></tr>`;
     });
     tableRows += `<tr><td colspan="3" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
