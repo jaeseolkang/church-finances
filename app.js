@@ -1,4 +1,4 @@
-// v2.45 | 2026-06-27 04:20 KST | 수정: 인쇄 페이지 구분 강화, area.innerHTML 중복 제거 | cache:v149
+// v2.46 | 2026-06-27 04:30 KST | 수정: 인쇄 페이지 구분 인라인 스타일로 강제 적용 | cache:v150
 'use strict';
 
 /* =========================================================
@@ -593,12 +593,13 @@ function doPrint(html) {
         .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
         .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
         .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
-        .print-page{page-break-after:always;break-after:page;}
+        .print-page{page-break-after:always;break-after:page;page-break-inside:avoid;}
         .print-page:last-child{page-break-after:avoid;break-after:avoid;}
         @media print{
           @page{size:A4 portrait;margin:15mm 12mm;}
-          .print-page{page-break-after:always!important;break-after:page!important;}
+          .print-page{page-break-after:always!important;break-after:page!important;page-break-before:auto!important;}
           .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
+          div[style*="break-before:page"]{page-break-before:always!important;break-before:page!important;}
           th{background:#1F4E79!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
         }
         .btn{display:block;width:100%;padding:14px;background:#1d4ed8;color:#fff;text-align:center;font-size:16px;font-weight:700;border:none;border-radius:10px;margin-bottom:16px;cursor:pointer;}
@@ -1956,7 +1957,7 @@ function printStats() {
 
   // ── 1페이지: 통계 (막대) ──
   const page1 = `
-    <div class="print-page">
+    <div class="print-page" style="page-break-after:always;break-after:page;display:block;">
       ${pageHeader}
       <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
       ${statRows.map(r => {
@@ -2084,7 +2085,7 @@ function printStats() {
     }
 
     page2 = `
-      <div class="print-page">
+      <div class="print-page" style="page-break-before:always;break-before:page;display:block;">
         ${pageHeader}
         <div class="print-section-title">${range.label} 지출현황</div>
         <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">

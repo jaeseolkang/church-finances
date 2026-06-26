@@ -1,7 +1,7 @@
-// 2026-06-27 04:20 KST | 수정: CACHE_NAME v149 (인쇄 페이지구분 강화)
+// 2026-06-27 04:30 KST | 수정: CACHE_NAME v150 (인쇄 페이지구분 인라인스타일)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v149';
+const CACHE_NAME = 'gaegyebu-v150';
 const ASSETS = [
   './',
   './index.html',
