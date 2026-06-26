@@ -1,7 +1,7 @@
-// 2026-06-27 01:40 KST | 수정: CACHE_NAME v139 (항목구조표 width 100%)
+// 2026-06-27 02:00 KST | 수정: CACHE_NAME v140 (계정탭 축약명/거래내역)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v139';
+const CACHE_NAME = 'gaegyebu-v140';
 const ASSETS = [
   './',
   './index.html',

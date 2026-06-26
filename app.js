@@ -1,4 +1,4 @@
-// v2.35 | 2026-06-27 01:40 KST | 수정: 항목구조표 테이블 width:100% | cache:v139
+// v2.36 | 2026-06-27 02:00 KST | 수정: 계정탭 축약명/클릭시 거래내역 시트 | cache:v140
 'use strict';
 
 /* =========================================================
@@ -584,6 +584,7 @@ function renderShell() {
     <div class="sheet-backdrop" id="sheetBackdrop"></div>
     <div class="sheet" id="txSheet"></div>
     <div class="sheet" id="linkedAccountsSheet"></div>
+    <div class="sheet" id="acctDetailSheet" style="max-height:100%;border-radius:0;"></div>
     <div class="sheet" id="catManageSheet"></div>
     <div class="sheet" id="catEditSheet"></div>
     <div class="sheet" id="catSubSheet"></div>
@@ -2787,6 +2788,9 @@ function renderAccounts() {
 
   const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
 
+  // 계정명 축약 (끝의 '계정' 제거)
+  const shortName = name => name.replace(/계정$/, '');
+
   const rowsHTML = accounts.length === 0
     ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">
         등록된 계정이 없어요<br>
@@ -2797,8 +2801,8 @@ function renderAccounts() {
         const carry = a.carryover || 0;
         const net   = carry + t.income - t.expense;
         const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
-        return `<tr class="acct-tbl-row">
-          <td class="acct-tbl-name">${escapeHTML(a.name)}</td>
+        return `<tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;">
+          <td class="acct-tbl-name">${escapeHTML(shortName(a.name))}</td>
           <td class="acct-tbl-num">${fmt(carry)}</td>
           <td class="acct-tbl-num income">${fmt(t.income)}</td>
           <td class="acct-tbl-num expense">${fmt(t.expense)}</td>
@@ -2836,6 +2840,116 @@ function renderAccounts() {
       </table>
     </div>
   `;
+
+  // 계정 행 클릭 → 상세 내역 시트
+  page.querySelectorAll('.acct-tbl-row[data-acct-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const acct = (State.linkedAccounts || []).find(a => a.id === row.dataset.acctId);
+      if (acct) openAcctDetail(acct);
+    });
+  });
+}
+
+/* =========================================================
+   ACCT DETAIL SHEET — 계정 탭에서 계정 클릭 시 거래 내역
+   재정→계정 이체(예금) + 계정→재정 반환(통장이동) + accountId 직접 태깅 거래
+   ========================================================= */
+function openAcctDetail(acct) {
+  renderAcctDetail(acct);
+  openSheet('acctDetailSheet');
+}
+
+function renderAcctDetail(acct) {
+  const sheet = document.getElementById('acctDetailSheet');
+  const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
+  const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
+
+  // 이 계정에 해당하는 subItemId 수집
+  const incomeSubIds  = new Set(); // 예금→계정 (수입)
+  const expenseSubIds = new Set(); // 통장이동→재정 (지출)
+  for (const si of (State.subItems || [])) {
+    if (expCat  && si.categoryId === expCat.id  && si.name === acct.name) incomeSubIds.add(si.id);
+    if (tongCat && si.categoryId === tongCat.id && si.name === acct.name) expenseSubIds.add(si.id);
+  }
+
+  // 거래 수집
+  const txList = [];
+  for (const t of (State.transactions || [])) {
+    // 방식 A: accountId 직접 태깅
+    if (t.accountId === acct.id) {
+      txList.push({ date: t.date, type: t.type, amount: t.amount, memo: t.memo || '', source: 'direct', tx: t });
+      continue;
+    }
+    // 방식 B: 예금/통장이동 subItem
+    for (const line of (t.lines || [])) {
+      if (incomeSubIds.has(line.subItemId)) {
+        txList.push({ date: t.date, type: 'income', amount: line.amount, memo: t.memo || '', source: 'transfer_in', tx: t });
+      } else if (expenseSubIds.has(line.subItemId)) {
+        txList.push({ date: t.date, type: 'expense', amount: line.amount, memo: t.memo || '', source: 'transfer_out', tx: t });
+      }
+    }
+  }
+
+  // 날짜순 정렬
+  txList.sort((a, b) => a.date.localeCompare(b.date) || (a.tx.createdAt||0) - (b.tx.createdAt||0));
+
+  const carry = acct.carryover || 0;
+  let running = carry;
+  const shortName = acct.name.replace(/계정$/, '');
+
+  const typeLabel = { income: '수입', expense: '지출' };
+  const rows = txList.map(item => {
+    if (item.type === 'income') running += item.amount;
+    else running -= item.amount;
+    const amtColor = item.type === 'income' ? 'var(--primary)' : 'var(--expense)';
+    const sign     = item.type === 'income' ? '+' : '-';
+    // 내용 표시
+    let label = '';
+    if (item.source === 'transfer_in')  label = '재정→' + shortName;
+    else if (item.source === 'transfer_out') label = shortName + '→재정';
+    else {
+      const cat = catById(item.tx.categoryId);
+      label = cat ? cat.name : '기타';
+      if (item.memo) label += ' · ' + item.memo;
+    }
+    return `<div class="acct-ledger-row">
+      <div class="acct-ledger-date">${item.date.slice(5).replace('-','/')}</div>
+      <div class="acct-ledger-label">${escapeHTML(label)}</div>
+      <div class="acct-ledger-amt" style="color:${amtColor}">${sign}${item.amount.toLocaleString('ko-KR')}</div>
+      <div class="acct-ledger-bal">${running.toLocaleString('ko-KR')}</div>
+    </div>`;
+  }).join('');
+
+  const totalIncome  = txList.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+  const totalExpense = txList.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+  const net = carry + totalIncome - totalExpense;
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="adClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+      <h3>${escapeHTML(shortName)}</h3>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div class="acct-detail-summary">
+        <span>이월 <b>${carry.toLocaleString('ko-KR')}</b></span>
+        <span>수입 <b class="income">${totalIncome.toLocaleString('ko-KR')}</b></span>
+        <span>지출 <b class="expense">${totalExpense.toLocaleString('ko-KR')}</b></span>
+        <span>잔액 <b style="color:${net>=0?'var(--primary)':'var(--expense)'}">${net.toLocaleString('ko-KR')}</b></span>
+      </div>
+      <div class="acct-ledger-header">
+        <span>날짜</span><span>내용</span><span>금액</span><span>잔액</span>
+      </div>
+      <div class="acct-ledger-body">
+        ${txList.length === 0
+          ? `<div style="text-align:center;color:var(--text-3);padding:32px 0;">거래 내역이 없어요</div>`
+          : rows}
+      </div>
+    </div>
+  `;
+
+  sheet.querySelector('#adClose').addEventListener('click', () => closeSheet('acctDetailSheet'));
 }
 
 function renderSettings() {
