@@ -1,7 +1,7 @@
-// 2026-06-26 17:40 KST | 수정: CACHE_NAME v112 (월지출 A4스크롤/엑셀스타일/결재란이미지/항목구조표스크롤)
+// 2026-06-26 18:10 KST | 수정: CACHE_NAME v113 (월장부 엑셀 헤더파란색/열너비/테두리/반복헤더/결재란이미지)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v112';
+const CACHE_NAME = 'gaegyebu-v113';
 const ASSETS = [
   './',
   './index.html',
