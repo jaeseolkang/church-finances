@@ -1,7 +1,7 @@
-// 2026-06-26 21:40 KST | 수정: CACHE_NAME v122 (연결계좌 관리 + 날짜패널 연동)
+// 2026-06-26 22:00 KST | 수정: CACHE_NAME v123 (SyntaxError 수정)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v122';
+const CACHE_NAME = 'gaegyebu-v123';
 const ASSETS = [
   './',
   './index.html',

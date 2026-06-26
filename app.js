@@ -1,4 +1,4 @@
-// v2.18 | 2026-06-26 21:40 KST | 수정: 연결계좌 관리(설정), 날짜패널 계정선택 linkedAccounts 연동 | cache:v122
+// v2.19 | 2026-06-26 22:00 KST | 수정: SyntaxError 백틱 이스케이프 수정 | cache:v123
 'use strict';
 
 /* =========================================================
@@ -4962,7 +4962,7 @@ function openLinkedAccountEditSheet(acct) {
 
   if (!isNew) {
     sheet.querySelector('#laeDelBtn').addEventListener('click', async () => {
-      if (!confirm(\`"\${acct.name}" 계좌를 삭제할까요?\`)) return;
+      if (!confirm(`"${acct.name}" 계좌를 삭제할까요?`)) return;
       await DB.del('linkedAccounts', acct.id);
       await reloadData();
       renderLinkedAccountsSheet();
