@@ -1,4 +1,4 @@
-// v2.56 | 2026-06-27 06:50 KST | 수정: 헌금 인쇄 JS scale로 45명 1장 강제, 테두리 진하게 | cache:v160
+// v2.57 | 2026-06-27 15:00 KST | 수정: 계정 탭 일반/정기예금 서브탭, 연결계좌 좌우 분할, 정기예금 프리셋 | cache:v161
 'use strict';
 
 /* =========================================================
@@ -201,6 +201,7 @@ const State = {
   statsSortKey: 'amount',   // '내용' 탭 정렬 기준: 'label' | 'count' | 'amount'
   statsSortDir: 'desc',     // 'asc' | 'desc'
   budgetExpanded: {},       // { [catId]: true/false, [catId+'__'+groupName]: true/false }
+  accountsSubTab: 'normal', // 'normal' | 'deposit'
 };
 
 function fmtMoney(n) {
@@ -2953,7 +2954,15 @@ function calcAcctTotals() {
 
 function renderAccounts() {
   const page = document.getElementById('page-accounts');
-  const accounts = (State.linkedAccounts || []).filter(a => !a.isDefault);
+  const sub = State.accountsSubTab || 'normal'; // 'normal' | 'deposit'
+
+  // accountKind 기준으로 필터 (undefined/null/'normal' → 일반계정)
+  const accounts = (State.linkedAccounts || []).filter(a => {
+    if (a.isDefault) return false;
+    if (sub === 'deposit') return a.accountKind === 'deposit';
+    return !a.accountKind || a.accountKind === 'normal';
+  });
+
   const totals = calcAcctTotals();
 
   let totalCarry = 0, totalIncome = 0, totalExpense = 0;
@@ -2966,15 +2975,14 @@ function renderAccounts() {
   const totalNet = totalCarry + totalIncome - totalExpense;
 
   const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
-
-  // 계정명 축약 (끝의 '계정' 제거)
   const shortName = name => name.replace(/계정$/, '');
 
+  const emptyMsg = sub === 'deposit'
+    ? '등록된 정기예금 계좌가 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>'
+    : '등록된 계정이 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>';
+
   const rowsHTML = accounts.length === 0
-    ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">
-        등록된 계정이 없어요<br>
-        <span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>
-      </td></tr>`
+    ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
     : accounts.map(a => {
         const t = totals[a.name] || {income:0, expense:0};
         const carry = a.carryover || 0;
@@ -2989,13 +2997,20 @@ function renderAccounts() {
         </tr>`;
       }).join('');
 
+  const summaryTitle = sub === 'deposit' ? '정기예금 합계' : '계좌 합계';
+
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>계정</h1>
     </div>
 
+    <div class="acct-sub-tabs">
+      <button class="acct-sub-tab ${sub==='normal'?'active':''}" data-sub="normal">일반계정</button>
+      <button class="acct-sub-tab ${sub==='deposit'?'active':''}" data-sub="deposit">정기예금</button>
+    </div>
+
     <div class="acct-summary-card">
-      <div class="acct-summary-title">계좌 합계</div>
+      <div class="acct-summary-title">${summaryTitle}</div>
       <div class="acct-summary-amount">${totalNet.toLocaleString('ko-KR')}원</div>
       <div class="acct-summary-row">
         <span>이월 <b>${totalCarry.toLocaleString('ko-KR')}원</b></span>
@@ -3019,6 +3034,14 @@ function renderAccounts() {
       </table>
     </div>
   `;
+
+  // 서브탭 전환
+  page.querySelectorAll('.acct-sub-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      State.accountsSubTab = btn.dataset.sub;
+      renderAccounts();
+    });
+  });
 
   // 계정 행 클릭 → 상세 내역 시트
   page.querySelectorAll('.acct-tbl-row[data-acct-id]').forEach(row => {
@@ -5588,6 +5611,17 @@ function renderLinkedAccountsSheet() {
   const sheet = document.getElementById('linkedAccountsSheet');
   const accounts = State.linkedAccounts || [];
 
+  const normalAccts  = accounts.filter(a => !a.isDefault && (!a.accountKind || a.accountKind === 'normal'));
+  const depositAccts = accounts.filter(a => !a.isDefault && a.accountKind === 'deposit');
+
+  const normalListHTML = normalAccts.length === 0
+    ? `<div style="text-align:center;color:var(--text-3);padding:20px 0;font-size:13px;">없음</div>`
+    : normalAccts.map(a => laItemHTML(a)).join('');
+
+  const depositListHTML = depositAccts.length === 0
+    ? `<div style="text-align:center;color:var(--text-3);padding:20px 0;font-size:13px;">없음</div>`
+    : depositAccts.map(a => laItemHTML(a)).join('');
+
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
@@ -5596,22 +5630,33 @@ function renderLinkedAccountsSheet() {
       <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
-      <div class="la-list" id="laList">
-        ${accounts.length === 0
-          ? `<div style="text-align:center;color:var(--text-3);padding:32px 0;font-size:14px;">등록된 계좌가 없어요<br><span style="font-size:12px;">아래 버튼으로 계좌를 추가해보세요</span></div>`
-          : accounts.map(a => laItemHTML(a)).join('')}
+      <div class="la-split-wrap">
+        <div class="la-split-col">
+          <div class="la-split-header">일반계좌</div>
+          <div class="la-list" id="laNormalList">${normalListHTML}</div>
+          <button class="la-add-btn la-add-small" data-kind="normal">${ICONS.plus} 일반계좌 추가</button>
+        </div>
+        <div class="la-split-divider"></div>
+        <div class="la-split-col">
+          <div class="la-split-header">정기예금</div>
+          <div class="la-list" id="laDepositList">${depositListHTML}</div>
+          <button class="la-add-btn la-add-small" data-kind="deposit">${ICONS.plus} 정기예금 추가</button>
+        </div>
       </div>
-      <button class="la-add-btn" id="laAddBtn">${ICONS.plus} 계좌 추가</button>
     </div>
   `;
 
   sheet.querySelector('#laClose').addEventListener('click', () => closeSheet('linkedAccountsSheet'));
-  sheet.querySelector('#laAddBtn').addEventListener('click', () => openLinkedAccountEditSheet(null));
+
+  sheet.querySelectorAll('.la-add-small').forEach(btn => {
+    btn.addEventListener('click', () => openLinkedAccountEditSheet(null, btn.dataset.kind));
+  });
+
   sheet.querySelectorAll('.la-item').forEach(el => {
     el.addEventListener('click', () => {
       const id = el.dataset.id;
       const acct = (State.linkedAccounts||[]).find(a=>a.id===id);
-      if (acct) openLinkedAccountEditSheet(acct);
+      if (acct) openLinkedAccountEditSheet(acct, acct.accountKind || 'normal');
     });
   });
   sheet.querySelectorAll('.la-del-btn').forEach(el => {
@@ -5640,22 +5685,37 @@ function laItemHTML(a) {
 }
 
 // 계좌 추가/편집 시트
-function openLinkedAccountEditSheet(acct) {
+function openLinkedAccountEditSheet(acct, kind) {
   const isNew = !acct;
+  const accountKind = isNew ? (kind || 'normal') : (acct.accountKind || 'normal');
   const sheet = document.getElementById('linkedAccountsSheet');
   const isDefault = !isNew && !!acct.isDefault;
+
+  // 정기예금 프리셋 이름
+  const depositPresets = ['정기선교', '정기건축', '정기후대', '정기퇴직'];
+
+  const kindLabel = accountKind === 'deposit' ? '정기예금' : '일반계좌';
+
+  const presetsHTML = (isNew && accountKind === 'deposit') ? `
+    <div class="form-field" style="margin-bottom:0;">
+      <label class="form-label">빠른 선택</label>
+      <div class="la-preset-row">
+        ${depositPresets.map(p => `<button class="la-preset-btn" data-name="${p}">${p}</button>`).join('')}
+      </div>
+    </div>` : '';
 
   const editHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <button id="laeBack" class="sheet-close-btn">${ICONS.chevLeft}뒤로</button>
-      <h3>${isNew ? '계좌 추가' : '계좌 편집'}</h3>
+      <h3>${isNew ? kindLabel + ' 추가' : '계좌 편집'}</h3>
       <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.chevLeft}뒤로</button>
     </div>
     <div class="sheet-body">
-      <div class="form-field">
+      ${presetsHTML}
+      <div class="form-field" style="margin-top:${isNew && accountKind==='deposit'?'12px':'0'};">
         <label class="form-label">계좌 이름</label>
-        <input id="laeNameInput" class="form-input" type="text" placeholder="예: 재정계정, 선교계정" maxlength="20"
+        <input id="laeNameInput" class="form-input" type="text" placeholder="${accountKind==='deposit'?'예: 정기선교, 정기건축':'예: 재정계정, 선교계정'}" maxlength="20"
           value="${isNew ? '' : escapeHTML(acct.name)}">
       </div>
       <div class="form-field" style="margin-top:16px;">
@@ -5672,12 +5732,19 @@ function openLinkedAccountEditSheet(acct) {
         </label>
       </div>
       <div style="font-size:12px;color:var(--text-3);margin-bottom:20px;">대표계정은 날짜 패널에서 기본으로 선택돼요</div>
-      <button class="la-save-btn" id="laeSaveBtn">${isNew ? '계좌 추가' : '저장'}</button>
+      <button class="la-save-btn" id="laeSaveBtn">${isNew ? kindLabel + ' 추가' : '저장'}</button>
       ${!isNew ? `<button class="la-del-full-btn" id="laeDelBtn">계좌 삭제</button>` : ''}
     </div>
   `;
 
   sheet.innerHTML = editHTML;
+
+  // 프리셋 버튼 클릭 → 이름 입력창에 채우기
+  sheet.querySelectorAll('.la-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sheet.querySelector('#laeNameInput').value = btn.dataset.name;
+    });
+  });
 
   sheet.querySelector('#laeBack').addEventListener('click', () => {
     renderLinkedAccountsSheet();
@@ -5705,6 +5772,7 @@ function openLinkedAccountEditSheet(acct) {
       name,
       carryover,
       isDefault: isDefaultChk,
+      accountKind,
       createdAt: isNew ? Date.now() : acct.createdAt
     };
     await DB.put('linkedAccounts', record);

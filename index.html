@@ -817,6 +817,51 @@ input,textarea,select{font-family:inherit; color:inherit;}
   background:var(--expense-light); color:var(--expense);
   font-size:14px; font-weight:700;
 }
+/* ── 계정 서브탭 ── */
+.acct-sub-tabs{
+  display:flex; gap:0; margin:0 0 14px 0;
+  border-radius:12px; overflow:hidden;
+  border:1.5px solid var(--border); background:var(--bg);
+}
+.acct-sub-tab{
+  flex:1; padding:10px 0; font-size:14px; font-weight:700;
+  color:var(--text-3); background:transparent; border:none;
+  transition:all 0.15s;
+}
+.acct-sub-tab.active{
+  background:var(--primary); color:#fff;
+}
+/* ── 연결계좌 관리 좌우 분할 ── */
+.la-split-wrap{
+  display:flex; gap:0; width:100%;
+}
+.la-split-col{
+  flex:1; min-width:0; display:flex; flex-direction:column; gap:8px;
+}
+.la-split-divider{
+  width:1px; background:var(--border); margin:0 10px; flex-shrink:0;
+}
+.la-split-header{
+  font-size:12px; font-weight:700; color:var(--primary);
+  padding:4px 0 6px 0; letter-spacing:-0.2px; text-align:center;
+  border-bottom:1.5px solid var(--primary-light);
+}
+.la-add-small{
+  width:100%; padding:10px 0; border-radius:10px;
+  background:var(--primary-light); color:var(--primary);
+  font-size:13px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; gap:4px;
+  margin-top:4px;
+}
+/* ── 정기예금 프리셋 버튼 ── */
+.la-preset-row{
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:4px;
+}
+.la-preset-btn{
+  padding:7px 12px; border-radius:20px; font-size:13px; font-weight:600;
+  background:var(--primary-light); color:var(--primary); border:1.5px solid var(--primary);
+}
+.la-preset-btn:active{background:var(--primary); color:#fff;}
 .form-field{display:flex; flex-direction:column; gap:6px;}
 .form-label{font-size:13px; font-weight:600; color:var(--text-2);}
 .form-input{

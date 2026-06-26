@@ -1,7 +1,7 @@
-// 2026-06-27 05:00 KST | 수정: CACHE_NAME v152 (doPrint 공통CSS, 페이지구분 강화)
+// 2026-06-27 15:00 KST | 수정: CACHE_NAME v161 (계정 서브탭, 정기예금 분리)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v152';
+const CACHE_NAME = 'gaegyebu-v161';
 const ASSETS = [
   './',
   './index.html',
