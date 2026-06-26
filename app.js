@@ -1,4 +1,4 @@
-// v2.37 | 2026-06-27 02:20 KST | 수정: 계정 상세 인쇄/엑셀 추가 | cache:v141
+// v2.38 | 2026-06-27 02:25 KST | 수정: 계정 상세 엑셀/인쇄 버튼 통일 | cache:v142
 'use strict';
 
 /* =========================================================
@@ -2930,8 +2930,8 @@ function renderAcctDetail(acct) {
       <button id="adClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>${escapeHTML(shortName)}</h3>
       <div style="display:flex;gap:6px;">
-        <button id="adPrint" style="font-size:12px;color:var(--primary);font-weight:700;padding:5px 9px;border-radius:8px;background:var(--primary-light);">🖨️</button>
-        <button id="adExcel" style="font-size:12px;color:#217346;font-weight:700;padding:5px 9px;border-radius:8px;background:#e8f5e9;">📊</button>
+        <button id="adExcel" style="font-size:13px;color:#217346;font-weight:700;padding:6px 10px;border-radius:8px;background:#E8F5E9;">📥 엑셀</button>
+        <button id="adPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
       </div>
     </div>
     <div class="sheet-body">

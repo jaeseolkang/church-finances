@@ -1,7 +1,7 @@
-// 2026-06-27 02:20 KST | 수정: CACHE_NAME v141 (계정 상세 인쇄/엑셀)
+// 2026-06-27 02:25 KST | 수정: CACHE_NAME v142 (버튼 스타일 통일)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v141';
+const CACHE_NAME = 'gaegyebu-v142';
 const ASSETS = [
   './',
   './index.html',
