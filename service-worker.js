@@ -1,7 +1,7 @@
-// 2026-06-27 00:30 KST | 수정: CACHE_NAME v133 (통계 재정계정만, 탭순서)
+// 2026-06-27 00:50 KST | 수정: CACHE_NAME v134 (지출현황 중분류 열밀림 수정)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v133';
+const CACHE_NAME = 'gaegyebu-v134';
 const ASSETS = [
   './',
   './index.html',
