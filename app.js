@@ -1,4 +1,4 @@
-// v2.24 | 2026-06-26 23:20 KST | 수정: linkedAccounts 백업/복원 포함 | cache:v128
+// v2.25 | 2026-06-26 23:40 KST | 수정: 거래에 accountId 저장 (계정별 수입/지출 연동) | cache:v129
 'use strict';
 
 /* =========================================================
@@ -194,6 +194,7 @@ const State = {
   formDate: null,
   formMemo: '',
   formAmounts: {}, // { subItemId: amountNumber }
+  formAccountId: null, // 현재 거래 입력 시 선택된 계좌 id
   dayDetailDate: null, // 현재 열려있는 '일별 상세' 시트의 날짜 (null이면 닫힌 상태)
   catStatDetailId: null, // 현재 열려있는 '통계 항목 상세' 시트의 categoryId (null이면 닫힌 상태)
   subStatDetailKey: null, // 현재 열려있는 '내용 탭 집계 상세' 시트의 key (null이면 닫힌 상태)
@@ -2713,34 +2714,46 @@ function openItemStructureSheet() {
    linkedAccounts의 name과 subItem name을 매칭하여 집계
    ========================================================= */
 function calcAcctTotals() {
-  // subItems에서 계정명 → subItemId 매핑 구성
-  // 통장이동 categoryId 찾기
   const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
   const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
 
-  // name → subItemId (통장이동: 수입, 예금: 지출)
-  const incomeMap  = {};  // acctName → subItemId
-  const expenseMap = {};  // acctName → subItemId
+  // 계정명 → subItemId 매핑 (통장이동: 계정지출, 예금: 계정수입)
+  const incomeMap  = {};  // acctName → subItemId (예금지출 = 계정수입)
+  const expenseMap = {};  // acctName → subItemId (통장이동수입 = 계정지출)
   for (const si of (State.subItems || [])) {
-    if (tongCat && si.categoryId === tongCat.id) incomeMap[si.name]  = si.id;
-    if (expCat  && si.categoryId === expCat.id)  expenseMap[si.name] = si.id;
+    if (expCat  && si.categoryId === expCat.id)  incomeMap[si.name]  = si.id;
+    if (tongCat && si.categoryId === tongCat.id) expenseMap[si.name] = si.id;
   }
 
-  // 거래 집계
-  // 재정→계정 이체(예금/지출) = 계정의 수입
-  // 계정→재정 반환(통장이동/수입) = 계정의 지출
+  // 계좌 id → name 매핑
+  const idToName = {};
+  for (const a of (State.linkedAccounts || [])) idToName[a.id] = a.name;
+
   const result = {};  // acctName → { income, expense }
+  const ensure = name => { if (!result[name]) result[name] = {income:0, expense:0}; };
+
   for (const t of (State.transactions || [])) {
+    // ── 방식 A: accountId 직접 태깅 (v2.25 이후 신규 거래) ──
+    if (t.accountId && idToName[t.accountId]) {
+      const name = idToName[t.accountId];
+      // 대표계정(재정계정) 거래는 제외
+      const acct = (State.linkedAccounts||[]).find(a => a.id === t.accountId);
+      if (acct && !acct.isDefault) {
+        ensure(name);
+        if (t.type === 'income')  result[name].income  += t.amount;
+        if (t.type === 'expense') result[name].expense += t.amount;
+        continue; // subItem 방식 중복 집계 방지
+      }
+    }
+    // ── 방식 B: 예금/통장이동 subItem 기준 (기존 거래 하위호환) ──
     for (const line of (t.lines || [])) {
       const sid = line.subItemId;
       const amt = line.amount || 0;
-      // 수입(계정 입장): 예금(지출) subItem — 재정에서 계정으로 이체
-      for (const [name, id] of Object.entries(expenseMap)) {
-        if (sid === id) { if (!result[name]) result[name] = {income:0,expense:0}; result[name].income += amt; }
-      }
-      // 지출(계정 입장): 통장이동(수입) subItem — 계정에서 재정으로 반환
       for (const [name, id] of Object.entries(incomeMap)) {
-        if (sid === id) { if (!result[name]) result[name] = {income:0,expense:0}; result[name].expense += amt; }
+        if (sid === id) { ensure(name); result[name].income += amt; }
+      }
+      for (const [name, id] of Object.entries(expenseMap)) {
+        if (sid === id) { ensure(name); result[name].expense += amt; }
       }
     }
   }
@@ -4082,7 +4095,7 @@ function resetTxForm(type) {
   State.formAmounts = {};
 }
 
-function openTxSheet(txId, presetDate, presetType) {
+function openTxSheet(txId, presetDate, presetType, presetAccountId) {
   const editing = txId ? State.transactions.find(t => t.id === txId) : null;
   State.editingTx = editing;
 
@@ -4101,11 +4114,13 @@ function openTxSheet(txId, presetDate, presetType) {
     if (!editing.lines || editing.lines.length === 0) {
       State.formAmounts['__direct__'] = editing.amount || 0; // 구버전 호환
     }
+    State.formAccountId = editing.accountId || null;
     // 수정 시에는 바로 항목 입력 단계로 진입 (대분류/이름은 이미 확정된 상태로 보여줌)
     State.formStep = 'items';
   } else {
     resetTxForm(presetType || 'expense');
     if (presetDate) State.formDate = presetDate;
+    State.formAccountId = presetAccountId || State.selectedAccountId || null;
   }
 
   renderTxSheet();
@@ -4619,6 +4634,7 @@ async function saveTx() {
     amount: total,
     date,
     memo,
+    accountId: State.formAccountId || null,
     createdAt: State.editingTx ? State.editingTx.createdAt : Date.now(),
   };
   await DB.put('transactions', record);
@@ -4734,8 +4750,8 @@ function renderDayDetail(dateStr) {
     });
   }
 
-  sheet.querySelector('#ddAddIncome').addEventListener('click', () => openTxSheet(null, dateStr, 'income'));
-  sheet.querySelector('#ddAddExpense').addEventListener('click', () => openTxSheet(null, dateStr, 'expense'));
+  sheet.querySelector('#ddAddIncome').addEventListener('click', () => openTxSheet(null, dateStr, 'income', State.selectedAccountId));
+  sheet.querySelector('#ddAddExpense').addEventListener('click', () => openTxSheet(null, dateStr, 'expense', State.selectedAccountId));
   sheet.querySelectorAll('.tx-item').forEach(el => {
     el.addEventListener('click', () => openTxSheet(el.dataset.id, dateStr));
   });

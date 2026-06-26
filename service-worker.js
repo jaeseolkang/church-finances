@@ -1,7 +1,7 @@
-// 2026-06-26 23:20 KST | 수정: CACHE_NAME v128 (linkedAccounts 백업/복원 포함)
+// 2026-06-26 23:40 KST | 수정: CACHE_NAME v129 (거래 accountId 저장)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v128';
+const CACHE_NAME = 'gaegyebu-v129';
 const ASSETS = [
   './',
   './index.html',
