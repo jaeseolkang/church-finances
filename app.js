@@ -1,4 +1,4 @@
-// v2.28 | 2026-06-27 00:20 KST | 수정: 홈 수입/지출 집계를 재정계정 거래만 포함 | cache:v132
+// v2.29 | 2026-06-27 00:30 KST | 수정: 통계 집계 재정계정만, 탭 순서 변경 | cache:v133
 'use strict';
 
 /* =========================================================
@@ -560,8 +560,8 @@ const TABS = [
   { key: 'home',     label: '홈' },
   { key: 'budget',   label: '예산' },
   { key: 'stats',    label: '통계' },
-  { key: 'members',  label: '명부' },
   { key: 'accounts', label: '계정' },
+  { key: 'members',  label: '명부' },
   { key: 'settings', label: '설정' },
 ];
 
@@ -1340,7 +1340,7 @@ function statsPeriodRange() {
 }
 
 function txInPeriod(start, end) {
-  return State.transactions.filter(t => t.date >= start && t.date <= end);
+  return mainAcctTxs().filter(t => t.date >= start && t.date <= end);
 }
 
 /* =========================================================

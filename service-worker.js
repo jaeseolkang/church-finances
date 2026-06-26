@@ -1,7 +1,7 @@
-// 2026-06-27 00:20 KST | 수정: CACHE_NAME v132 (홈 집계 재정계정만)
+// 2026-06-27 00:30 KST | 수정: CACHE_NAME v133 (통계 재정계정만, 탭순서)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v132';
+const CACHE_NAME = 'gaegyebu-v133';
 const ASSETS = [
   './',
   './index.html',
