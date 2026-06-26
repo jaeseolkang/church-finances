@@ -1,4 +1,4 @@
-// v2.46 | 2026-06-27 04:30 KST | 수정: 인쇄 페이지 구분 인라인 스타일로 강제 적용 | cache:v150
+// v2.47 | 2026-06-27 04:50 KST | 수정: 헌금 상세 시트 인쇄/엑셀 버튼 추가 | cache:v151
 'use strict';
 
 /* =========================================================
@@ -5246,7 +5246,10 @@ function renderCatStatDetail(categoryId) {
     <div class="sheet-head">
       <button id="csdClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>${cat.icon} ${escapeHTML(cat.name)}</h3>
-      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
+      <div style="display:flex;gap:6px;">
+        ${isHeon ? `<button id="csdExcel" style="font-size:13px;color:#217346;font-weight:700;padding:6px 10px;border-radius:8px;background:#E8F5E9;">📥 엑셀</button>` : ''}
+        <button id="csdPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      </div>
     </div>
     <div class="sheet-body">
       <div class="daydetail-summary">
@@ -5258,11 +5261,112 @@ function renderCatStatDetail(categoryId) {
   `;
 
   sheet.querySelector('#csdClose').addEventListener('click', closeAllSheets);
+
+  // 인쇄
+  sheet.querySelector('#csdPrint').addEventListener('click', () => {
+    printCatStatDetail(cat, range, list, total, isHeon);
+  });
+
+  // 엑셀 (헌금 피벗만)
+  if (isHeon) {
+    sheet.querySelector('#csdExcel').addEventListener('click', () => {
+      exportCatStatDetailToExcel(cat, range, list, total);
+    });
+  }
+
   if (!isHeon) {
     sheet.querySelectorAll('.tx-item').forEach(el => {
       el.addEventListener('click', () => openTxSheet(el.dataset.id));
     });
   }
+}
+
+// ── 헌금 상세 인쇄 ──
+function printCatStatDetail(cat, range, list, total, isHeon) {
+  const pageHeader = `
+    <div class="print-title">${cat.icon} ${escapeHTML(cat.name)}</div>
+    <div class="print-period">${range.label}</div>
+    <div class="print-summary">
+      <div class="print-summary-item">
+        <div class="print-summary-label">합계</div>
+        <div class="print-summary-value income">${total.toLocaleString('ko-KR')}원</div>
+      </div>
+    </div>`;
+
+  let tableHTML = '';
+  if (isHeon) {
+    // 피벗 테이블
+    const pivot = {}, colSet = new Set();
+    for (const t of list) {
+      const sgId = t.subGroupId || t.personId;
+      const pName = sgId ? ((State.persons||[]).find(p=>p.id===sgId)||{}).name||'(이름없음)' : '(이름없음)';
+      if (!pivot[pName]) pivot[pName] = {};
+      for (const l of (t.lines||[])) {
+        const si = subItemById(l.subItemId);
+        const sName = si ? subItemDisplayName('income','헌금',si.name) : '(기타)';
+        pivot[pName][sName] = (pivot[pName][sName]||0) + l.amount;
+        colSet.add(sName);
+      }
+    }
+    const rows = Object.keys(pivot).sort((a,b)=>a.localeCompare(b,'ko'));
+    const orderedCols = [...TX_ENTRY_ITEM_ORDER.filter(n=>colSet.has(n)), ...[...colSet].filter(n=>!TX_ENTRY_ITEM_ORDER.includes(n)).sort()];
+    const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
+    const grandTotal = colTotals.reduce((s,v)=>s+v,0);
+    const midPct = Math.floor(72/Math.max(orderedCols.length,1));
+
+    tableHTML = `<table style="border-collapse:collapse;width:100%;font-size:7pt;table-layout:fixed;">
+      <colgroup><col style="width:14%">${orderedCols.map(()=>`<col style="width:${midPct}%">`).join('')}<col style="width:11%"></colgroup>
+      <thead><tr>
+        <th class="left" style="padding:2pt 3pt;border:0.5pt solid #555;font-size:7pt;text-align:left;">이름</th>
+        ${orderedCols.map(c=>`<th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:7pt;text-align:right;">${escapeHTML(c)}</th>`).join('')}
+        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:7pt;text-align:right;">합계</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(name=>{
+          const rowTotal=orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
+          return `<tr>
+            <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:left;font-weight:600;">${escapeHTML(name)}</td>
+            ${orderedCols.map(c=>{const v=pivot[name][c]||0;return `<td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;">${v?v.toLocaleString('ko-KR'):''}</td>`;}).join('')}
+            <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;font-weight:700;">${rowTotal.toLocaleString('ko-KR')}</td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:#eee;">
+          <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;font-weight:700;">합계</td>
+          ${colTotals.map(v=>`<td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;font-weight:700;">${v.toLocaleString('ko-KR')}</td>`).join('')}
+          <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:7pt;text-align:right;font-weight:700;">${grandTotal.toLocaleString('ko-KR')}</td>
+        </tr>
+      </tbody>
+    </table>`;
+  } else {
+    // 날짜별 목록
+    const rows = list.sort((a,b)=>a.date.localeCompare(b.date)).map(t=>{
+      const cat2 = catById(t.categoryId);
+      return `<tr>
+        <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:8pt;">${t.date}</td>
+        <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:8pt;">${escapeHTML(txDisplayTitle(t))}</td>
+        <td style="padding:2pt 3pt;border:0.5pt solid #ddd;font-size:8pt;text-align:right;font-weight:700;">${t.amount.toLocaleString('ko-KR')}</td>
+      </tr>`;
+    }).join('');
+    tableHTML = `<table style="border-collapse:collapse;width:100%;font-size:8pt;">
+      <thead><tr>
+        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;text-align:left;width:22%;">날짜</th>
+        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;text-align:left;">내용</th>
+        <th style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;text-align:right;width:25%;">금액</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;text-align:center;background:#eee;">합계</td>
+        <td style="padding:2pt 3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;text-align:right;background:#eee;">${total.toLocaleString('ko-KR')}</td>
+      </tfoot>
+    </table>`;
+  }
+
+  doPrint(`<div class="print-page">${pageHeader}${tableHTML}</div>`);
+}
+
+// ── 헌금 피벗 엑셀 내보내기 ──
+function exportCatStatDetailToExcel(cat, range, list, total) {
+  exportPivotToExcel(); // 기존 함수 재사용
 }
 
 /* =========================================================
