@@ -1,4 +1,4 @@
-// v2.53 | 2026-06-27 06:20 KST | 수정: 인쇄 테두리 인라인 스타일로 강제 적용 | cache:v157
+// v2.54 | 2026-06-27 06:30 KST | 수정: 헌금 인쇄 페이지 분할 제거, 전체 1페이지로 | cache:v158
 'use strict';
 
 /* =========================================================
@@ -5427,8 +5427,8 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
       ${TD(grandTotal.toLocaleString('ko-KR'), {right:true, bold:true, bg:'#E8F0FE'})}
     </tr>`;
 
-    // A4 세로 기준 헤더(약 6줄) 제외 가용 행 수: 1페이지는 38행, 이후 45행
-    const ROWS_1ST = 38, ROWS_REST = 45;
+    // 페이지 분할 없이 전체를 한 페이지로 출력 (iOS 자동 페이지 분리에 맡김)
+    const ROWS_1ST = rows.length, ROWS_REST = 45;
     const pages = [];
     let i = 0;
     while (i < rows.length) {
