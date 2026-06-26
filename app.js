@@ -1,4 +1,4 @@
-// v2.36 | 2026-06-27 02:00 KST | 수정: 계정탭 축약명/클릭시 거래내역 시트 | cache:v140
+// v2.37 | 2026-06-27 02:20 KST | 수정: 계정 상세 인쇄/엑셀 추가 | cache:v141
 'use strict';
 
 /* =========================================================
@@ -2929,7 +2929,10 @@ function renderAcctDetail(acct) {
     <div class="sheet-head">
       <button id="adClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>${escapeHTML(shortName)}</h3>
-      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
+      <div style="display:flex;gap:6px;">
+        <button id="adPrint" style="font-size:12px;color:var(--primary);font-weight:700;padding:5px 9px;border-radius:8px;background:var(--primary-light);">🖨️</button>
+        <button id="adExcel" style="font-size:12px;color:#217346;font-weight:700;padding:5px 9px;border-radius:8px;background:#e8f5e9;">📊</button>
+      </div>
     </div>
     <div class="sheet-body">
       <div class="acct-detail-summary">
@@ -2950,6 +2953,139 @@ function renderAcctDetail(acct) {
   `;
 
   sheet.querySelector('#adClose').addEventListener('click', () => closeSheet('acctDetailSheet'));
+  sheet.querySelector('#adPrint').addEventListener('click', () => printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, shortName));
+  sheet.querySelector('#adExcel').addEventListener('click', () => exportAcctDetailToExcel(acct, txList, carry, totalIncome, totalExpense, net, shortName));
+}
+
+// ── 계정 상세 인쇄 ──
+function printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, shortName) {
+  const netColor = net >= 0 ? '#1F497D' : '#CC0000';
+  let running = carry;
+  const rows = txList.map(item => {
+    if (item.type === 'income') running += item.amount;
+    else running -= item.amount;
+    let label = '';
+    if (item.source === 'transfer_in')  label = '재정→' + shortName;
+    else if (item.source === 'transfer_out') label = shortName + '→재정';
+    else { const cat = catById(item.tx.categoryId); label = (cat?cat.name:'기타') + (item.memo?' · '+item.memo:''); }
+    const sign = item.type === 'income' ? '+' : '-';
+    const col  = item.type === 'income' ? '#1F497D' : '#CC0000';
+    return `<tr>
+      <td style="padding:2pt 3pt;border:0.5pt solid #ccc;font-size:8pt;text-align:center;">${item.date}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #ccc;font-size:8pt;">${escapeHTML(label)}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #ccc;font-size:8pt;text-align:right;color:${col};font-weight:700;">${sign}${item.amount.toLocaleString('ko-KR')}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #ccc;font-size:8pt;text-align:right;">${running.toLocaleString('ko-KR')}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `
+    <div class="print-page">
+      <div class="print-title">📋 ${escapeHTML(acct.name)} 장부</div>
+      <div class="print-summary">
+        <div class="print-summary-item"><div class="print-summary-label">이월금액</div><div class="print-summary-value">${carry.toLocaleString('ko-KR')}원</div></div>
+        <div class="print-summary-item"><div class="print-summary-label">수입합계</div><div class="print-summary-value income">${totalIncome.toLocaleString('ko-KR')}원</div></div>
+        <div class="print-summary-item"><div class="print-summary-label">지출합계</div><div class="print-summary-value expense">${totalExpense.toLocaleString('ko-KR')}원</div></div>
+        <div class="print-summary-item"><div class="print-summary-label">잔액</div><div class="print-summary-value" style="color:${netColor}">${net.toLocaleString('ko-KR')}원</div></div>
+      </div>
+      <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">
+        <colgroup><col style="width:18%"><col style="width:42%"><col style="width:20%"><col style="width:20%"></colgroup>
+        <thead><tr style="background:#1F4E79;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:center;">날짜</th>
+          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:left;">내용</th>
+          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:right;">금액</th>
+          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:right;">잔액</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:#2E74B5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+            <td colspan="2" style="padding:3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;color:#fff;text-align:center;">합 계</td>
+            <td style="padding:3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;color:#fff;text-align:right;">${(totalIncome-totalExpense>=0?'+':'')+(totalIncome-totalExpense).toLocaleString('ko-KR')}</td>
+            <td style="padding:3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;color:${netColor};text-align:right;">${net.toLocaleString('ko-KR')}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  const area = document.getElementById('print-area');
+  area.innerHTML = html;
+  area.style.display = 'block';
+  window.print();
+  area.style.display = 'none';
+  area.innerHTML = '';
+}
+
+// ── 계정 상세 엑셀 내보내기 ──
+function exportAcctDetailToExcel(acct, txList, carry, totalIncome, totalExpense, net, shortName) {
+  const wb = XLSX.utils.book_new();
+  const numFmt = '#,##0';
+  const gBdr = {style:'thin', color:{rgb:'CCCCCC'}};
+  const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
+  const HDR_FILL = {patternType:'solid',fgColor:{rgb:'1F4E79'}};
+  const SUM_FILL = {patternType:'solid',fgColor:{rgb:'2E74B5'}};
+  const whiteFont = {bold:true,color:{rgb:'FFFFFF'}};
+  const boldFont  = {bold:true};
+  const blueFont  = {color:{rgb:'1F497D'}};
+  const redFont   = {color:{rgb:'CC0000'}};
+
+  // 헤더행
+  const aoa = [['날짜','내용','수입금액','지출금액','잔액']];
+  let running = carry;
+  for (const item of txList) {
+    let label = '';
+    if (item.source === 'transfer_in')  label = '재정→' + shortName;
+    else if (item.source === 'transfer_out') label = shortName + '→재정';
+    else { const cat = catById(item.tx.categoryId); label = (cat?cat.name:'기타') + (item.memo?' · '+item.memo:''); }
+    if (item.type === 'income') running += item.amount;
+    else running -= item.amount;
+    aoa.push([
+      item.date,
+      label,
+      item.type === 'income'  ? item.amount : '',
+      item.type === 'expense' ? item.amount : '',
+      running
+    ]);
+  }
+  // 결산행
+  aoa.push(['결산','합계', totalIncome, totalExpense, net]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:12},{wch:24},{wch:13},{wch:13},{wch:14}];
+
+  const sc = (r,c,s) => {
+    const addr = XLSX.utils.encode_cell({r,c});
+    if (!ws[addr]) ws[addr] = {t:'s',v:''};
+    ws[addr].s = s;
+  };
+
+  // 헤더 스타일
+  for (let c=0;c<5;c++) sc(0,c,{fill:HDR_FILL,font:whiteFont,border:allGray,alignment:{horizontal:c>=2?'right':'center',vertical:'center'}});
+
+  // 데이터 스타일
+  for (let r=1;r<aoa.length-1;r++) {
+    for (let c=0;c<5;c++) {
+      const addr = XLSX.utils.encode_cell({r,c});
+      if (!ws[addr]) ws[addr]={t:'s',v:''};
+      const isNum = typeof ws[addr].v === 'number';
+      let font = {};
+      if (c===2) font = blueFont;
+      if (c===3) font = redFont;
+      ws[addr].s = {font,border:allGray,alignment:{horizontal:c>=2?'right':c===0?'center':'left',vertical:'center'}, ...(isNum?{numFmt}:{})};
+      if (isNum) ws[addr].z = numFmt;
+    }
+  }
+  // 결산행 스타일
+  const sumR = aoa.length-1;
+  for (let c=0;c<5;c++) {
+    const addr = XLSX.utils.encode_cell({r:sumR,c});
+    if (!ws[addr]) ws[addr]={t:'s',v:''};
+    const isNum = typeof ws[addr].v === 'number';
+    ws[addr].s = {fill:SUM_FILL,font:whiteFont,border:allGray,alignment:{horizontal:c>=2?'right':'center',vertical:'center'},...(isNum?{numFmt}:{})};
+    if (isNum) ws[addr].z = numFmt;
+  }
+
+  ws['!pageSetup'] = {paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
+  XLSX.utils.book_append_sheet(wb, ws, shortName+'장부');
+  XLSX.writeFile(wb, `${acct.name}_장부.xlsx`);
 }
 
 function renderSettings() {

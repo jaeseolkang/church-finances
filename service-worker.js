@@ -1,7 +1,7 @@
-// 2026-06-27 02:00 KST | 수정: CACHE_NAME v140 (계정탭 축약명/거래내역)
+// 2026-06-27 02:20 KST | 수정: CACHE_NAME v141 (계정 상세 인쇄/엑셀)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v140';
+const CACHE_NAME = 'gaegyebu-v141';
 const ASSETS = [
   './',
   './index.html',
