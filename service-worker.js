@@ -1,7 +1,7 @@
-// 2026-06-26 22:40 KST | 수정: CACHE_NAME v125 (계정 탭 추가)
+// 2026-06-26 23:20 KST | 수정: CACHE_NAME v128 (linkedAccounts 백업/복원 포함)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v125';
+const CACHE_NAME = 'gaegyebu-v128';
 const ASSETS = [
   './',
   './index.html',

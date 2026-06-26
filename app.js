@@ -1,4 +1,4 @@
-// v2.21 | 2026-06-26 22:40 KST | 수정: 계정 탭 추가 (연결계좌 합계표) | cache:v125
+// v2.24 | 2026-06-26 23:20 KST | 수정: linkedAccounts 백업/복원 포함 | cache:v128
 'use strict';
 
 /* =========================================================
@@ -2708,31 +2708,60 @@ function openItemStructureSheet() {
 
 /* =========================================================
    ACCOUNTS TAB — 계정 현황
-   재정계정 제외 모든 연결계좌의 합계 + 개별 표
+   통장이동(수입) subItem명 = 계정수입
+   예금(지출) subItem명 = 계정지출
+   linkedAccounts의 name과 subItem name을 매칭하여 집계
    ========================================================= */
+function calcAcctTotals() {
+  // subItems에서 계정명 → subItemId 매핑 구성
+  // 통장이동 categoryId 찾기
+  const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
+  const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
+
+  // name → subItemId (통장이동: 수입, 예금: 지출)
+  const incomeMap  = {};  // acctName → subItemId
+  const expenseMap = {};  // acctName → subItemId
+  for (const si of (State.subItems || [])) {
+    if (tongCat && si.categoryId === tongCat.id) incomeMap[si.name]  = si.id;
+    if (expCat  && si.categoryId === expCat.id)  expenseMap[si.name] = si.id;
+  }
+
+  // 거래 집계
+  // 재정→계정 이체(예금/지출) = 계정의 수입
+  // 계정→재정 반환(통장이동/수입) = 계정의 지출
+  const result = {};  // acctName → { income, expense }
+  for (const t of (State.transactions || [])) {
+    for (const line of (t.lines || [])) {
+      const sid = line.subItemId;
+      const amt = line.amount || 0;
+      // 수입(계정 입장): 예금(지출) subItem — 재정에서 계정으로 이체
+      for (const [name, id] of Object.entries(expenseMap)) {
+        if (sid === id) { if (!result[name]) result[name] = {income:0,expense:0}; result[name].income += amt; }
+      }
+      // 지출(계정 입장): 통장이동(수입) subItem — 계정에서 재정으로 반환
+      for (const [name, id] of Object.entries(incomeMap)) {
+        if (sid === id) { if (!result[name]) result[name] = {income:0,expense:0}; result[name].expense += amt; }
+      }
+    }
+  }
+  return result;
+}
+
 function renderAccounts() {
   const page = document.getElementById('page-accounts');
   const accounts = (State.linkedAccounts || []).filter(a => !a.isDefault);
-  const allTx = State.transactions;
+  const totals = calcAcctTotals();
 
-  // 계좌별 수입/지출 집계 (accountId 필드 기준 — 현재는 selectedAccountId로 태깅 예정)
-  // 현재는 linkedAccounts에 연결된 tx가 없으므로 0으로 표시, 추후 tx.accountId 연동 시 업데이트
-  function acctTotals(acctId) {
-    const txs = allTx.filter(t => t.accountId === acctId);
-    const income  = txs.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
-    const expense = txs.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
-    return { income, expense };
-  }
-
-  // 전체 합계 (재정계정 제외)
   let totalCarry = 0, totalIncome = 0, totalExpense = 0;
   for (const a of accounts) {
-    const { income, expense } = acctTotals(a.id);
+    const t = totals[a.name] || {income:0, expense:0};
     totalCarry   += (a.carryover || 0);
-    totalIncome  += income;
-    totalExpense += expense;
+    totalIncome  += t.income;
+    totalExpense += t.expense;
   }
   const totalNet = totalCarry + totalIncome - totalExpense;
+
+  const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
 
   const rowsHTML = accounts.length === 0
     ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">
@@ -2740,15 +2769,15 @@ function renderAccounts() {
         <span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>
       </td></tr>`
     : accounts.map(a => {
-        const { income, expense } = acctTotals(a.id);
+        const t = totals[a.name] || {income:0, expense:0};
         const carry = a.carryover || 0;
-        const net   = carry + income - expense;
+        const net   = carry + t.income - t.expense;
         const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
         return `<tr class="acct-tbl-row">
           <td class="acct-tbl-name">${escapeHTML(a.name)}</td>
-          <td class="acct-tbl-num">${carry ? carry.toLocaleString('ko-KR') : '-'}</td>
-          <td class="acct-tbl-num income">${income ? income.toLocaleString('ko-KR') : '-'}</td>
-          <td class="acct-tbl-num expense">${expense ? expense.toLocaleString('ko-KR') : '-'}</td>
+          <td class="acct-tbl-num">${fmt(carry)}</td>
+          <td class="acct-tbl-num income">${fmt(t.income)}</td>
+          <td class="acct-tbl-num expense">${fmt(t.expense)}</td>
           <td class="acct-tbl-num" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
         </tr>`;
       }).join('');
@@ -3924,6 +3953,7 @@ async function exportData(startYm, endYm) {
     persons:    State.persons,
     subItems:   State.subItems,
     subGroups:  State.subGroups,
+    linkedAccounts: State.linkedAccounts || [],
     transactions: txs,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -3955,19 +3985,22 @@ function importData(e) {
       if (!replace) return;
 
       // 기존 데이터 전체 삭제 후 교체
-      const [oldCats, oldPersons, oldSubs, oldTxs, oldSubGroups] = await Promise.all([
-        DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('transactions'), DB.getAll('subGroups')
+      const [oldCats, oldPersons, oldSubs, oldTxs, oldSubGroups, oldLinkedAccounts] = await Promise.all([
+        DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'),
+        DB.getAll('transactions'), DB.getAll('subGroups'), DB.getAll('linkedAccounts')
       ]);
       for (const x of oldTxs) await DB.del('transactions', x.id);
       for (const x of oldSubs) await DB.del('subItems', x.id);
       for (const x of oldPersons) await DB.del('persons', x.id);
       for (const x of oldCats) await DB.del('categories', x.id);
       for (const x of oldSubGroups) await DB.del('subGroups', x.id);
+      for (const x of oldLinkedAccounts) await DB.del('linkedAccounts', x.id);
 
       for (const c of data.categories) await DB.put('categories', c);
       for (const p of (data.persons || [])) await DB.put('persons', p);
       for (const s of (data.subItems || [])) await DB.put('subItems', s);
       for (const g of (data.subGroups || [])) await DB.put('subGroups', g);
+      for (const a of (data.linkedAccounts || [])) await DB.put('linkedAccounts', a);
       for (const t of data.transactions) await DB.put('transactions', t);
       await reloadData();
       renderCurrentPage();
