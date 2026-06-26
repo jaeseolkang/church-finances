@@ -1,4 +1,4 @@
-// v2.57 | 2026-06-27 15:00 KST | 수정: 계정 탭 일반/정기예금 서브탭, 연결계좌 좌우 분할, 정기예금 프리셋 | cache:v161
+// v2.58 | 2026-06-27 15:30 KST | 수정: 계정 탭 최상단 자산합계 카드 (재정+일반+정기예금) | cache:v162
 'use strict';
 
 /* =========================================================
@@ -776,7 +776,7 @@ function renderCurrentPage() {
   else if (State.tab === 'budget') renderBudget();
   else if (State.tab === 'stats') renderStats();
   else if (State.tab === 'members') renderMembers();
-  else if (State.tab === 'accounts') renderAccounts();
+  else if (State.tab === 'accounts') renderAccounts();  // async, fire-and-forget OK
   else if (State.tab === 'settings') renderSettings();
 }
 
@@ -2952,18 +2952,47 @@ function calcAcctTotals() {
   return result;
 }
 
-function renderAccounts() {
+async function renderAccounts() {
   const page = document.getElementById('page-accounts');
-  const sub = State.accountsSubTab || 'normal'; // 'normal' | 'deposit'
+  const sub = State.accountsSubTab || 'normal';
 
-  // accountKind 기준으로 필터 (undefined/null/'normal' → 일반계정)
-  const accounts = (State.linkedAccounts || []).filter(a => {
-    if (a.isDefault) return false;
+  // ── 재정(대표계정) 합계 ──
+  const { totalIncome: mainIncome, totalExpense: mainExpense, carryover: mainCarry, net: mainNet } = await totalAssets();
+
+  // ── 연결계좌 합계 ──
+  const totals = calcAcctTotals();
+  const nonDefaultAccts = (State.linkedAccounts || []).filter(a => !a.isDefault);
+
+  let normalCarry = 0, normalIncome = 0, normalExpense = 0;
+  let depositCarry = 0, depositIncome = 0, depositExpense = 0;
+  for (const a of nonDefaultAccts) {
+    const t = totals[a.name] || {income:0, expense:0};
+    const carry = a.carryover || 0;
+    if (!a.accountKind || a.accountKind === 'normal') {
+      normalCarry   += carry;
+      normalIncome  += t.income;
+      normalExpense += t.expense;
+    } else if (a.accountKind === 'deposit') {
+      depositCarry   += carry;
+      depositIncome  += t.income;
+      depositExpense += t.expense;
+    }
+  }
+  const normalNet  = normalCarry  + normalIncome  - normalExpense;
+  const depositNet = depositCarry + depositIncome - depositExpense;
+
+  // ── 전체 자산합계 ──
+  const grandCarry   = mainCarry   + normalCarry   + depositCarry;
+  const grandIncome  = mainIncome  + normalIncome  + depositIncome;
+  const grandExpense = mainExpense + normalExpense  + depositExpense;
+  const grandNet     = mainNet     + normalNet      + depositNet;
+  const grandNetColor = grandNet >= 0 ? 'var(--primary)' : 'var(--expense)';
+
+  // ── 현재 탭 계좌 목록 ──
+  const accounts = nonDefaultAccts.filter(a => {
     if (sub === 'deposit') return a.accountKind === 'deposit';
     return !a.accountKind || a.accountKind === 'normal';
   });
-
-  const totals = calcAcctTotals();
 
   let totalCarry = 0, totalIncome = 0, totalExpense = 0;
   for (const a of accounts) {
@@ -3004,6 +3033,27 @@ function renderAccounts() {
       <h1>계정</h1>
     </div>
 
+    <!-- 자산합계 카드 -->
+    <div class="acct-grand-card">
+      <div class="acct-grand-title">자산합계</div>
+      <div class="acct-grand-amount" style="color:${grandNetColor};">${grandNet.toLocaleString('ko-KR')}원</div>
+      <div class="acct-grand-rows">
+        <div class="acct-grand-row">
+          <span class="acct-grand-label">재정</span>
+          <span class="acct-grand-val">${mainNet.toLocaleString('ko-KR')}원</span>
+        </div>
+        <div class="acct-grand-row">
+          <span class="acct-grand-label">일반계정</span>
+          <span class="acct-grand-val">${normalNet.toLocaleString('ko-KR')}원</span>
+        </div>
+        <div class="acct-grand-row">
+          <span class="acct-grand-label">정기예금</span>
+          <span class="acct-grand-val">${depositNet.toLocaleString('ko-KR')}원</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 서브탭 -->
     <div class="acct-sub-tabs">
       <button class="acct-sub-tab ${sub==='normal'?'active':''}" data-sub="normal">일반계정</button>
       <button class="acct-sub-tab ${sub==='deposit'?'active':''}" data-sub="deposit">정기예금</button>
@@ -3035,7 +3085,6 @@ function renderAccounts() {
     </div>
   `;
 
-  // 서브탭 전환
   page.querySelectorAll('.acct-sub-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       State.accountsSubTab = btn.dataset.sub;
@@ -3043,7 +3092,6 @@ function renderAccounts() {
     });
   });
 
-  // 계정 행 클릭 → 상세 내역 시트
   page.querySelectorAll('.acct-tbl-row[data-acct-id]').forEach(row => {
     row.addEventListener('click', () => {
       const acct = (State.linkedAccounts || []).find(a => a.id === row.dataset.acctId);

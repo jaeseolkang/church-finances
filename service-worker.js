@@ -1,7 +1,7 @@
-// 2026-06-27 15:00 KST | 수정: CACHE_NAME v161 (계정 서브탭, 정기예금 분리)
+// 2026-06-27 15:30 KST | 수정: CACHE_NAME v162 (자산합계 카드)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v161';
+const CACHE_NAME = 'gaegyebu-v162';
 const ASSETS = [
   './',
   './index.html',
