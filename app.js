@@ -1,4 +1,4 @@
-// v2.12 | 2026-06-26 19:30 KST | 수정: xlsx-js-style 라이브러리 교체로 엑셀 스타일(색상/테두리/폰트) 정상 적용 | cache:v116
+// v2.13 | 2026-06-26 20:00 KST | 수정: 월장부 엑셀 반복인쇄헤더 xlsx-js-style 호환(DefinedNames 방식) | cache:v117
 'use strict';
 
 /* =========================================================
@@ -1734,11 +1734,20 @@ function exportLedgerToExcel(ym) {
   }
 
   // ── 인쇄 설정: 1~2행 반복, A4 세로 ──
-  ws['!printHeader']={firstRow:0,lastRow:1};  // 0-based
   ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
-  ws['!sheetPr']={pageSetup:{fitToPage:true}};
 
   XLSX.utils.book_append_sheet(wb, ws, `${month}월장부`);
+
+  // 반복 인쇄 헤더 (xlsx-js-style 방식: workbook DefinedNames로 설정)
+  const sheetIdx = wb.SheetNames.indexOf(`${month}월장부`);
+  if (!wb.Workbook) wb.Workbook = {};
+  if (!wb.Workbook.Names) wb.Workbook.Names = [];
+  wb.Workbook.Names.push({
+    Name: 'Print_Titles',
+    Ref: `'${month}월장부'!$1:$2`,
+    Sheet: sheetIdx
+  });
+
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
 }
 

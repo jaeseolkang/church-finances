@@ -1,7 +1,7 @@
-// 2026-06-26 19:30 KST | 수정: CACHE_NAME v116 (xlsx-js-style 교체 - 엑셀 스타일 지원)
+// 2026-06-26 20:00 KST | 수정: CACHE_NAME v117 (월장부 반복인쇄헤더 DefinedNames 방식)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v116';
+const CACHE_NAME = 'gaegyebu-v117';
 const ASSETS = [
   './',
   './index.html',
