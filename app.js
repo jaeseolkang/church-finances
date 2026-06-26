@@ -1,4 +1,4 @@
-// v2.42 | 2026-06-27 03:40 KST | 수정: iOS Safari 인쇄 백지 수정 (focus/visibilitychange 복원) | cache:v146
+// v2.43 | 2026-06-27 04:00 KST | 수정: iOS PWA 인쇄 새탭 방식으로 변경 | cache:v147
 'use strict';
 
 /* =========================================================
@@ -567,28 +567,58 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isPWA = window.navigator.standalone === true;
+
+  if (isIOS && isPWA) {
+    // iOS PWA: window.print() 미동작 → 새 탭에서 인쇄 페이지 열기
+    const printHTML = `<!DOCTYPE html><html lang="ko"><head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>인쇄</title>
+      <style>
+        body{margin:0;padding:12px;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;background:#fff;}
+        table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;}
+        th{background:#1F4E79!important;color:#fff!important;padding:3pt;border:0.5pt solid #555;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+        td{padding:2pt 3pt;border:0.5pt solid #ccc;font-size:8pt;}
+        .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
+        .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
+        .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
+        .print-summary-item{flex:1;min-width:80pt;}
+        .print-summary-label{font-size:8pt;color:#666;}
+        .print-summary-value{font-size:12pt;font-weight:800;}
+        .print-summary-value.income{color:#1F5C8B;}
+        .print-summary-value.expense{color:#B00;}
+        .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #eee;font-size:9pt;}
+        .print-bar-label{flex:1;}
+        .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
+        .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
+        @media print{@page{size:A4 portrait;margin:15mm 12mm;}}
+        .btn{display:block;width:100%;padding:14px;background:#1d4ed8;color:#fff;text-align:center;font-size:16px;font-weight:700;border:none;border-radius:10px;margin-bottom:16px;cursor:pointer;}
+      </style>
+    </head><body>
+      <button class="btn" onclick="window.print()">🖨️ 프린트</button>
+      ${html}
+    </body></html>`;
+    const blob = new Blob([printHTML], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return;
+  }
+
+  // PC / Android: 기존 방식
   const area = document.getElementById('print-area');
   area.innerHTML = html;
   area.style.display = 'block';
 
-  // iOS Safari: afterprint 미지원 → focusin/visibilitychange로 복원
   const cleanup = () => {
     area.style.display = 'none';
     area.innerHTML = '';
     window.removeEventListener('afterprint', cleanup);
-    window.removeEventListener('focus', cleanup);
-    document.removeEventListener('visibilitychange', onVisible);
   };
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') cleanup();
-  };
-
-  window.addEventListener('afterprint', cleanup);          // PC Chrome/Firefox
-  window.addEventListener('focus', cleanup, {once: true}); // iOS Safari 복귀 시
-  document.addEventListener('visibilitychange', onVisible); // iOS 탭 전환 복귀
-
-  // DOM 렌더링 후 인쇄 (iOS는 충분한 딜레이 필요)
-  setTimeout(() => window.print(), 300);
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(() => window.print(), 150);
 }
 
 /* =========================================================

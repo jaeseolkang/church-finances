@@ -1,7 +1,7 @@
-// 2026-06-27 03:40 KST | 수정: CACHE_NAME v146 (iOS 인쇄 백지 수정)
+// 2026-06-27 04:00 KST | 수정: CACHE_NAME v147 (iOS PWA 인쇄 새탭 방식)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v146';
+const CACHE_NAME = 'gaegyebu-v147';
 const ASSETS = [
   './',
   './index.html',
