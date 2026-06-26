@@ -1,4 +1,4 @@
-// v2.50 | 2026-06-27 05:40 KST | 수정: 헌금 인쇄 페이지 자동 분할 (1페이지 22행, 이후 35행) | cache:v154
+// v2.51 | 2026-06-27 06:00 KST | 수정: 모든 인쇄 출력물 테두리 강화 | cache:v155
 'use strict';
 
 /* =========================================================
@@ -571,11 +571,22 @@ function doPrint(html) {
 
   // 공통 CSS (iOS 새탭 + PC 모두 사용)
   const printCSS = `
-    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
     body{margin:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;background:#fff;}
-    table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;}
-    th{background:#1F4E79!important;color:#fff!important;padding:3pt;border:0.5pt solid #555;font-size:8pt;}
-    td{padding:2pt 3pt;border:0.5pt solid #ccc;font-size:8pt;}
+    table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:1pt solid #555;}
+    th{
+      background:#1F4E79!important;color:#fff!important;
+      padding:3pt 4pt;
+      border:0.5pt solid #3a6fa0!important;
+      font-size:8pt;font-weight:700;
+    }
+    td{
+      padding:2pt 4pt;
+      border:0.5pt solid #aaa!important;
+      font-size:8pt;
+    }
+    tr:nth-child(even) td{background:#f7f9fc!important;}
+    tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
     .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
     .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
     .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
@@ -584,7 +595,7 @@ function doPrint(html) {
     .print-summary-value{font-size:12pt;font-weight:800;}
     .print-summary-value.income{color:#1F5C8B;}
     .print-summary-value.expense{color:#B00;}
-    .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #eee;font-size:9pt;}
+    .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #ccc;font-size:9pt;}
     .print-bar-label{flex:1;}
     .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
     .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
@@ -600,8 +611,11 @@ function doPrint(html) {
         page-break-after:avoid!important;
         break-after:avoid!important;
       }
-      table{page-break-inside:auto;}
+      table{page-break-inside:auto;border:1pt solid #555!important;}
       tr{page-break-inside:avoid;}
+      th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}
+      td{border:0.5pt solid #aaa!important;}
+      tfoot td{background:#1F4E79!important;color:#fff!important;}
     }
   `;
 
