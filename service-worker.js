@@ -1,7 +1,7 @@
-// 2026-06-27 22:20 KST | 수정: CACHE_NAME v180 (통계 차트/지출현황 탭 분리)
+// 2026-06-27 22:40 KST | 수정: CACHE_NAME v181 (인쇄 배율 @page size 역산)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v180';
+const CACHE_NAME = 'gaegyebu-v181';
 const ASSETS = [
   './',
   './index.html',

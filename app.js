@@ -1,4 +1,4 @@
-// v2.76 | 2026-06-27 22:20 KST | 수정: 통계 탭 차트/지출현황 페이지 탭 분리 | cache:v180
+// v2.77 | 2026-06-27 22:40 KST | 수정: 인쇄 배율 @page size 역산으로 가로세로 균일 축소 | cache:v181
 'use strict';
 
 /* =========================================================
@@ -571,13 +571,102 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  // print-area에 콘텐츠 삽입 후 window.print() — 새 탭 없음
+  // 배율 선택 → @page size 역산으로 균일 축소
+  _showPrintScale(html);
+}
+
+function _showPrintScale(html) {
+  const sheetId = 'printScaleSheet';
+  let sheet = document.getElementById(sheetId);
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = sheetId;
+    sheet.className = 'sheet';
+    sheet.style.cssText = 'z-index:3100;max-height:55vh;';
+    document.body.appendChild(sheet);
+  }
+
+  const presets = [60, 70, 75, 80, 85, 90, 95, 100];
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="psClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+      <h3>인쇄 배율</h3>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:14px;">
+        배율을 선택하면 가로·세로 모두 균일하게 축소됩니다.
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+        ${presets.map(v => `
+          <button class="ps-btn ${v===100?'active':''}" data-val="${v}"
+            style="flex:1;min-width:60px;padding:11px 0;border-radius:10px;font-size:14px;font-weight:700;
+            border:1.5px solid ${v===100?'var(--primary)':'var(--border)'};
+            background:${v===100?'var(--primary-light)':'var(--card)'};
+            color:${v===100?'var(--primary)':'var(--text-1)'};">
+            ${v}%
+          </button>`).join('')}
+      </div>
+      <button id="psPrint" style="width:100%;padding:14px 0;border-radius:14px;
+        background:var(--primary);color:#fff;font-size:15px;font-weight:800;">
+        🖨️ 인쇄
+      </button>
+    </div>
+  `;
+
+  openSheet(sheetId);
+
+  let selectedVal = 100;
+
+  sheet.querySelectorAll('.ps-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedVal = parseInt(btn.dataset.val);
+      sheet.querySelectorAll('.ps-btn').forEach(b => {
+        b.style.borderColor = 'var(--border)';
+        b.style.background  = 'var(--card)';
+        b.style.color       = 'var(--text-1)';
+      });
+      btn.style.borderColor = 'var(--primary)';
+      btn.style.background  = 'var(--primary-light)';
+      btn.style.color       = 'var(--primary)';
+    });
+  });
+
+  sheet.querySelector('#psClose').addEventListener('click', () => closeSheet(sheetId));
+
+  sheet.querySelector('#psPrint').addEventListener('click', () => {
+    closeSheet(sheetId);
+    setTimeout(() => _executePrintWithScale(html, selectedVal), 250);
+  });
+}
+
+function _executePrintWithScale(html, scalePct) {
+  // @page size를 역산: 배율 80% → size = A4 / 0.8 = 262.5mm × 371.25mm
+  // 브라우저가 이 큰 페이지를 A4에 맞추면서 전체를 80%로 균일 축소
+  const scale = scalePct / 100;
+  const W = (210 / scale).toFixed(2);
+  const H = (297 / scale).toFixed(2);
+
+  // 동적 style 태그로 @page size 주입
+  const styleId = '__print_scale__';
+  let st = document.getElementById(styleId);
+  if (!st) {
+    st = document.createElement('style');
+    st.id = styleId;
+    document.head.appendChild(st);
+  }
+  st.textContent = `@media print { @page { size: ${W}mm ${H}mm; margin: 15mm 18mm; } }`;
+
   const area = document.getElementById('print-area');
   area.innerHTML = html;
   area.style.display = 'block';
+
   const cleanup = () => {
     area.style.display = 'none';
     area.innerHTML = '';
+    st.textContent = '';
     window.removeEventListener('afterprint', cleanup);
   };
   window.addEventListener('afterprint', cleanup);
