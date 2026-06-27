@@ -1,4 +1,4 @@
-// v2.78 | 2026-06-27 23:00 KST | 수정: 인쇄 단순화 - 배율 시트 제거, window.print() 직접 | cache:v182
+// v2.79 | 2026-06-27 23:10 KST | 수정: 통계 지출 인쇄 page1+page2 모두 출력 복원 | cache:v183
 'use strict';
 
 /* =========================================================
@@ -2042,7 +2042,7 @@ function printStats() {
     }
 
     page2 = `
-      <div class="print-page">
+      <div class="print-page" style="page-break-before:always;break-before:page;">
         <div class="page-inner">
           ${pageHeader}
           <div class="print-section-title">${range.label} 지출현황</div>
@@ -2076,7 +2076,7 @@ function printStats() {
   // 현재 보이는 페이지만 인쇄
   const html = isIncome
     ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
-    : ((State.statsPage||'chart') === 'table' ? page2 : page2); // 지출은 항상 지출현황 테이블
+    : page1 + page2;
 
   doPrint(html);
 }

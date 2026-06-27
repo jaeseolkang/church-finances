@@ -1,7 +1,7 @@
-// 2026-06-27 23:00 KST | 수정: CACHE_NAME v182 (인쇄 단순화)
+// 2026-06-27 23:10 KST | 수정: CACHE_NAME v183 (통계 2페이지 모두 출력)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v182';
+const CACHE_NAME = 'gaegyebu-v183';
 const ASSETS = [
   './',
   './index.html',
