@@ -1,7 +1,7 @@
-// 2026-06-27 20:10 KST | 수정: CACHE_NAME v173 (모든 인쇄 A4 170mm 통일)
+// 2026-06-27 20:30 KST | 수정: CACHE_NAME v174 (인쇄 @page 완전 위임, 배율 정상화)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v173';
+const CACHE_NAME = 'gaegyebu-v174';
 const ASSETS = [
   './',
   './index.html',

@@ -1,4 +1,4 @@
-// v2.69 | 2026-06-27 20:10 KST | 수정: 모든 인쇄 콘텐츠 A4 170mm 기준 통일, font 7.5pt, border 0.5pt | cache:v173
+// v2.70 | 2026-06-27 20:30 KST | 수정: 인쇄 max-width 제거, @page에 완전 위임 → 배율 가로세로 모두 적용 | cache:v174
 'use strict';
 
 /* =========================================================
@@ -570,22 +570,26 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  // A4 기준 인쇄 CSS — 배율 조작 없음, 브라우저 기본 100%로 출력
   const printHTML = `<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8">
     <title>인쇄</title>
     <style>
       *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-      html,body{margin:0;padding:0;background:#f0f0f0;
+      html,body{margin:0;padding:0;
         font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;}
-      /* 화면 미리보기 */
+
+      /* ── 화면 미리보기 ── */
+      body{background:#e8e8e8;}
       .print-page{
-        width:170mm; /* A4 210mm - 좌우여백 20mm×2 */
-        margin:12px auto;padding:0;
-        background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);
+        max-width:680px;          /* 화면 미리보기 폭 — 인쇄와 무관 */
+        margin:12px auto;
+        padding:15mm 18mm;        /* 화면에서도 여백 표현 */
+        background:#fff;
+        box-shadow:0 2px 10px rgba(0,0,0,.18);
       }
-      .page-inner{padding:8mm;}
-      /* 인쇄 버튼 바 */
+      .page-inner{margin:0;padding:0;}  /* page-inner는 래퍼만 */
+
+      /* ── 인쇄 버튼 바 ── */
       #toolbar{
         position:sticky;top:0;z-index:99;
         background:#1d4ed8;padding:10px 20px;
@@ -596,9 +600,10 @@ function doPrint(html) {
         padding:9px 28px;background:#fff;color:#1d4ed8;
         font-size:14px;font-weight:800;border:none;border-radius:8px;cursor:pointer;
       }
-      #toolbar span{color:rgba(255,255,255,0.8);font-size:12px;}
-      /* 공통 콘텐츠 스타일 */
-      table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;}
+      #toolbar span{color:rgba(255,255,255,0.75);font-size:12px;}
+
+      /* ── 공통 콘텐츠 스타일 ── */
+      table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}
       th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;
          border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
       td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
@@ -617,23 +622,35 @@ function doPrint(html) {
       .print-bar-amt{font-weight:700;min-width:60pt;text-align:right;}
       .print-bar-pct{min-width:26pt;text-align:right;color:#555;}
       .print-section-title{font-size:11pt;font-weight:800;margin-bottom:5pt;margin-top:7pt;}
-      /* 인쇄 */
+
+      /* ── 인쇄 — 브라우저 배율이 가로·세로 모두 적용되도록 ── */
       @media print{
-        html,body{background:#fff!important;}
+        html,body{background:#fff!important;margin:0;padding:0;}
         #toolbar{display:none!important;}
-        .print-page{width:100%!important;margin:0!important;box-shadow:none!important;}
-        .page-inner{padding:0!important;}
-        @page{size:A4 portrait;margin:15mm 20mm;}
-        .print-page{page-break-after:always;break-after:page;}
+        /* print-page: 고정 폭 완전 제거, @page 여백에만 의존 */
+        .print-page{
+          width:100%!important;
+          max-width:none!important;
+          margin:0!important;
+          padding:0!important;
+          box-shadow:none!important;
+          page-break-after:always;
+          break-after:page;
+        }
         .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+        .page-inner{margin:0;padding:0;}
+        @page{size:A4 portrait;margin:15mm 18mm;}
         table{page-break-inside:auto;}
         tr{page-break-inside:avoid;}
+        th{background:#1F4E79!important;color:#fff!important;}
+        tfoot td{background:#1F4E79!important;color:#fff!important;}
+        tr:nth-child(even) td{background:#f7f9fc!important;}
       }
     </style>
   </head><body>
     <div id="toolbar">
       <button onclick="window.print()">🖨️ 인쇄</button>
-      <span>브라우저 인쇄 설정의 배율로 크기를 조정하세요</span>
+      <span>인쇄 크기는 브라우저 인쇄 설정의 배율로 조정하세요</span>
     </div>
     ${html}
   </body></html>`;
