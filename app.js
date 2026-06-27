@@ -1,4 +1,4 @@
-// v2.59 | 2026-06-27 15:50 KST | 수정: 정기예금 목록 만기일 컬럼 추가, 편집시트 만기일 입력 | cache:v163
+// v2.60 | 2026-06-27 16:10 KST | 수정: 정기예금 목록 계좌이름/만기일 헤더 클릭 정렬 | cache:v164
 'use strict';
 
 /* =========================================================
@@ -202,6 +202,8 @@ const State = {
   statsSortDir: 'desc',     // 'asc' | 'desc'
   budgetExpanded: {},       // { [catId]: true/false, [catId+'__'+groupName]: true/false }
   accountsSubTab: 'normal', // 'normal' | 'deposit'
+  depositSortKey: 'name',   // 'name' | 'maturity'
+  depositSortDir: 'asc',    // 'asc' | 'desc'
 };
 
 function fmtMoney(n) {
@@ -2988,11 +2990,27 @@ async function renderAccounts() {
   const grandNet     = mainNet     + normalNet      + depositNet;
   const grandNetColor = grandNet >= 0 ? 'var(--primary)' : 'var(--expense)';
 
-  // ── 현재 탭 계좌 목록 ──
-  const accounts = nonDefaultAccts.filter(a => {
+  // ── 현재 탭 계좌 목록 (정기예금 탭이면 정렬 적용) ──
+  let accounts = nonDefaultAccts.filter(a => {
     if (sub === 'deposit') return a.accountKind === 'deposit';
     return !a.accountKind || a.accountKind === 'normal';
   });
+
+  if (sub === 'deposit' && accounts.length > 0) {
+    const sk  = State.depositSortKey || 'name';
+    const dir = State.depositSortDir || 'asc';
+    accounts = [...accounts].sort((a, b) => {
+      let va, vb;
+      if (sk === 'maturity') {
+        va = a.maturityDate || 'zzzz'; // 미입력은 맨 뒤
+        vb = b.maturityDate || 'zzzz';
+      } else {
+        va = a.name;
+        vb = b.name;
+      }
+      return dir === 'asc' ? va.localeCompare(vb, 'ko') : vb.localeCompare(va, 'ko');
+    });
+  }
 
   let totalCarry = 0, totalIncome = 0, totalExpense = 0;
   for (const a of accounts) {
@@ -3087,12 +3105,14 @@ async function renderAccounts() {
       <table class="acct-tbl">
         <thead>
           <tr>
-            <th class="acct-tbl-name">계좌이름</th>
+            <th class="acct-tbl-name ${sub==='deposit'?'acct-th-sort':''}" data-sort="name">
+              계좌이름${sub==='deposit' ? `<span class="acct-sort-icon">${State.depositSortKey==='name' ? (State.depositSortDir==='asc'?'↑':'↓') : '↕'}</span>` : ''}
+            </th>
             <th class="acct-tbl-num">이월금</th>
             <th class="acct-tbl-num">수입금</th>
             <th class="acct-tbl-num">지출금</th>
             <th class="acct-tbl-num">합계</th>
-            ${sub==='deposit' ? '<th class="acct-tbl-num">만기일</th>' : ''}
+            ${sub==='deposit' ? `<th class="acct-tbl-num acct-th-sort" data-sort="maturity">만기일<span class="acct-sort-icon">${State.depositSortKey==='maturity' ? (State.depositSortDir==='asc'?'↑':'↓') : '↕'}</span></th>` : ''}
           </tr>
         </thead>
         <tbody>${rowsHTML}</tbody>
@@ -3106,6 +3126,22 @@ async function renderAccounts() {
       renderAccounts();
     });
   });
+
+  // 정기예금 탭: 헤더 클릭 정렬
+  if (sub === 'deposit') {
+    page.querySelectorAll('.acct-th-sort[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (State.depositSortKey === key) {
+          State.depositSortDir = State.depositSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          State.depositSortKey = key;
+          State.depositSortDir = 'asc';
+        }
+        renderAccounts();
+      });
+    });
+  }
 
   page.querySelectorAll('.acct-tbl-row[data-acct-id]').forEach(row => {
     row.addEventListener('click', () => {
