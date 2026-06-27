@@ -3685,6 +3685,13 @@ function renderSettings() {
         </div>
         ${ICONS.download}
       </div>
+      <div class="settings-row" id="rowEmailBackup">
+        <div>
+          <div class="settings-label">백업 메일 발송</div>
+          <div class="settings-sub">전체 데이터 JSON을 등록된 이메일로 발송</div>
+        </div>
+        <span style="font-size:18px;">📧</span>
+      </div>
       <div class="settings-row" id="rowImport">
         <div>
           <div class="settings-label">데이터 가져오기</div>
@@ -3762,6 +3769,7 @@ function renderSettings() {
   page.querySelector('#rowLedger').addEventListener('click', () => openLedgerSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
+  page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
@@ -4820,6 +4828,64 @@ function renderBackupRangeSheet() {
     exportData(sYm, eYm);
     closeAllSheets();
   });
+}
+
+async function sendBackupByEmail() {
+  const emailRec = await DB.get('settings', 'maturityEmail');
+  if (!emailRec || !emailRec.email) {
+    showToast('설정에서 이메일을 먼저 등록해주세요');
+    return;
+  }
+  const email = emailRec.email;
+  const appName = State.appName || '교회 회계부';
+  const today = todayStr();
+
+  showToast('메일 발송 준비 중...');
+
+  // 전체 데이터 JSON 생성
+  const data = {
+    exportedAt: new Date().toISOString(),
+    categories: State.categories,
+    persons: State.persons,
+    subItems: State.subItems,
+    subGroups: State.subGroups,
+    linkedAccounts: State.linkedAccounts || [],
+    transactions: State.transactions,
+  };
+  const jsonStr = JSON.stringify(data, null, 2);
+  const txCount = State.transactions.length;
+  const subject = `[${appName}] 데이터 백업 ${today}`;
+  const body = `안녕하세요.\n\n${appName} 전체 데이터 백업입니다.\n\n` +
+    `백업일시: ${new Date().toLocaleString('ko-KR')}\n` +
+    `거래 건수: ${txCount}건\n` +
+    `카테고리: ${State.categories.length}개\n\n` +
+    `아래 JSON 데이터를 복사하여 .json 파일로 저장한 후 앱에서 복원하세요.\n\n` +
+    `--- 백업 데이터 시작 ---\n${jsonStr}\n--- 백업 데이터 끝 ---`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail-mcp' }],
+        messages: [{
+          role: 'user',
+          content: `Send an email using Gmail. To: ${email}, Subject: ${subject}, Body: ${body}. Send it directly now.`
+        }]
+      })
+    });
+    if (response.ok) {
+      showToast(`📧 백업 메일 발송 완료 → ${email}`);
+    } else {
+      console.error('backup email error:', await response.text());
+      showToast('메일 발송 실패 — 이메일 설정을 확인해주세요');
+    }
+  } catch (e) {
+    console.error('sendBackupByEmail error:', e);
+    showToast('메일 발송 중 오류가 발생했어요');
+  }
 }
 
 async function exportData(startYm, endYm) {
