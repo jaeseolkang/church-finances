@@ -1,4 +1,4 @@
-// v2.87 | 2026-06-28 01:00 KST | 수정: 계정 appbar flex 명시, 인쇄 버튼 표시 | cache:v191
+// v2.88 | 2026-06-28 01:10 KST | 수정: 계정 인쇄 자산합계 줄바꿈 방지, 간격 축소 | cache:v192
 'use strict';
 
 /* =========================================================
@@ -2432,22 +2432,22 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <div class="print-period">${new Date().toLocaleDateString('ko-KR')}</div>
 
         <!-- 자산합계 -->
-        <div style="display:flex;gap:16pt;margin-bottom:10pt;border:1pt solid #1F4E79;border-radius:6pt;padding:8pt 10pt;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <div style="flex:1;">
-            <div style="font-size:8pt;color:#555;">자산합계</div>
-            <div style="font-size:14pt;font-weight:900;color:${grandNetColor};">${grandNet.toLocaleString('ko-KR')}원</div>
+        <div style="display:flex;gap:8pt;margin-bottom:10pt;border:1pt solid #1F4E79;border-radius:6pt;padding:7pt 10pt;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;align-items:center;">
+          <div style="flex:2;min-width:0;">
+            <div style="font-size:7pt;color:#555;white-space:nowrap;">자산합계</div>
+            <div style="font-size:13pt;font-weight:900;color:${grandNetColor};white-space:nowrap;">${grandNet.toLocaleString('ko-KR')}원</div>
           </div>
-          <div style="flex:1;">
-            <div style="font-size:7.5pt;color:#555;">재정</div>
-            <div style="font-size:10pt;font-weight:700;">${mainNet.toLocaleString('ko-KR')}원</div>
+          <div style="flex:1;min-width:0;border-left:0.5pt solid #b0c4de;padding-left:6pt;">
+            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">재정</div>
+            <div style="font-size:8.5pt;font-weight:700;white-space:nowrap;">${mainNet.toLocaleString('ko-KR')}원</div>
           </div>
-          <div style="flex:1;">
-            <div style="font-size:7.5pt;color:#555;">일반계정</div>
-            <div style="font-size:10pt;font-weight:700;">${normalNet.toLocaleString('ko-KR')}원</div>
+          <div style="flex:1;min-width:0;border-left:0.5pt solid #b0c4de;padding-left:6pt;">
+            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">일반계정</div>
+            <div style="font-size:8.5pt;font-weight:700;white-space:nowrap;">${normalNet.toLocaleString('ko-KR')}원</div>
           </div>
-          <div style="flex:1;">
-            <div style="font-size:7.5pt;color:#555;">정기예금</div>
-            <div style="font-size:10pt;font-weight:700;">${depositNet.toLocaleString('ko-KR')}원</div>
+          <div style="flex:1;min-width:0;border-left:0.5pt solid #b0c4de;padding-left:6pt;">
+            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">정기예금</div>
+            <div style="font-size:8.5pt;font-weight:700;white-space:nowrap;">${depositNet.toLocaleString('ko-KR')}원</div>
           </div>
         </div>
 
