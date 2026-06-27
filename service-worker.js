@@ -1,7 +1,7 @@
-// 2026-06-27 20:45 KST | 수정: CACHE_NAME v175 (인쇄 툴바 버튼 소형화)
+// 2026-06-27 21:00 KST | 수정: CACHE_NAME v176 (인쇄 툴바 인라인 스타일)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v175';
+const CACHE_NAME = 'gaegyebu-v176';
 const ASSETS = [
   './',
   './index.html',

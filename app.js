@@ -1,4 +1,4 @@
-// v2.71 | 2026-06-27 20:45 KST | 수정: 인쇄 툴바 버튼 소형화, flex-shrink:0 적용 | cache:v175
+// v2.72 | 2026-06-27 21:00 KST | 수정: 인쇄 툴바 인라인 스타일 적용 (캐시 무관) | cache:v176
 'use strict';
 
 /* =========================================================
@@ -649,9 +649,9 @@ function doPrint(html) {
       }
     </style>
   </head><body>
-    <div id="toolbar">
-      <button onclick="window.print()">🖨️ 인쇄</button>
-      <span>인쇄 크기는 브라우저 인쇄 설정의 배율로 조정하세요</span>
+    <div id="toolbar" style="position:sticky;top:0;z-index:99;background:#1d4ed8;padding:8px 16px;display:flex;align-items:center;gap:10px;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;">
+      <button onclick="window.print()" style="padding:7px 18px;background:#fff;color:#1d4ed8;font-size:13px;font-weight:800;border:none;border-radius:7px;cursor:pointer;flex-shrink:0;white-space:nowrap;">🖨️ 인쇄</button>
+      <span style="color:rgba(255,255,255,0.75);font-size:11px;">인쇄 크기는 브라우저 인쇄 설정의 배율로 조정하세요</span>
     </div>
     ${html}
   </body></html>`;
