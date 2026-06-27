@@ -3623,6 +3623,28 @@ function renderSettings() {
     </div>
 
     <div class="settings-group">
+      <div class="settings-group-title">정기예금 만기 알림</div>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <div class="settings-label">알림 수신 이메일</div>
+        <div class="settings-sub">앱 실행 시 만기 7일 전 · 당일에 메일을 보내요</div>
+        <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
+          <input type="email" id="maturityEmailInput" class="textinput"
+            placeholder="example@gmail.com"
+            style="flex:1;font-size:13px;padding:8px 12px;">
+          <button id="maturityEmailSave" class="btn-primary"
+            style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
+        </div>
+      </div>
+      <div class="settings-row" id="rowMaturityCheck" style="cursor:pointer;">
+        <div>
+          <div class="settings-label">지금 바로 만기 체크</div>
+          <div class="settings-sub">오늘 기준으로 만기 계좌를 확인하고 메일 발송</div>
+        </div>
+        ${ICONS.chevR}
+      </div>
+    </div>
+
+    <div class="settings-group">
       <div class="settings-group-title">자동 백업</div>
       <div class="settings-row" style="justify-content:space-between;">
         <div>
@@ -3751,6 +3773,25 @@ function renderSettings() {
     }
     showToast('캐시를 비웠습니다. 새로고침합니다...');
     setTimeout(() => location.reload(true), 800);
+  });
+
+  // 만기 알림 이메일
+  (async () => {
+    const rec = await DB.get('settings', 'maturityEmail');
+    const inp = page.querySelector('#maturityEmailInput');
+    if (rec && rec.email && inp) inp.value = rec.email;
+  })();
+  page.querySelector('#maturityEmailSave').addEventListener('click', async () => {
+    const inp = page.querySelector('#maturityEmailInput');
+    const email = inp.value.trim();
+    if (!email || !email.includes('@')) { showToast('올바른 이메일을 입력해주세요'); return; }
+    await DB.put('settings', { key: 'maturityEmail', email });
+    showToast('✅ 이메일이 저장됐어요');
+  });
+  page.querySelector('#rowMaturityCheck').addEventListener('click', async () => {
+    showToast('만기 체크 중...');
+    const count = await checkMaturityAndNotify(true);
+    if (count === 0) showToast('만기 임박 계좌가 없어요');
   });
 
   page.querySelector('#rowReset').addEventListener('click', resetAllData);
@@ -4041,6 +4082,78 @@ function isSunday() {
 // 오늘 날짜 문자열 YYYY-MM-DD
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/* =========================================================
+   정기예금 만기 알림 — Gmail MCP via Anthropic API
+   ========================================================= */
+async function checkMaturityAndNotify(force = false) {
+  const emailRec = await DB.get('settings', 'maturityEmail');
+  if (!emailRec || !emailRec.email) return 0;
+  const email = emailRec.email;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 오늘 이미 체크했으면 스킵 (force=true면 무조건 실행)
+  if (!force) {
+    const lastRec = await DB.get('settings', 'maturityLastCheck');
+    if (lastRec && lastRec.date === today) return 0;
+  }
+
+  // 만기 7일 후 날짜 계산
+  const d7 = new Date(); d7.setDate(d7.getDate() + 7);
+  const date7 = d7.toISOString().slice(0, 10);
+
+  // 정기예금 계좌 중 만기일이 오늘 또는 7일 이내인 것 찾기
+  const deposits = (State.linkedAccounts || []).filter(a => a.isDeposit && a.maturityDate);
+  const targets = deposits.filter(a => a.maturityDate === today || a.maturityDate === date7);
+
+  if (targets.length === 0) {
+    await DB.put('settings', { key: 'maturityLastCheck', date: today });
+    return 0;
+  }
+
+  // 메일 본문 생성
+  const appName = State.appName || '교회 회계부';
+  const rows = targets.map(a => {
+    const tag = a.maturityDate === today ? '🔴 오늘 만기' : '🟡 7일 후 만기';
+    const amt = (a.carryover || 0).toLocaleString('ko-KR');
+    return `• ${tag} | ${a.name} | ${a.maturityDate} | ${amt}원`;
+  }).join('\n');
+
+  const subject = `[${appName}] 정기예금 만기 알림 (${today})`;
+  const body = `안녕하세요.\n\n정기예금 만기 계좌를 알려드립니다.\n\n${rows}\n\n확인 후 적절한 조치를 취해주세요.\n\n— ${appName}`;
+
+  // Anthropic API로 Gmail MCP 호출
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail-mcp' }],
+        messages: [{
+          role: 'user',
+          content: `Send an email using Gmail. To: ${email}, Subject: ${subject}, Body: ${body}. Just send it directly without asking anything.`
+        }]
+      })
+    });
+
+    if (response.ok) {
+      await DB.put('settings', { key: 'maturityLastCheck', date: today });
+      showToast(`📧 만기 알림 ${targets.length}건 발송 완료`);
+      return targets.length;
+    } else {
+      console.error('Gmail MCP error:', await response.text());
+      showToast('메일 발송 실패 — 설정을 확인해주세요');
+      return 0;
+    }
+  } catch (e) {
+    console.error('maturity notify error:', e);
+    showToast('메일 발송 중 오류가 발생했어요');
+    return 0;
+  }
 }
 
 async function checkAndRunAutoBackup() {
@@ -7182,6 +7295,7 @@ async function initApp() {
   switchTab('home');
   // 앱 시작 시 자동 백업 체크 (일요일이면 실행)
   setTimeout(checkAndRunAutoBackup, 2000);
+  setTimeout(() => checkMaturityAndNotify(false), 3000);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
