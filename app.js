@@ -1964,13 +1964,16 @@ function printStats() {
       if (rows.length > 0) {
         const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
         const grandTotal = colTotals.reduce((s,v)=>s+v,0);
-        // 열 너비: 이름 고정(14%), 헌금종류 균등 분배, 합계 고정(11%)
-        const colCount = orderedCols.length + 2; // 이름 + 종류들 + 합계
-        const midPct = Math.floor(75 / (colCount - 2)); // 이름14%, 합계11% 제외
+        // 열 너비: 이름 고정(14%), 합계 고정(11%), 나머지를 헌금종류로 균등 분배 (합계 정확히 100%)
+        const colCount = orderedCols.length + 2;
+        const namePct = 14, sumPct = 11;
+        const midTotal = 100 - namePct - sumPct; // 75%
+        const midPct = Math.floor(midTotal / orderedCols.length);
+        const midRem = midTotal - midPct * orderedCols.length; // 나머지 1~몇% → 첫 열에 합산
         const colgroup = `<colgroup>
-          <col style="width:14%">
-          ${orderedCols.map(()=>`<col style="width:${midPct}%">`).join('')}
-          <col style="width:11%">
+          <col style="width:${namePct}%">
+          ${orderedCols.map((_,i)=>`<col style="width:${midPct + (i===0?midRem:0)}%">`).join('')}
+          <col style="width:${sumPct}%">
         </colgroup>`;
         pivotHTML = `
           <div style="margin-top:6pt;">
@@ -1987,8 +1990,8 @@ function printStats() {
                   const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
                   return `<tr>
                     <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;">${escapeHTML(name)}</td>
-                    ${orderedCols.map(c=>`<td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${pivot[name][c]?pivot[name][c].toLocaleString('ko-KR'):''}</td>`).join('')}
-                    <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;">${rowTotal.toLocaleString('ko-KR')}</td>
+                    ${orderedCols.map(c=>`<td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;white-space:nowrap;">${pivot[name][c]?pivot[name][c].toLocaleString('ko-KR'):''}</td>`).join('')}
+                    <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;white-space:nowrap;">${rowTotal.toLocaleString('ko-KR')}</td>
                   </tr>`;
                 }).join('')}
               </tbody>
