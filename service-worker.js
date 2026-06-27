@@ -1,7 +1,7 @@
-// 2026-06-27 16:10 KST | 수정: CACHE_NAME v164 (정기예금 정렬)
+// 2026-06-27 17:00 KST | 수정: CACHE_NAME v165 (지출현황 소계 열 정렬)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v164';
+const CACHE_NAME = 'gaegyebu-v165';
 const ASSETS = [
   './',
   './index.html',
