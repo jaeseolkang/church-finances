@@ -1967,7 +1967,7 @@ function printStats() {
         // 셀 스타일
         const TH_S = 'padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;font-size:7pt;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         const TD_N = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;white-space:nowrap;';
-        const TD_SUM = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;font-weight:700;white-space:nowrap;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+        const TD_SUM = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;font-weight:400;white-space:nowrap;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         const FT_S = 'padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7pt;font-weight:700;text-align:right;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         pivotHTML = `
           <div style="margin-top:6pt;overflow-x:auto;">
