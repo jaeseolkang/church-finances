@@ -2872,26 +2872,26 @@ function openLedgerSheet() {
     // @media print에서 thead가 매 페이지 반복됨
     const approvalBox = `
       <div style="page-break-inside:avoid;break-inside:avoid;display:flex;justify-content:flex-end;margin-top:8pt;">
-        <table style="border-collapse:collapse;table-layout:fixed;width:113pt;border:0.5pt solid #000;">
+        <table style="border-collapse:collapse;table-layout:fixed;width:136pt;border:1pt solid #000;">
           <colgroup>
-            <col style="width:12pt;">
-            <col style="width:33.7pt;">
-            <col style="width:33.7pt;">
-            <col style="width:33.7pt;">
+            <col style="width:14pt;">
+            <col style="width:40pt;">
+            <col style="width:40pt;">
+            <col style="width:40pt;">
           </colgroup>
           <tbody>
             <tr>
-              <td rowspan="2" style="border:0.5pt solid #000;padding:0;text-align:center;font-weight:700;font-size:6pt;vertical-align:middle;overflow:hidden;">
-                <span style="display:inline-block;writing-mode:vertical-lr;text-orientation:mixed;letter-spacing:1pt;font-size:6pt;font-weight:700;">결재</span>
+              <td rowspan="2" style="border:1pt solid #000;padding:0;text-align:center;font-weight:700;font-size:7pt;vertical-align:middle;overflow:hidden;">
+                <span style="display:inline-block;writing-mode:vertical-lr;text-orientation:mixed;letter-spacing:1pt;font-size:7pt;font-weight:700;">결재</span>
               </td>
-              <td style="border:0.5pt solid #000;padding:1pt 0;text-align:center;font-weight:700;font-size:6pt;white-space:nowrap;overflow:hidden;">담당</td>
-              <td style="border:0.5pt solid #000;padding:1pt 0;text-align:center;font-weight:700;font-size:6pt;white-space:nowrap;overflow:hidden;">부장</td>
-              <td style="border:0.5pt solid #000;padding:1pt 0;text-align:center;font-weight:700;font-size:6pt;white-space:nowrap;overflow:hidden;">담임목사</td>
+              <td style="border:1pt solid #000;padding:1pt 0;text-align:center;font-weight:700;font-size:7pt;white-space:nowrap;overflow:hidden;">담당</td>
+              <td style="border:1pt solid #000;padding:1pt 0;text-align:center;font-weight:700;font-size:7pt;white-space:nowrap;overflow:hidden;">부장</td>
+              <td style="border:1pt solid #000;padding:1pt 0;text-align:center;font-weight:700;font-size:7pt;white-space:nowrap;overflow:hidden;">담임목사</td>
             </tr>
             <tr>
-              <td style="border:0.5pt solid #000;height:24pt;"></td>
-              <td style="border:0.5pt solid #000;height:24pt;"></td>
-              <td style="border:0.5pt solid #000;height:24pt;"></td>
+              <td style="border:1pt solid #000;height:29pt;"></td>
+              <td style="border:1pt solid #000;height:29pt;"></td>
+              <td style="border:1pt solid #000;height:29pt;"></td>
             </tr>
           </tbody>
         </table>
