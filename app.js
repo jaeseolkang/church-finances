@@ -2170,8 +2170,7 @@ function printStats() {
             <thead><tr>
               ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
             </tr></thead>
-            <tbody>${tableRows}</tbody>
-            <tfoot>
+            <tbody>${tableRows}
               <tr>
                 <td colspan="3" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
                 <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
@@ -2180,7 +2179,7 @@ function printStats() {
                 <td colspan="3" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
                 <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
               </tr>
-            </tfoot>
+            </tbody>
           </table>
         </div>
       </div>`;
@@ -2455,11 +2454,10 @@ function renderExpenseTableA4(list, range) {
           <thead><tr>
             <th style="${thStyle}">대분류</th><th style="${thStyle}">중분류</th><th style="${thStyle}">소분류</th><th style="${thStyle}text-align:right;">금액(원)</th><th style="${thStyle}">비고/잔액</th>
           </tr></thead>
-          <tbody>${tableRows}</tbody>
-          <tfoot>
+          <tbody>${tableRows}
             <tr><td colspan="3" style="${ftStyle()}">합  계</td><td style="${ftStyle(true)}">${grandTotal.toLocaleString('ko-KR')}</td><td style="${ftStyle()}"></td></tr>
             <tr><td colspan="3" style="${ftStyle()}">순지출(지출-예금)</td><td style="${ftStyle(true)}">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td><td style="${ftStyle()}"></td></tr>
-          </tfoot>
+          </tbody>
         </table>
       </div>
     </div>`;
