@@ -1,4 +1,4 @@
-// v2.72 | 2026-06-27 21:00 KST | 수정: 인쇄 툴바 인라인 스타일 적용 (캐시 무관) | cache:v176
+// v2.73 | 2026-06-27 21:20 KST | 수정: 인쇄 화면 미리보기 overflow 방지, 반응형 폭 | cache:v177
 'use strict';
 
 /* =========================================================
@@ -580,14 +580,17 @@ function doPrint(html) {
 
       /* ── 화면 미리보기 ── */
       body{background:#e8e8e8;}
+      html,body{overflow-x:hidden;}
       .print-page{
-        max-width:680px;          /* 화면 미리보기 폭 — 인쇄와 무관 */
+        width:calc(100% - 32px);
+        max-width:640px;
         margin:12px auto;
-        padding:15mm 18mm;        /* 화면에서도 여백 표현 */
+        padding:10mm 12mm;
         background:#fff;
         box-shadow:0 2px 10px rgba(0,0,0,.18);
+        overflow:hidden;
       }
-      .page-inner{margin:0;padding:0;}  /* page-inner는 래퍼만 */
+      .page-inner{margin:0;padding:0;}
 
       /* ── 인쇄 버튼 바 ── */
       #toolbar{
