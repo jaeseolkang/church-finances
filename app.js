@@ -1,4 +1,4 @@
-// v2.89 | 2026-06-28 01:25 KST | 수정: iOS 인쇄 백지 수정 - Blob 새탭, PC는 print-area 유지 | cache:v193
+// v2.90 | 2026-06-28 01:35 KST | 수정: iOS 인쇄 자동실행 제거, 수동 버튼으로 변경 | cache:v194
 'use strict';
 
 /* =========================================================
@@ -630,10 +630,19 @@ function _doPrintBlob(html) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>인쇄</title>
-    <style>${printCSS}</style>
+    <style>
+      ${printCSS}
+      #print-btn{
+        display:block;width:calc(100% - 32px);margin:16px auto;padding:14px;
+        background:#1d4ed8;color:#fff;font-size:16px;font-weight:800;
+        border:none;border-radius:12px;cursor:pointer;
+        font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
+      }
+      @media print{#print-btn{display:none!important;}}
+    </style>
   </head><body>
+    <button id="print-btn" onclick="window.print()">🖨️ 인쇄</button>
     ${html}
-    <script>window.onload=function(){window.print();}<\/script>
   </body></html>`;
 
   const blob = new Blob([fullHTML], {type:'text/html'});

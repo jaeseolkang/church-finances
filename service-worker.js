@@ -1,7 +1,7 @@
-// 2026-06-28 01:25 KST | 수정: CACHE_NAME v193 (iOS 인쇄 Blob 새탭)
+// 2026-06-28 01:35 KST | 수정: CACHE_NAME v194 (iOS 인쇄 수동버튼)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v193';
+const CACHE_NAME = 'gaegyebu-v194';
 const ASSETS = [
   './',
   './index.html',
