@@ -1,7 +1,7 @@
-// 2026-06-27 18:10 KST | 수정: CACHE_NAME v168 (인쇄 body zoom 균일 배율)
+// 2026-06-27 18:50 KST | 수정: CACHE_NAME v170 (모든 인쇄 새탭, print-area 제거)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v168';
+const CACHE_NAME = 'gaegyebu-v170';
 const ASSETS = [
   './',
   './index.html',

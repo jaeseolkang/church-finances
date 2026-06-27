@@ -1,4 +1,4 @@
-// v2.64 | 2026-06-27 18:10 KST | 수정: 인쇄 배율 body zoom 적용 (텍스트+박스+보더 전체 균일 축소) | cache:v168
+// v2.66 | 2026-06-27 18:50 KST | 수정: 모든 인쇄 새탭 통일, print-area 제거, printScaleSheet 제거 | cache:v170
 'use strict';
 
 /* =========================================================
@@ -570,201 +570,112 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  // 인쇄 비율 선택 시트를 먼저 띄우고, 선택 후 실제 인쇄 진행
-  _showPrintScaleSheet(html);
-}
-
-function _showPrintScaleSheet(html) {
-  const sheetId = 'printScaleSheet';
-  let sheet = document.getElementById(sheetId);
-  if (!sheet) {
-    sheet = document.createElement('div');
-    sheet.id = sheetId;
-    sheet.className = 'sheet';
-    sheet.style.cssText = 'z-index:3100;';
-    document.body.appendChild(sheet);
-  }
-
-  const presets = [60, 70, 75, 80, 85, 90, 95, 100];
-  const btnStyle = (v) => `
-    display:inline-flex;align-items:center;justify-content:center;
-    width:60px;height:44px;border-radius:10px;font-size:14px;font-weight:700;
-    cursor:pointer;border:1.5px solid var(--border);
-    background:var(--card);color:var(--text-1);margin:4px;transition:all .12s;
-  `;
-
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <button id="psClose" class="sheet-close-btn">${ICONS.close}닫기</button>
-      <h3>인쇄 비율 선택</h3>
-      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
-    </div>
-    <div class="sheet-body">
-      <div style="font-size:13px;color:var(--text-3);margin-bottom:14px;">
-        우측이 잘리는 경우 비율을 낮추세요.
-      </div>
-      <div style="display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:16px;" id="psPresets">
-        ${presets.map(v => `
-          <button class="ps-btn" data-val="${v}" style="${btnStyle(v)}${v===100?'border-color:var(--primary);background:var(--primary-light);color:var(--primary);':''}">${v}%</button>
-        `).join('')}
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:0 4px;">
-        <span style="font-size:13px;color:var(--text-2);white-space:nowrap;">직접 입력</span>
-        <input id="psCustom" type="number" min="40" max="120" value="100"
-          style="width:80px;padding:9px 12px;border-radius:10px;border:1.5px solid var(--border);
-                 font-size:15px;font-weight:700;text-align:center;background:var(--card);color:var(--text-1);">
-        <span style="font-size:13px;color:var(--text-2);">%</span>
-      </div>
-      <button id="psPrint" style="
-        width:100%;padding:15px 0;border-radius:14px;
-        background:var(--primary);color:#fff;
-        font-size:15px;font-weight:800;
-      ">🖨️ 인쇄하기</button>
-    </div>
-  `;
-
-  openSheet(sheetId);
-
-  let selectedVal = 100;
-
-  sheet.querySelectorAll('.ps-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      selectedVal = parseInt(btn.dataset.val);
-      sheet.querySelector('#psCustom').value = selectedVal;
-      sheet.querySelectorAll('.ps-btn').forEach(b => {
-        b.style.borderColor = 'var(--border)';
-        b.style.background  = 'var(--card)';
-        b.style.color       = 'var(--text-1)';
-      });
-      btn.style.borderColor = 'var(--primary)';
-      btn.style.background  = 'var(--primary-light)';
-      btn.style.color       = 'var(--primary)';
-    });
-  });
-
-  sheet.querySelector('#psCustom').addEventListener('input', function() {
-    selectedVal = parseInt(this.value) || 100;
-    sheet.querySelectorAll('.ps-btn').forEach(b => {
-      const match = parseInt(b.dataset.val) === selectedVal;
-      b.style.borderColor = match ? 'var(--primary)' : 'var(--border)';
-      b.style.background  = match ? 'var(--primary-light)' : 'var(--card)';
-      b.style.color       = match ? 'var(--primary)' : 'var(--text-1)';
-    });
-  });
-
-  sheet.querySelector('#psClose').addEventListener('click', () => closeSheet(sheetId));
-
-  sheet.querySelector('#psPrint').addEventListener('click', () => {
-    const v = parseInt(sheet.querySelector('#psCustom').value) || 100;
-    closeSheet(sheetId);
-    setTimeout(() => _executePrint(html, v), 250);
-  });
-}
-
-function _executePrint(html, scalePct) {
-  const scale = Math.min(Math.max(scalePct, 40), 120) / 100;
-
-  // 기본 CSS — 크기 값은 100% 기준 고정 (zoom으로 전체 축소)
-  const printCSS = `
-    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-    body{
-      margin:0;
-      font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
-      font-size:10pt;color:#000;background:#fff;
-    }
-    table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:0.5pt solid #555;}
-    th{
-      background:#1F4E79!important;color:#fff!important;
-      padding:3pt 4pt;border:0.5pt solid #3a6fa0!important;
-      font-size:8pt;font-weight:700;
-    }
-    td{padding:2pt 4pt;border:0.5pt solid #aaa!important;font-size:8pt;}
-    tr:nth-child(even) td{background:#f7f9fc!important;}
-    tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
-    .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
-    .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
-    .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
-    .print-summary-item{flex:1;min-width:80pt;}
-    .print-summary-label{font-size:8pt;color:#666;}
-    .print-summary-value{font-size:12pt;font-weight:800;}
-    .print-summary-value.income{color:#1F5C8B;}
-    .print-summary-value.expense{color:#B00;}
-    .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #ccc;font-size:9pt;}
-    .print-bar-label{flex:1;}
-    .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
-    .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
-    .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
-    @media print{
-      @page{size:A4 portrait;margin:15mm 18mm;}
-      body{zoom:${scale};}
-      .print-page{
-        page-break-after:always!important;break-after:page!important;
-        page-break-inside:avoid!important;
-      }
-      .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
-      table{page-break-inside:auto;border:0.5pt solid #555!important;}
-      tr{page-break-inside:avoid;}
-      th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}
-      td{border:0.5pt solid #aaa!important;}
-      tfoot td{background:#1F4E79!important;color:#fff!important;}
-      .no-print{display:none!important;}
-    }
-  `;
-
+  // 새 탭을 열고, 탭 안의 툴바에서 배율 조정 + 인쇄
   const printHTML = `<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>인쇄 (${scalePct}%)</title>
+    <title>인쇄</title>
     <style>
-      ${printCSS}
-      html{background:#f0f0f0;}
-      body{zoom:${scale};background:#f0f0f0;}
-      .print-page{
-        width:210mm;min-height:10mm;margin:8px auto;padding:10mm;
-        box-sizing:border-box;background:#fff;display:block;
-        box-shadow:0 2px 8px rgba(0,0,0,0.15);
-      }
-      .top-bar{
-        position:sticky;top:0;z-index:99;
+      /* ── 툴바 (zoom 바깥에 고정) ── */
+      #toolbar{
+        position:fixed;top:0;left:0;right:0;z-index:9999;
         display:flex;align-items:center;gap:12px;
-        padding:10px 16px;background:#1d4ed8;
-        /* zoom 적용된 body 안에 있으므로 역방향으로 키워서 항상 전체 폭 유지 */
-        width:${(100/scale).toFixed(4)}%;
-        margin-left:0;
-        box-sizing:border-box;
+        padding:10px 20px;background:#1d4ed8;
+        font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
       }
-      .btn-print{
-        flex:1;padding:12px 0;background:#fff;color:#1d4ed8;
-        font-size:${Math.round(15/scale)}px;font-weight:800;border:none;
-        border-radius:8px;cursor:pointer;
+      #toolbar button{
+        padding:9px 24px;background:#fff;color:#1d4ed8;
+        font-size:14px;font-weight:800;border:none;
+        border-radius:8px;cursor:pointer;white-space:nowrap;
       }
-      .scale-info{
-        color:#fff;font-size:${Math.round(13/scale)}px;font-weight:600;
-        white-space:nowrap;background:rgba(255,255,255,0.2);
-        padding:6px 12px;border-radius:6px;
+      #toolbar button:hover{background:#e0e7ff;}
+      #toolbar label{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;}
+      #scaleSlider{width:140px;accent-color:#fff;}
+      #scaleVal{
+        color:#fff;font-size:13px;font-weight:700;
+        min-width:36px;text-align:right;
       }
+      /* ── 콘텐츠 래퍼 ── */
+      #wrap{
+        margin-top:56px;   /* 툴바 높이만큼 밀기 */
+        background:#e5e7eb;
+        padding:20px 0;
+        min-height:calc(100vh - 56px);
+      }
+      /* ── 공통 인쇄 CSS ── */
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
+      .print-page{
+        width:210mm;margin:0 auto 12px;padding:12mm;
+        background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);
+      }
+      body{font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;}
+      table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:0.5pt solid #555;}
+      th{background:#1F4E79!important;color:#fff!important;padding:3pt 4pt;border:0.5pt solid #3a6fa0!important;font-size:8pt;font-weight:700;}
+      td{padding:2pt 4pt;border:0.5pt solid #aaa!important;font-size:8pt;}
+      tr:nth-child(even) td{background:#f7f9fc!important;}
+      tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
+      .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
+      .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
+      .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
+      .print-summary-item{flex:1;min-width:80pt;}
+      .print-summary-label{font-size:8pt;color:#666;}
+      .print-summary-value{font-size:12pt;font-weight:800;}
+      .print-summary-value.income{color:#1F5C8B;}
+      .print-summary-value.expense{color:#B00;}
+      .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #ccc;font-size:9pt;}
+      .print-bar-label{flex:1;}
+      .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
+      .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
+      .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
+      /* ── 인쇄 미디어 ── */
       @media print{
-        html{background:#fff;}
-        .top-bar{display:none!important;}
-        .print-page{
-          width:100%!important;margin:0!important;padding:0!important;
-          box-shadow:none!important;
-        }
+        #toolbar{display:none!important;}
+        #wrap{margin-top:0!important;padding:0!important;background:#fff!important;}
+        .print-page{width:100%!important;margin:0!important;padding:0!important;box-shadow:none!important;}
+        @page{size:A4 portrait;margin:15mm 18mm;}
+        table{page-break-inside:auto;}
+        tr{page-break-inside:avoid;}
+        th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}
+        td{border:0.5pt solid #aaa!important;}
+        tfoot td{background:#1F4E79!important;color:#fff!important;}
+        .print-page{page-break-after:always;break-after:page;}
+        .print-page:last-child{page-break-after:avoid;break-after:avoid;}
       }
     </style>
   </head><body>
-    <div class="top-bar">
-      <button class="btn-print" onclick="window.print()">🖨️ 인쇄</button>
-      <span class="scale-info">배율 ${scalePct}%</span>
+    <div id="toolbar">
+      <button onclick="window.print()">🖨️ 인쇄</button>
+      <label for="scaleSlider">배율</label>
+      <input id="scaleSlider" type="range" min="50" max="110" value="100" step="5"
+             oninput="applyScale(this.value)">
+      <span id="scaleVal">100%</span>
     </div>
-    ${html}
+    <div id="wrap">
+      ${html}
+    </div>
+    <script>
+      function applyScale(v) {
+        document.getElementById('scaleVal').textContent = v + '%';
+        document.getElementById('wrap').style.zoom = (v / 100);
+      }
+      // 인쇄 전에 wrap의 zoom을 @media print body에 반영
+      window.addEventListener('beforeprint', function() {
+        var z = document.getElementById('wrap').style.zoom || 1;
+        var s = document.createElement('style');
+        s.id = '__pz__';
+        s.textContent = '@media print { #wrap { zoom:' + z + ' !important; } }';
+        document.head.appendChild(s);
+      });
+      window.addEventListener('afterprint', function() {
+        var s = document.getElementById('__pz__');
+        if (s) s.remove();
+      });
+    </script>
   </body></html>`;
 
   const blob = new Blob([printHTML], {type:'text/html'});
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  setTimeout(() => URL.revokeObjectURL(url), 300000);
 }
 
 /* =========================================================
@@ -2795,7 +2706,6 @@ function openLedgerSheet() {
     const appName = State.appName || '교회 회계부';
     // thead repeat을 위해 table을 print-page div 없이 직접 출력
     // @media print에서 thead가 매 페이지 반복됨
-    const area = document.getElementById('print-area');
     const approvalBox = `
       <div style="page-break-inside:avoid;break-inside:avoid;display:flex;justify-content:flex-end;margin-top:8pt;">
         <table style="border-collapse:collapse;font-size:8pt;">
@@ -3360,8 +3270,6 @@ function printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, sh
       </table>
     </div>`;
 
-  const area = document.getElementById('print-area');
-  area.innerHTML = html;
   doPrint(html);
 }
 

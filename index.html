@@ -903,99 +903,13 @@ input,textarea,select{font-family:inherit; color:inherit;}
 }
 .form-input:focus{border-color:var(--primary);}
 
-/* ===== 인쇄 스타일 (A4) ===== */
-@media print {
-  @page { size: A4 portrait; margin: 15mm 12mm; }
-
-  body { position: static !important; background: #fff !important; overflow: visible !important; height: auto !important; }
-
-  /* 앱 UI 전체 숨김, print-area만 표시 */
-  body > * { display: none !important; }
-  body > #print-area { display: block !important; }
-
-  #print-area {
-    display: block !important;
-    width: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-    font-size: 11pt;
-    color: #000;
-  }
-
-  .print-title { font-size: 15pt; font-weight: 800; margin-bottom: 6pt; }
-  .print-period { font-size: 10pt; color: #555; margin-bottom: 10pt; }
-  .print-summary { display: flex; gap: 20pt; margin-bottom: 12pt; border-bottom: 1.5pt solid #000; padding-bottom: 8pt; }
-  .print-summary-item { flex: 1; }
-  .print-summary-label { font-size: 9pt; color: #666; }
-  .print-summary-value { font-size: 13pt; font-weight: 800; }
-  .print-summary-value.income { color: #1F5C8B; }
-  .print-summary-value.expense { color: #B00; }
-
-  table { border-collapse: collapse; width: 100%; font-size: 8pt; table-layout: fixed; border: 1pt solid #555 !important; }
-  table th { background: #1F4E79 !important; color: #fff !important; padding: 3pt 4pt; text-align: right; border: 0.5pt solid #3a6fa0 !important; font-size: 8pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; white-space: nowrap; overflow: hidden; }
-  table th.left { text-align: left; }
-  table td { padding: 2pt 4pt; border: 0.7pt solid #888 !important; text-align: right; font-size: 8pt; overflow: hidden; }
-  table td.left { text-align: left; font-weight: 600; }
-  table tr:nth-child(even) td { background: #f7f9fc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  table tfoot td { background: #1F4E79 !important; color: #fff !important; font-weight: 800 !important; border: 0.5pt solid #3a6fa0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  .print-bar-row { display: flex; justify-content: space-between; padding: 5pt 2pt; border-bottom: 0.5pt solid #eee; font-size: 10pt; }
-  .print-bar-label { flex: 1; }
-  .print-bar-amt { font-weight: 700; min-width: 80pt; text-align: right; }
-  .print-bar-pct { min-width: 36pt; text-align: right; color: #555; }
-
-  .print-detail-row { display: flex; justify-content: space-between; padding: 4pt 2pt; border-bottom: 0.5pt solid #eee; font-size: 10pt; }
-  .print-detail-label { flex: 1; }
-  .print-detail-count { min-width: 36pt; text-align: right; color: #555; }
-  .print-detail-amt { min-width: 80pt; text-align: right; font-weight: 700; }
-  .print-total-row { display: flex; justify-content: space-between; padding: 6pt 2pt; font-weight: 800; font-size: 11pt; border-top: 1.5pt solid #000; margin-top: 2pt; }
-
-  .print-no-print { display: none !important; }
-
-  /* 월장부 메인 테이블 — thead 매 페이지 반복 */
-  #print-area > table { width: 100% !important; font-size: 7.5pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
-  #print-area > table thead { display: table-header-group; }
-  #print-area > table tfoot { display: table-footer-group; }
-  #print-area > table th { padding: 2pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; background: #DCE6F1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #print-area > table td { padding: 1.5pt 3pt !important; font-size: 7.5pt !important; overflow: hidden; }
-  /* 페이지 나눔 방지 */
-  #print-area .print-page { page-break-inside: avoid; break-inside: avoid; }
-  /* 결재란 테이블 전용 — .approval-table 클래스로 한정 */
-  #print-area .approval-table { width: 150pt !important; font-size: 8pt !important; table-layout: fixed !important; }
-  #print-area .approval-table th { background: none !important; font-size: 8pt !important; padding: 2pt 0 !important; width: 50pt !important; }
-  #print-area .approval-table td { font-size: 8pt !important; padding: 0 !important; height: 28pt !important; width: 50pt !important; }
-  /* 지출현황/항목구조 등 일반 div 내 테이블 */
-  #print-area div table { width: 100% !important; font-size: 8pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
-
-  /* 페이지 구분 */
-  .print-page {
-    page-break-after: always !important;
-    break-after: page !important;
-    page-break-inside: avoid !important;
-    display: block !important;
-  }
-  .print-page:last-child {
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-  }
-  table { page-break-inside: auto !important; }
-  tr { page-break-inside: avoid !important; }
-  .print-section-title {
-    font-size: 12pt;
-    font-weight: 800;
-    margin-bottom: 6pt;
-    border-bottom: 1pt solid #000;
-    padding-bottom: 4pt;
-    margin-top: 4pt;
-  }
-}
+/* ===== 인쇄 스타일: 새 탭 방식으로 전환 — 앱 자체에는 @media print 불필요 ===== */
 </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="print-area" style="display:none;"></div>
 <div id="itemStructureSheet" class="sheet" style="z-index:110; max-height:92vh;"></div>
 <div id="ledgerSheet" class="sheet" style="z-index:111; max-height:92vh;"></div>
-<div id="printScaleSheet" class="sheet" style="z-index:3100; max-height:60vh;"></div>
 <script src="xlsx-js-style.min.js"></script>
 <script src="app.js"></script>
 <script>
