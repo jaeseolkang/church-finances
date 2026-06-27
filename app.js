@@ -631,7 +631,7 @@ function _doPrintBlob(html) {
   const printCSS = `
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
     html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;background:#fff;}
-    table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}
+    table{border-collapse:collapse;width:100%;font-size:7.5pt;}
     th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
     td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;min-width:0;}
     tbody tr:nth-child(even) td{background:#f7f9fc!important;}
@@ -650,6 +650,10 @@ function _doPrintBlob(html) {
     .print-bar-pct{min-width:26pt;text-align:right;color:#555;}
     .print-section-title{font-size:11pt;font-weight:800;margin-bottom:5pt;margin-top:7pt;}
     .page-inner{margin:0;padding:0;}
+    #pivot-tbl{table-layout:fixed!important;width:100%!important;}
+    #pivot-tbl th{font-size:6pt!important;padding:2pt 1pt!important;text-align:center!important;overflow:hidden!important;word-break:break-all!important;}
+    #pivot-tbl td{font-size:6.5pt!important;padding:2pt 1pt!important;overflow:hidden!important;word-break:break-all!important;}
+    #pivot-tbl col{width:var(--cw)!important;}
     @media print{
       @page{size:A4 portrait;margin:15mm 25mm;}
       .print-page{
@@ -1975,7 +1979,7 @@ function printStats() {
         pivotHTML = `
           <div style="margin-top:6pt;">
             <div style="font-size:10pt;font-weight:800;margin-bottom:4pt;border-bottom:0.5pt solid #000;padding-bottom:2pt;">🙏 헌금 개인별 명세</div>
-            <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.5pt;">
+            <table id="pivot-tbl" style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.5pt;">
               ${colgroup}
               <thead><tr>
                 <th style="${TH_S}text-align:left;">이름</th>
