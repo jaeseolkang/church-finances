@@ -2870,36 +2870,10 @@ function openLedgerSheet() {
     const appName = State.appName || '교회 회계부';
     // thead repeat을 위해 table을 print-page div 없이 직접 출력
     // @media print에서 thead가 매 페이지 반복됨
-    const BO = '2.5pt solid #000';
+    const approvalSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCAyNDAgODAiPgogIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIzMCIgaGVpZ2h0PSI4MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIzMCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjE3MCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjMwIiB5PSIxNiIgd2lkdGg9IjcwIiBoZWlnaHQ9IjY0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjEwMCIgeT0iMTYiIHdpZHRoPSI3MCIgaGVpZ2h0PSI2NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIxNzAiIHk9IjE2IiB3aWR0aD0iNzAiIGhlaWdodD0iNjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHRleHQgeD0iMTUiIHk9IjQ0IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgd3JpdGluZy1tb2RlPSJ0YiI+6rKw7J6sPC90ZXh0PgogIDx0ZXh0IHg9IjY1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7ri7Tri7k8L3RleHQ+CiAgPHRleHQgeD0iMTM1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7rtoDsnqU8L3RleHQ+CiAgPHRleHQgeD0iMjA1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7ri7TsnoTrqqnsgqw8L3RleHQ+Cjwvc3ZnPg==';
     const approvalBox = `
-      <div style="page-break-inside:avoid;break-inside:avoid;margin-top:4pt;">
-        <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
-          <colgroup>
-            <col style="width:9%"><col style="width:13%"><col style="width:13%">
-            <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
-          </colgroup>
-          <tbody>
-            <tr>
-              <td colspan="3" style="border:none;padding:0;"></td>
-              <td rowspan="6" style="border-top:${BO};border-bottom:${BO};border-left:${BO};border-right:${BO};padding:0;text-align:center;font-weight:700;font-size:7pt;vertical-align:middle;">
-                <span style="writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:3pt;font-size:7pt;font-weight:700;">결재</span>
-              </td>
-              <td style="border-top:${BO};border-left:${BO};border-right:${BO};border-bottom:${BO};padding:2pt;text-align:center;font-weight:700;font-size:7pt;">담당</td>
-              <td style="border-top:${BO};border-left:${BO};border-right:${BO};border-bottom:${BO};padding:2pt;text-align:center;font-weight:700;font-size:7pt;">부장</td>
-              <td style="border-top:${BO};border-left:${BO};border-right:${BO};border-bottom:${BO};padding:2pt;text-align:center;font-weight:700;font-size:7pt;">담임목사</td>
-            </tr>
-            <tr>
-              <td colspan="3" style="border:none;padding:0;"></td>
-              <td rowspan="5" style="border-top:none;border-bottom:${BO};border-left:${BO};border-right:${BO};height:50pt;"></td>
-              <td rowspan="5" style="border-top:none;border-bottom:${BO};border-left:${BO};border-right:${BO};height:50pt;"></td>
-              <td rowspan="5" style="border-top:none;border-bottom:${BO};border-left:${BO};border-right:${BO};height:50pt;"></td>
-            </tr>
-            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
-            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
-            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
-            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
-          </tbody>
-        </table>
+      <div style="page-break-inside:avoid;break-inside:avoid;margin-top:6pt;display:flex;justify-content:flex-end;">
+        <img src="${approvalSvg}" style="width:65%;height:auto;" alt="결재란">
       </div>`;
     // 인쇄용: 행을 30개씩 나눠 페이지마다 헤더 포함한 테이블 생성
     const { dataRows: dRows, summaryRows: sRows, TH: TH2 } = currentLedger;
