@@ -1,4 +1,4 @@
-// v2.79 | 2026-06-27 23:10 KST | 수정: 통계 지출 인쇄 page1+page2 모두 출력 복원 | cache:v183
+// v2.80 | 2026-06-27 23:20 KST | 수정: 통계 탭 차트+지출현황 한 화면에 표시, 인쇄 2페이지 | cache:v184
 'use strict';
 
 /* =========================================================
@@ -2181,14 +2181,8 @@ function renderStats() {
     </div>
 
     ${State.statsView === 'stats'
-      ? `<div class="stats-page-tabs">
-           <button class="stats-page-tab ${(State.statsPage||'chart')==='chart'?'active':''}" data-page="chart">📊 차트</button>
-           <button class="stats-page-tab ${(State.statsPage||'chart')==='table'?'active':''}" data-page="table">📋 ${isIncome?'헌금명세':'지출현황'}</button>
-         </div>
-         ${(State.statsPage||'chart')==='chart'
-           ? renderStatsTabBars(statRows, statTotal, isIncome)
-           : (isIncome ? '' : renderExpenseTableA4(list, range))
-         }`
+      ? `${renderStatsTabBars(statRows, statTotal, isIncome)}
+         ${!isIncome ? `<div style="margin-top:6px;">${renderExpenseTableA4(list, range)}</div>` : ''}`
       : renderStatsTabDetail(detailTx, isIncome)
     }
   `;
@@ -2199,10 +2193,6 @@ function renderStats() {
     else exportExpenseToExcel();
   });
   page.querySelector('#statsPrint').addEventListener('click', () => printStats());
-
-  page.querySelectorAll('.stats-page-tab').forEach(b => {
-    b.addEventListener('click', () => { State.statsPage = b.dataset.page; renderStats(); });
-  });
 
   page.querySelectorAll('.segctrl')[0].querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => { State.statsView = b.dataset.view; renderStats(); });
