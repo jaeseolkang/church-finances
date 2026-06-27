@@ -1964,41 +1964,34 @@ function printStats() {
       if (rows.length > 0) {
         const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
         const grandTotal = colTotals.reduce((s,v)=>s+v,0);
-        // 열 너비: 이름 고정(14%), 합계 고정(11%), 나머지를 헌금종류로 균등 분배 (합계 정확히 100%)
-        const colCount = orderedCols.length + 2;
-        const namePct = 14, sumPct = 11;
-        const midTotal = 100 - namePct - sumPct; // 75%
-        const midPct = Math.floor(midTotal / orderedCols.length);
-        const midRem = midTotal - midPct * orderedCols.length; // 나머지 1~몇% → 첫 열에 합산
-        const colgroup = `<colgroup>
-          <col style="width:${namePct}%">
-          ${orderedCols.map((_,i)=>`<col style="width:${midPct + (i===0?midRem:0)}%">`).join('')}
-          <col style="width:${sumPct}%">
-        </colgroup>`;
+        // 셀 스타일
+        const TH_S = 'padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;font-size:7pt;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+        const TD_N = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;white-space:nowrap;';
+        const TD_SUM = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;font-weight:700;white-space:nowrap;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+        const FT_S = 'padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7pt;font-weight:700;text-align:right;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         pivotHTML = `
-          <div style="margin-top:6pt;">
+          <div style="margin-top:6pt;overflow-x:auto;">
             <div style="font-size:10pt;font-weight:800;margin-bottom:4pt;border-bottom:0.5pt solid #000;padding-bottom:2pt;">🙏 헌금 개인별 명세</div>
-            <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
-              ${colgroup}
+            <table style="border-collapse:collapse;width:100%;table-layout:auto;font-size:7pt;">
               <thead><tr>
-                <th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact;">이름</th>
-                ${orderedCols.map(c=>`<th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(c)}</th>`).join('')}
-                <th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합계</th>
+                <th style="${TH_S}text-align:left;min-width:40pt;">이름</th>
+                ${orderedCols.map(c=>`<th style="${TH_S}text-align:right;min-width:50pt;">${escapeHTML(c)}</th>`).join('')}
+                <th style="${TH_S}text-align:right;min-width:55pt;">합계</th>
               </tr></thead>
               <tbody>
                 ${rows.map(name => {
                   const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
                   return `<tr>
-                    <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;">${escapeHTML(name)}</td>
-                    ${orderedCols.map(c=>`<td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;white-space:nowrap;">${pivot[name][c]?pivot[name][c].toLocaleString('ko-KR'):''}</td>`).join('')}
-                    <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;white-space:nowrap;">${rowTotal.toLocaleString('ko-KR')}</td>
+                    <td style="padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;font-weight:700;white-space:nowrap;">${escapeHTML(name)}</td>
+                    ${orderedCols.map(c=>`<td style="${TD_N}">${pivot[name][c]?pivot[name][c].toLocaleString('ko-KR'):''}</td>`).join('')}
+                    <td style="${TD_SUM}">${rowTotal.toLocaleString('ko-KR')}</td>
                   </tr>`;
                 }).join('')}
               </tbody>
               <tfoot><tr>
-                <td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합계</td>
-                ${colTotals.map(v=>`<td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${v?v.toLocaleString('ko-KR'):''}</td>`).join('')}
-                <td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
+                <td style="${FT_S}text-align:left;">합계</td>
+                ${colTotals.map(v=>`<td style="${FT_S}">${v?v.toLocaleString('ko-KR'):''}</td>`).join('')}
+                <td style="${FT_S}">${grandTotal.toLocaleString('ko-KR')}</td>
               </tr></tfoot>
             </table>
           </div>`;
