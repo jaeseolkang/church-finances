@@ -1,4 +1,4 @@
-// v2.84 | 2026-06-28 00:10 KST | 수정: 계정 탭 테이블 모바일 가로스크롤, nowrap, min-width | cache:v188
+// v2.85 | 2026-06-28 00:30 KST | 수정: 계정 탭 인쇄 버튼 + printAccounts() 함수 | cache:v189
 'use strict';
 
 /* =========================================================
@@ -2352,6 +2352,103 @@ function renderExpenseTableA4(list, range) {
     </div>`;
 }
 
+function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet,
+  totalCarry, totalIncome, totalExpense, totalNet, summaryTitle,
+  normalCarry, normalIncome, normalExpense,
+  depositCarry, depositIncome, depositExpense, nonDefaultAccts}) {
+
+  const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
+  const shortName = name => name.replace(/계정$/, '');
+  const today = new Date().toISOString().slice(0,10);
+
+  // 테이블 행 생성 함수
+  const makeRows = (acctList, isDeposit) => {
+    if (!acctList.length) return `<tr><td colspan="${isDeposit?6:5}" style="text-align:center;padding:12pt;color:#888;">등록된 계좌가 없습니다</td></tr>`;
+    return acctList.map(a => {
+      const t = totals[a.name] || {income:0, expense:0};
+      const carry = a.carryover || 0;
+      const net = carry + t.income - t.expense;
+      const netColor = net >= 0 ? '#1F497D' : '#CC0000';
+      let matTd = '';
+      if (isDeposit) {
+        const md = a.maturityDate || '';
+        const matLabel = md ? md.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1.$2.$3') : '-';
+        const matColor = md ? (md < today ? '#CC0000' : '#1F497D') : '#888';
+        matTd = `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:center;color:${matColor};">${matLabel}</td>`;
+      }
+      return `<tr>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:600;">${escapeHTML(shortName(a.name))}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${fmt(carry)}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#1F497D;">${fmt(t.income)}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#CC0000;">${fmt(t.expense)}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${netColor};">${net.toLocaleString('ko-KR')}</td>
+        ${matTd}
+      </tr>`;
+    }).join('');
+  };
+
+  const thStyle = 'padding:2.5pt 4pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-size:7.5pt;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const ftStyle = 'padding:2.5pt 4pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+
+  const normalAccts  = nonDefaultAccts.filter(a => !a.accountKind || a.accountKind === 'normal');
+  const depositAccts = nonDefaultAccts.filter(a => a.accountKind === 'deposit');
+
+  const makeTable = (acctList, isDeposit) => `
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
+      <colgroup>
+        <col style="width:18%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:${isDeposit?'16%':'34%'}">
+        ${isDeposit ? '<col style="width:18%">' : ''}
+      </colgroup>
+      <thead><tr>
+        <th style="${thStyle}text-align:left;">계좌이름</th>
+        <th style="${thStyle}text-align:right;">이월금</th>
+        <th style="${thStyle}text-align:right;">수입금</th>
+        <th style="${thStyle}text-align:right;">지출금</th>
+        <th style="${thStyle}text-align:right;">합계</th>
+        ${isDeposit ? `<th style="${thStyle}text-align:center;">만기일</th>` : ''}
+      </tr></thead>
+      <tbody>${makeRows(acctList, isDeposit)}</tbody>
+    </table>`;
+
+  const html = `
+    <div class="print-page" style="display:block;">
+      <div class="page-inner">
+        <div class="print-title">🏦 계정 현황</div>
+        <div class="print-period">${new Date().toLocaleDateString('ko-KR')}</div>
+
+        <!-- 자산합계 -->
+        <div style="display:flex;gap:16pt;margin-bottom:10pt;border:1pt solid #1F4E79;border-radius:6pt;padding:8pt 10pt;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="flex:1;">
+            <div style="font-size:8pt;color:#555;">자산합계</div>
+            <div style="font-size:14pt;font-weight:900;color:${grandNetColor};">${grandNet.toLocaleString('ko-KR')}원</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:7.5pt;color:#555;">재정</div>
+            <div style="font-size:10pt;font-weight:700;">${mainNet.toLocaleString('ko-KR')}원</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:7.5pt;color:#555;">일반계정</div>
+            <div style="font-size:10pt;font-weight:700;">${normalNet.toLocaleString('ko-KR')}원</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:7.5pt;color:#555;">정기예금</div>
+            <div style="font-size:10pt;font-weight:700;">${depositNet.toLocaleString('ko-KR')}원</div>
+          </div>
+        </div>
+
+        <!-- 일반계정 -->
+        <div class="print-section-title">일반계정 합계 · ${normalNet.toLocaleString('ko-KR')}원</div>
+        ${makeTable(normalAccts, false)}
+
+        <!-- 정기예금 -->
+        <div class="print-section-title" style="margin-top:10pt;">정기예금 합계 · ${depositNet.toLocaleString('ko-KR')}원</div>
+        ${makeTable(depositAccts, true)}
+      </div>
+    </div>`;
+
+  doPrint(html);
+}
+
 function renderStatsTabBars(rows, total, isIncome) {
   if (rows.length === 0) {
     return `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', `선택한 기간의 ${isIncome?'수입':'지출'} 내역이 없습니다`)}</div>`;
@@ -2938,6 +3035,7 @@ async function renderAccounts() {
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>계정</h1>
+      <button id="acctPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
     </div>
 
     <!-- 자산합계 카드 -->
@@ -3001,6 +3099,14 @@ async function renderAccounts() {
       renderAccounts();
     });
   });
+
+  page.querySelector('#acctPrint').addEventListener('click', () => printAccounts({
+    sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet,
+    totalCarry, totalIncome, totalExpense, totalNet, summaryTitle,
+    normalCarry, normalIncome, normalExpense,
+    depositCarry, depositIncome, depositExpense,
+    nonDefaultAccts
+  }));
 
   // 정기예금 탭: 헤더 클릭 정렬
   if (sub === 'deposit') {

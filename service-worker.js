@@ -1,7 +1,7 @@
-// 2026-06-28 00:10 KST | 수정: CACHE_NAME v188 (계정탭 모바일 가로스크롤)
+// 2026-06-28 00:30 KST | 수정: CACHE_NAME v189 (계정탭 인쇄)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v188';
+const CACHE_NAME = 'gaegyebu-v189';
 const ASSETS = [
   './',
   './index.html',
