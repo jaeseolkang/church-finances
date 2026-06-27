@@ -1,7 +1,7 @@
-// 2026-06-28 00:30 KST | 수정: CACHE_NAME v189 (계정탭 인쇄)
+// 2026-06-28 00:45 KST | 수정: CACHE_NAME v190 (계정 인쇄 합계행)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v189';
+const CACHE_NAME = 'gaegyebu-v190';
 const ASSETS = [
   './',
   './index.html',

@@ -1,4 +1,4 @@
-// v2.85 | 2026-06-28 00:30 KST | 수정: 계정 탭 인쇄 버튼 + printAccounts() 함수 | cache:v189
+// v2.86 | 2026-06-28 00:45 KST | 수정: 계정 인쇄 합계행 추가 | cache:v190
 'use strict';
 
 /* =========================================================
@@ -2393,7 +2393,13 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
   const normalAccts  = nonDefaultAccts.filter(a => !a.accountKind || a.accountKind === 'normal');
   const depositAccts = nonDefaultAccts.filter(a => a.accountKind === 'deposit');
 
-  const makeTable = (acctList, isDeposit) => `
+  const makeTable = (acctList, isDeposit) => {
+    const carry = acctList.reduce((s,a)=>s+(a.carryover||0),0);
+    const inc   = acctList.reduce((s,a)=>s+(totals[a.name]?.income||0),0);
+    const exp   = acctList.reduce((s,a)=>s+(totals[a.name]?.expense||0),0);
+    const net   = carry + inc - exp;
+    const cols  = isDeposit ? 6 : 5;
+    return `
     <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
       <colgroup>
         <col style="width:18%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:${isDeposit?'16%':'34%'}">
@@ -2408,7 +2414,16 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         ${isDeposit ? `<th style="${thStyle}text-align:center;">만기일</th>` : ''}
       </tr></thead>
       <tbody>${makeRows(acctList, isDeposit)}</tbody>
+      <tfoot><tr>
+        <td style="${ftStyle}text-align:center;">합 계</td>
+        <td style="${ftStyle}text-align:right;">${carry.toLocaleString('ko-KR')}</td>
+        <td style="${ftStyle}text-align:right;">${inc.toLocaleString('ko-KR')}</td>
+        <td style="${ftStyle}text-align:right;">${exp.toLocaleString('ko-KR')}</td>
+        <td style="${ftStyle}text-align:right;">${net.toLocaleString('ko-KR')}</td>
+        ${isDeposit ? `<td style="${ftStyle}"></td>` : ''}
+      </tr></tfoot>
     </table>`;
+  };
 
   const html = `
     <div class="print-page" style="display:block;">
