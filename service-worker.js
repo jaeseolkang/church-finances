@@ -1,7 +1,7 @@
-// 2026-06-27 15:30 KST | 수정: CACHE_NAME v162 (자산합계 카드)
+// 2026-06-27 15:50 KST | 수정: CACHE_NAME v163 (정기예금 만기일)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v162';
+const CACHE_NAME = 'gaegyebu-v163';
 const ASSETS = [
   './',
   './index.html',
