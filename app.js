@@ -3696,10 +3696,17 @@ function renderSettings() {
       </div>
       <div class="settings-row" id="rowImport">
         <div>
-          <div class="settings-label">데이터 가져오기</div>
-          <div class="settings-sub">백업 파일에서 복원</div>
+          <div class="settings-label">데이터 가져오기 (파일)</div>
+          <div class="settings-sub">백업 JSON 파일에서 복원</div>
         </div>
         ${ICONS.upload}
+      </div>
+      <div class="settings-row" id="rowImportText">
+        <div>
+          <div class="settings-label">데이터 가져오기 (텍스트)</div>
+          <div class="settings-sub">메일 본문의 JSON을 붙여넣어 복원</div>
+        </div>
+        <span style="font-size:18px;">📋</span>
       </div>
       <input type="file" id="importFile" accept="application/json" style="display:none;">
     </div>
@@ -3773,6 +3780,7 @@ function renderSettings() {
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
+  page.querySelector('#rowImportText').addEventListener('click', importDataFromText);
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
     if ('serviceWorker' in navigator) {
@@ -4920,6 +4928,78 @@ async function exportData(startYm, endYm) {
   a.remove();
   URL.revokeObjectURL(url);
   showToast(`${txs.length}건 백업 완료`);
+}
+
+async function importDataFromText() {
+  // 텍스트 입력 시트 표시
+  const sheet = document.createElement('div');
+  sheet.className = 'bottom-sheet active';
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>📋 텍스트로 복원</h3>
+      <button id="importTextClose" class="sheet-close-btn">${ICONS.close}</button>
+    </div>
+    <div class="sheet-body" style="padding:12px 16px 24px;">
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:8px;line-height:1.6;">
+        메일 본문에서 <b>===== JSON START =====</b> 부터<br>
+        <b>===== JSON END =====</b> 까지 전체를 복사해서 붙여넣으세요.
+      </div>
+      <textarea id="importTextArea" style="width:100%;height:180px;font-size:11px;padding:10px;border:1px solid var(--border);border-radius:10px;resize:none;font-family:monospace;" placeholder="여기에 붙여넣기..."></textarea>
+      <button id="importTextBtn" class="btn-primary" style="margin-top:10px;">복원하기</button>
+    </div>`;
+  document.body.appendChild(sheet);
+
+  sheet.querySelector('#importTextClose').addEventListener('click', () => sheet.remove());
+
+  sheet.querySelector('#importTextBtn').addEventListener('click', async () => {
+    let raw = sheet.querySelector('#importTextArea').value.trim();
+
+    // ===== JSON START ===== ~ ===== JSON END ===== 사이 추출
+    const startTag = '===== JSON START =====';
+    const endTag   = '===== JSON END =====';
+    const si = raw.indexOf(startTag);
+    const ei = raw.indexOf(endTag);
+    if (si !== -1 && ei !== -1 && ei > si) {
+      raw = raw.slice(si + startTag.length, ei).trim();
+    }
+
+    try {
+      const data = JSON.parse(raw);
+      if (!data.categories || !data.transactions) throw new Error('invalid');
+      const ok = confirm(
+        `${data.categories.length}개 항목, ${data.transactions.length}개 거래가 있는 백업입니다.\n\n기존 데이터를 모두 지우고 복원할까요?`
+      );
+      if (!ok) return;
+      sheet.remove();
+      // importData와 동일한 복원 로직 재사용
+      await restoreFromData(data);
+    } catch (e) {
+      showToast('JSON 형식이 올바르지 않아요. 전체를 다시 복사해주세요.');
+    }
+  });
+}
+
+async function restoreFromData(data) {
+  const [oldCats, oldPersons, oldSubs, oldTxs, oldSubGroups, oldLinkedAccounts] = await Promise.all([
+    DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'),
+    DB.getAll('transactions'), DB.getAll('subGroups'), DB.getAll('linkedAccounts')
+  ]);
+  for (const x of oldTxs) await DB.del('transactions', x.id);
+  for (const x of oldSubs) await DB.del('subItems', x.id);
+  for (const x of oldPersons) await DB.del('persons', x.id);
+  for (const x of oldCats) await DB.del('categories', x.id);
+  for (const x of oldSubGroups) await DB.del('subGroups', x.id);
+  for (const x of oldLinkedAccounts) await DB.del('linkedAccounts', x.id);
+  for (const c of (data.categories||[])) await DB.put('categories', c);
+  for (const p of (data.persons||[])) await DB.put('persons', p);
+  for (const s of (data.subItems||[])) await DB.put('subItems', s);
+  for (const g of (data.subGroups||[])) await DB.put('subGroups', g);
+  for (const a of (data.linkedAccounts||[])) await DB.put('linkedAccounts', a);
+  for (const t of (data.transactions||[])) await DB.put('transactions', t);
+  await reloadData();
+  renderCurrentPage();
+  showToast(`✅ 복원 완료 — 거래 ${(data.transactions||[]).length}건`);
 }
 
 function importData(e) {
