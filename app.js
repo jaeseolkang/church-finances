@@ -2805,20 +2805,20 @@ function openLedgerSheet() {
 
     const approvalBoxScreen = `
       <div style="display:flex;justify-content:flex-end;margin-top:16px;margin-bottom:8px;">
-        <table style="border-collapse:collapse;font-size:11px;">
+        <table style="border-collapse:collapse;font-size:13px;">
           <tbody>
             <tr>
-              <td rowspan="2" style="border:1px solid #888;padding:0;text-align:center;font-weight:700;width:28px;vertical-align:middle;background:#f8f9fa;">
-                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:11px;font-weight:700;letter-spacing:4px;padding:6px 3px;">결재</div>
+              <td rowspan="2" style="border:1px solid #555;padding:0;text-align:center;font-weight:700;width:37px;vertical-align:middle;background:var(--surface-1,#f8f9fa);">
+                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:14px;font-weight:700;letter-spacing:5px;padding:8px 4px;color:inherit;">결재</div>
               </td>
-              <td style="border:1px solid #888;padding:3px 0;text-align:center;font-weight:700;width:64px;background:#f8f9fa;">담 당</td>
-              <td style="border:1px solid #888;padding:3px 0;text-align:center;font-weight:700;width:64px;background:#f8f9fa;">부 장</td>
-              <td style="border:1px solid #888;padding:3px 0;text-align:center;font-weight:700;width:64px;background:#f8f9fa;">담임목사</td>
+              <td style="border:1px solid #555;padding:5px 0;text-align:center;font-weight:700;width:113px;background:var(--surface-1,#f8f9fa);">담 당</td>
+              <td style="border:1px solid #555;padding:5px 0;text-align:center;font-weight:700;width:113px;background:var(--surface-1,#f8f9fa);">부 장</td>
+              <td style="border:1px solid #555;padding:5px 0;text-align:center;font-weight:700;width:113px;background:var(--surface-1,#f8f9fa);">담임목사</td>
             </tr>
             <tr>
-              <td style="border:1px solid #888;height:44px;width:64px;"></td>
-              <td style="border:1px solid #888;height:44px;width:64px;"></td>
-              <td style="border:1px solid #888;height:44px;width:64px;"></td>
+              <td style="border:1px solid #555;height:83px;width:113px;"></td>
+              <td style="border:1px solid #555;height:83px;width:113px;"></td>
+              <td style="border:1px solid #555;height:83px;width:113px;"></td>
             </tr>
           </tbody>
         </table>
@@ -2866,22 +2866,20 @@ function openLedgerSheet() {
     // @media print에서 thead가 매 페이지 반복됨
     const approvalBox = `
       <div style="page-break-inside:avoid;break-inside:avoid;display:flex;justify-content:flex-end;margin-top:8pt;">
-        <table style="border-collapse:collapse;font-size:8pt;">
-          <thead>
-            <tr>
-              <th rowspan="2" style="border:0.5pt solid #000;padding:0;text-align:center;font-weight:700;width:18pt;vertical-align:middle;">
-                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:8pt;font-weight:700;letter-spacing:3pt;padding:4pt 2pt;">결재</div>
-              </th>
-              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">담 당</th>
-              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">부 장</th>
-              <th style="border:0.5pt solid #000;padding:2pt 0;text-align:center;font-weight:700;width:44pt;">담임목사</th>
-            </tr>
-          </thead>
+        <table style="border-collapse:collapse;font-size:10pt;">
           <tbody>
             <tr>
-              <td style="border:0.5pt solid #000;height:30pt;"></td>
-              <td style="border:0.5pt solid #000;height:30pt;"></td>
-              <td style="border:0.5pt solid #000;height:30pt;"></td>
+              <td rowspan="2" style="border:0.5pt solid #000;padding:0;text-align:center;font-weight:700;width:28pt;vertical-align:middle;">
+                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:12pt;font-weight:700;letter-spacing:4pt;padding:6pt 3pt;">결재</div>
+              </td>
+              <td style="border:0.5pt solid #000;padding:3pt 0;text-align:center;font-weight:700;width:85pt;">담 당</td>
+              <td style="border:0.5pt solid #000;padding:3pt 0;text-align:center;font-weight:700;width:85pt;">부 장</td>
+              <td style="border:0.5pt solid #000;padding:3pt 0;text-align:center;font-weight:700;width:85pt;">담임목사</td>
+            </tr>
+            <tr>
+              <td style="border:0.5pt solid #000;height:62pt;width:85pt;"></td>
+              <td style="border:0.5pt solid #000;height:62pt;width:85pt;"></td>
+              <td style="border:0.5pt solid #000;height:62pt;width:85pt;"></td>
             </tr>
           </tbody>
         </table>
@@ -2904,17 +2902,32 @@ function openLedgerSheet() {
     // dataRows를 <tr>...</tr> 단위로 분리
     const allDataRows = dRows.match(/<tr>[\s\S]*?<\/tr>/g) || [];
     const pages2 = [];
-    for (let i = 0; i < allDataRows.length; i += ROWS_PER_PAGE) {
-      const chunk = allDataRows.slice(i, i + ROWS_PER_PAGE).join('');
-      const isLast = i + ROWS_PER_PAGE >= allDataRows.length;
+    if (allDataRows.length === 0) {
+      // 거래 행이 없어도 결산+결재란은 출력
       pages2.push(`<div class="print-page"><div class="page-inner">
         <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
           ${colgroup}${makeHead(TH2)}
-          <tbody>${chunk}</tbody>
-          ${isLast ? `<tbody>${sRows}</tbody>` : ''}
+          <tbody>${sRows}</tbody>
         </table>
-        ${isLast ? approvalBox : ''}
+        ${approvalBox}
       </div></div>`);
+    } else {
+      for (let i = 0; i < allDataRows.length; i += ROWS_PER_PAGE) {
+        const chunk = allDataRows.slice(i, i + ROWS_PER_PAGE).join('');
+        const isLast = i + ROWS_PER_PAGE >= allDataRows.length;
+        pages2.push(`<div class="print-page"><div class="page-inner">
+          <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+            ${colgroup}${makeHead(TH2)}
+            <tbody>${chunk}</tbody>
+            ${isLast ? `<tbody>${sRows}</tbody>` : ''}
+          </table>
+          ${isLast ? approvalBox : ''}
+        </div></div>`);
+      }
+    }
+    // 마지막 페이지에 결재란이 없으면 강제 추가 (안전장치)
+    if (pages2.length > 0 && !pages2[pages2.length-1].includes('결재')) {
+      pages2[pages2.length-1] = pages2[pages2.length-1].replace('</div></div>', approvalBox + '</div></div>');
     }
     doPrint(pages2.join(''));
   });
