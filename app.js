@@ -635,7 +635,7 @@ function _doPrintBlob(html) {
     th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
     td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;min-width:0;}
     tbody tr:nth-child(even) td{background:#f7f9fc!important;}
-    tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
+    tfoot td{background:#2E74B5!important;color:#fff!important;font-weight:700!important;border:1pt solid #1a5fa8!important;font-size:8pt!important;}
     .print-title{font-size:13pt;font-weight:800;margin-bottom:5pt;}
     .print-period{font-size:9pt;color:#555;margin-bottom:7pt;}
     .print-summary{display:flex;gap:14pt;margin-bottom:9pt;border-bottom:1pt solid #000;padding-bottom:5pt;flex-wrap:wrap;}
@@ -661,8 +661,9 @@ function _doPrintBlob(html) {
       table{page-break-inside:auto;}
       thead{display:table-header-group!important;}
       tr{page-break-inside:avoid;}
+      tfoot{display:table-footer-group;page-break-inside:avoid;}
       th{background:#1F4E79!important;color:#fff!important;}
-      tfoot td{background:#1F4E79!important;color:#fff!important;}
+      tfoot td{background:#2E74B5!important;color:#fff!important;font-weight:700!important;}
       tbody tr:nth-child(even) td{background:#f7f9fc!important;}
       #print-btn{display:none!important;}
     }
@@ -2153,29 +2154,40 @@ function printStats() {
       </tr>`;
     }
 
-    const FT = 'padding:3pt 4pt;border:1pt solid #1a5fa8;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+    // page2: 완전히 독립된 Blob HTML (CSS 간섭 없음, 자동 축소)
+    // page2: #exp-page id로 격리된 지출현황 (자체 스타일, 자동 축소)
     page2 = `
-      <div class="print-page" style="page-break-before:always;break-before:page;">
-        <div id="expInner">
+      <div class="print-page" id="exp-page" style="page-break-before:always;break-before:page;overflow:hidden;">
+        <style>
+          #exp-inner{transform-origin:top left;}
+          #exp-page table{border-collapse:collapse;width:100%;table-layout:fixed;}
+          #exp-page thead th{padding:3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:7.5pt;font-weight:700;color:#fff!important;background:#1F4E79!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          #exp-page td{padding:2.5pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
+          #exp-page tbody:first-of-type tr:nth-child(even) td{background:#f7f9fc!important;}
+          #exp-page .sum-row td{background:#2E74B5!important;color:#fff!important;font-weight:700!important;border:1pt solid #1a5fa8!important;font-size:8pt!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+        </style>
+        <div id="exp-inner">
           ${pageHeader}
           <div style="font-size:11pt;font-weight:800;margin-bottom:5pt;">${range.label} 지출현황</div>
-          <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+          <table>
             <colgroup>
               <col style="width:15%"><col style="width:13%"><col style="width:26%"><col style="width:23%"><col style="width:23%">
             </colgroup>
             <thead><tr>
-              ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
+              <th>대분류</th><th>중분류</th><th>소분류</th>
+              <th style="text-align:right;">금액(원)</th><th>비고/잔액</th>
             </tr></thead>
-            <tbody>${tableRows}
-              <tr style="background:#2E74B5!important;">
-                <td colspan="3" style="${FT}">합  계</td>
-                <td style="${FT}text-align:right;">${grandTotal.toLocaleString('ko-KR')}</td>
-                <td style="${FT}"></td>
+            <tbody>${tableRows}</tbody>
+            <tbody>
+              <tr class="sum-row">
+                <td colspan="3" style="text-align:center;">합  계</td>
+                <td style="text-align:right;">${grandTotal.toLocaleString('ko-KR')}</td>
+                <td></td>
               </tr>
-              <tr style="background:#2E74B5!important;">
-                <td colspan="3" style="${FT}">순지출(지출-예금)</td>
-                <td style="${FT}text-align:right;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
-                <td style="${FT}"></td>
+              <tr class="sum-row">
+                <td colspan="3" style="text-align:center;">순지출(지출-예금)</td>
+                <td style="text-align:right;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
+                <td></td>
               </tr>
             </tbody>
           </table>
@@ -2183,17 +2195,15 @@ function printStats() {
       </div>
       <script>
         (function(){
-          var el = document.getElementById('expInner');
-          if(!el) return;
-          var maxH = 960;
-          var h = el.scrollHeight;
-          if(h > maxH){
-            var s = maxH / h;
-            el.style.transformOrigin = 'top left';
-            el.style.transform = 'scale('+s+')';
-            el.style.width = Math.round(100/s)+'%';
-            el.parentElement.style.overflow = 'hidden';
-            el.parentElement.style.height = maxH+'px';
+          var pg = document.getElementById('exp-page');
+          var inner = document.getElementById('exp-inner');
+          if(!pg||!inner) return;
+          var availH = pg.clientHeight || 900;
+          var h = inner.scrollHeight;
+          if(h > availH){
+            var s = availH / h;
+            inner.style.transform = 'scale('+s+')';
+            inner.style.width = Math.round(100/s)+'%';
           }
         })();
       </script>`;
