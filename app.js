@@ -1,4 +1,4 @@
-// v2.93 | 2026-06-28 02:20 KST | 수정: 월장부 인쇄 매 페이지 thead 반복 | cache:v197
+// v2.94 | 2026-06-28 02:40 KST | 수정: 월장부 인쇄 페이지별 테이블 분리 - 헤더 완전 반복 | cache:v198
 'use strict';
 
 /* =========================================================
@@ -2769,7 +2769,7 @@ function openLedgerSheet() {
 
     const body = sheet.querySelector('#ledgerBody');
     if (body) body.innerHTML = tableHTML;
-    return tableHTML;
+    return { tableHTML, dataRows, summaryRows, TH };
   }
 
   sheet.innerHTML = `
@@ -2791,7 +2791,7 @@ function openLedgerSheet() {
     </div>
   `;
 
-  let currentTableHTML = renderLedger(currentYM);
+  let currentLedger = renderLedger(currentYM);
 
   sheet.querySelector('#ldClose').addEventListener('click', () => closeSheet('ledgerSheet'));
   sheet.querySelector('#ldExcel').addEventListener('click', () => {
@@ -2799,7 +2799,7 @@ function openLedgerSheet() {
     exportLedgerToExcel(ym);
   });
   sheet.querySelector('#ldMonthSel').addEventListener('change', e => {
-    currentTableHTML = renderLedger(e.target.value);
+    currentLedger = renderLedger(e.target.value);
   });
   sheet.querySelector('#ldPrint').addEventListener('click', () => {
     const ym = sheet.querySelector('#ldMonthSel').value;
@@ -2829,7 +2829,37 @@ function openLedgerSheet() {
           </tbody>
         </table>
       </div>`;
-    doPrint(`<div class="print-page"><div class="page-inner">${currentTableHTML}${approvalBox}</div></div>`);
+    // 인쇄용: 행을 30개씩 나눠 페이지마다 헤더 포함한 테이블 생성
+    const { dataRows: dRows, summaryRows: sRows, TH: TH2 } = currentLedger;
+    const ROWS_PER_PAGE = 30;
+    const colgroup = `<colgroup>
+      <col style="width:9%"><col style="width:13%"><col style="width:13%">
+      <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
+    </colgroup>`;
+    const makeHead = (th) => `<thead><tr>
+      <th style="${th}text-align:center;">일자</th>
+      <th style="${th}">대분류</th><th style="${th}">중분류</th><th style="${th}">소분류</th>
+      <th style="${th}text-align:right;">수입금액</th>
+      <th style="${th}text-align:right;">지출금액</th>
+      <th style="${th}text-align:right;">누계금액</th>
+    </tr></thead>`;
+
+    // dataRows를 <tr>...</tr> 단위로 분리
+    const allDataRows = dRows.match(/<tr>[\s\S]*?<\/tr>/g) || [];
+    const pages2 = [];
+    for (let i = 0; i < allDataRows.length; i += ROWS_PER_PAGE) {
+      const chunk = allDataRows.slice(i, i + ROWS_PER_PAGE).join('');
+      const isLast = i + ROWS_PER_PAGE >= allDataRows.length;
+      pages2.push(`<div class="print-page"><div class="page-inner">
+        <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+          ${colgroup}${makeHead(TH2)}
+          <tbody>${chunk}</tbody>
+          ${isLast ? `<tbody>${sRows}</tbody>` : ''}
+        </table>
+        ${isLast ? approvalBox : ''}
+      </div></div>`);
+    }
+    doPrint(pages2.join(''));
   });
 
   openSheet('ledgerSheet');
