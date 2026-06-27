@@ -2163,9 +2163,9 @@ function printStats() {
           <td style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;text-align:right;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
         </tr>`;
       });
-      // 소계행 — 중분류+소분류 colspan=3으로 금액 열에 맞춤, 비고 빈칸 추가
+      // 소계행 — 대분류는 rowspan 점유 중 → 남은 4칸: colspan=2(중+소) + 금액 + 비고
       tableRows += `<tr>
-        <td colspan="3" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
+        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
         <td style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
         <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>
       </tr>`;
@@ -2450,7 +2450,7 @@ function renderExpenseTableA4(list, range) {
         ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
       tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle({right:true,color:remark&&acctBalanceMap[r.subName]<0?'#CC0000':'#1F497D'})}">${escapeHTML(remark)}</td></tr>`;
     });
-    tableRows += `<tr><td colspan="3" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
+    tableRows += `<tr><td colspan="2" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
   }
 
   const thStyle = `padding:4pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
