@@ -1,4 +1,4 @@
-// v2.70 | 2026-06-27 20:30 KST | 수정: 인쇄 max-width 제거, @page에 완전 위임 → 배율 가로세로 모두 적용 | cache:v174
+// v2.71 | 2026-06-27 20:45 KST | 수정: 인쇄 툴바 버튼 소형화, flex-shrink:0 적용 | cache:v175
 'use strict';
 
 /* =========================================================
@@ -592,15 +592,16 @@ function doPrint(html) {
       /* ── 인쇄 버튼 바 ── */
       #toolbar{
         position:sticky;top:0;z-index:99;
-        background:#1d4ed8;padding:10px 20px;
-        display:flex;align-items:center;gap:12px;
+        background:#1d4ed8;padding:8px 16px;
+        display:flex;align-items:center;gap:10px;
         font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
       }
       #toolbar button{
-        padding:9px 28px;background:#fff;color:#1d4ed8;
-        font-size:14px;font-weight:800;border:none;border-radius:8px;cursor:pointer;
+        padding:7px 18px;background:#fff;color:#1d4ed8;
+        font-size:13px;font-weight:800;border:none;border-radius:7px;cursor:pointer;
+        flex-shrink:0;white-space:nowrap;
       }
-      #toolbar span{color:rgba(255,255,255,0.75);font-size:12px;}
+      #toolbar span{color:rgba(255,255,255,0.75);font-size:11px;}
 
       /* ── 공통 콘텐츠 스타일 ── */
       table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}

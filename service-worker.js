@@ -1,7 +1,7 @@
-// 2026-06-27 20:30 KST | 수정: CACHE_NAME v174 (인쇄 @page 완전 위임, 배율 정상화)
+// 2026-06-27 20:45 KST | 수정: CACHE_NAME v175 (인쇄 툴바 버튼 소형화)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v174';
+const CACHE_NAME = 'gaegyebu-v175';
 const ASSETS = [
   './',
   './index.html',
