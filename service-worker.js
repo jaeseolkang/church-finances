@@ -1,7 +1,7 @@
-// 2026-06-27 17:00 KST | 수정: CACHE_NAME v165 (지출현황 소계 열 정렬)
+// 2026-06-27 17:30 KST | 수정: CACHE_NAME v166 (인쇄 비율 선택)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v165';
+const CACHE_NAME = 'gaegyebu-v166';
 const ASSETS = [
   './',
   './index.html',
