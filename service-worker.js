@@ -1,7 +1,7 @@
 // 2026-06-28 02:40 KST | 수정: CACHE_NAME v198 (월장부 페이지별 테이블 분리)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v198';
+const CACHE_NAME = 'gaegyebu-v200';
 const ASSETS = [
   './',
   './index.html',
