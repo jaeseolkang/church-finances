@@ -2803,8 +2803,29 @@ function openLedgerSheet() {
         <tbody>${summaryRows}</tbody>
       </table>`;
 
+    const approvalBoxScreen = `
+      <div style="display:flex;justify-content:flex-end;margin-top:16px;margin-bottom:8px;">
+        <table style="border-collapse:collapse;font-size:11px;">
+          <tbody>
+            <tr>
+              <td rowspan="2" style="border:1px solid #888;padding:0;text-align:center;font-weight:700;width:28px;vertical-align:middle;background:#f8f9fa;">
+                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:11px;font-weight:700;letter-spacing:4px;padding:6px 3px;">결재</div>
+              </td>
+              <td style="border:1px solid #888;padding:3px 0;text-align:center;font-weight:700;width:64px;background:#f8f9fa;">담 당</td>
+              <td style="border:1px solid #888;padding:3px 0;text-align:center;font-weight:700;width:64px;background:#f8f9fa;">부 장</td>
+              <td style="border:1px solid #888;padding:3px 0;text-align:center;font-weight:700;width:64px;background:#f8f9fa;">담임목사</td>
+            </tr>
+            <tr>
+              <td style="border:1px solid #888;height:44px;width:64px;"></td>
+              <td style="border:1px solid #888;height:44px;width:64px;"></td>
+              <td style="border:1px solid #888;height:44px;width:64px;"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+
     const body = sheet.querySelector('#ledgerBody');
-    if (body) body.innerHTML = tableHTML;
+    if (body) body.innerHTML = tableHTML + approvalBoxScreen;
     return { tableHTML, dataRows, summaryRows, TH };
   }
 
