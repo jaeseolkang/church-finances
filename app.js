@@ -4846,65 +4846,69 @@ async function sendBackupByEmail() {
   const jsonStr = JSON.stringify(data);
   const txCount = State.transactions.length;
   const subject = `[${appName}] 데이터 백업 ${today}`;
-
-  // Blob HTML 페이지를 열어서 거기서 mailto: 실행
-  // → iOS에서 긴 본문도 메일 앱으로 전달 가능
   const bodyText =
-    `[${appName}] 데이터 백업
-` +
-    `백업일시: ${new Date().toLocaleString('ko-KR')}
-` +
-    `거래 건수: ${txCount}건
+    `[${appName}] 데이터 백업\n` +
+    `백업일시: ${new Date().toLocaleString('ko-KR')}\n` +
+    `거래 건수: ${txCount}건\n\n` +
+    `아래 JSON을 [데이터 가져오기(텍스트)]로 복원하세요.\n\n` +
+    `===== JSON START =====\n${jsonStr}\n===== JSON END =====`;
 
-` +
-    `아래 JSON을 복사 후 .json 파일로 저장하여 [데이터 가져오기]로 복원하세요.
+  const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText)}`;
 
-` +
-    `===== JSON START =====
-${jsonStr}
-===== JSON END =====`;
-
-  const encodedSubject = encodeURIComponent(subject);
-  const encodedBody    = encodeURIComponent(bodyText);
-  const mailtoUrl      = `mailto:${encodeURIComponent(email)}?subject=${encodedSubject}&body=${encodedBody}`;
-
-  // mailto: URL이 너무 길면 브라우저가 잘라냄 → Blob 페이지 경유
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>body{font-family:-apple-system,sans-serif;padding:24px;text-align:center;}
-button{padding:16px 32px;font-size:18px;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:12px;cursor:pointer;width:100%;margin-bottom:12px;}
-.note{font-size:13px;color:#555;margin-top:8px;line-height:1.6;}
-pre{text-align:left;background:#f5f5f5;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;word-break:break-all;white-space:pre-wrap;margin-top:16px;}
+<style>
+*{box-sizing:border-box;}
+body{font-family:-apple-system,sans-serif;padding:32px 24px;text-align:center;background:#f8fafc;}
+h3{font-size:20px;margin-bottom:8px;}
+.sub{font-size:14px;color:#555;margin-bottom:24px;line-height:1.6;}
+.btn-mail{display:block;padding:18px;font-size:18px;font-weight:700;background:#1d4ed8;color:#fff;border-radius:14px;text-decoration:none;margin-bottom:12px;}
+.btn-copy{display:block;padding:14px;font-size:15px;font-weight:600;background:#059669;color:#fff;border:none;border-radius:12px;cursor:pointer;width:100%;margin-bottom:12px;}
+.note{font-size:12px;color:#888;margin-top:16px;line-height:1.7;}
+pre{text-align:left;background:#f1f5f9;padding:12px;border-radius:8px;font-size:10px;word-break:break-all;white-space:pre-wrap;margin-top:12px;max-height:200px;overflow-y:auto;}
 </style></head><body>
 <h3>📧 백업 메일 발송</h3>
-<button onclick="location.href=MAILTO">메일 앱으로 열기</button>
-<div class="note">버튼을 누르면 메일 앱이 열리고<br>JSON 데이터가 본문에 자동 입력됩니다.<br>보내기만 누르세요.</div>
-<button onclick="window.close()" style="background:#6b7280;margin-top:8px;">✕ 탭 닫기</button>
+<div class="sub">아래 링크를 탭하면<br>메일 앱이 열리고 JSON이 자동 입력됩니다</div>
+<a class="btn-mail" href="MAILTO_PLACEHOLDER">✉️ 메일 앱으로 열기</a>
+<button class="btn-copy" onclick="navigator.clipboard&&navigator.clipboard.writeText(JSON_DATA_VAR).then(()=>alert('JSON이 복사됐어요!\n앱의 [데이터 가져오기(텍스트)]에 붙여넣기하세요.'))">📋 JSON 복사 (텍스트 복원용)</button>
+<div class="note">
+  복원: 앱 설정 → 데이터 가져오기(텍스트) → 붙여넣기<br>
+  또는 메일 본문의 JSON START~END 사이 복사 후 붙여넣기
+</div>
 <details style="margin-top:16px;text-align:left;">
-  <summary style="cursor:pointer;font-size:13px;color:#1d4ed8;">JSON 미리보기 / 복사</summary>
-  <button onclick="navigator.clipboard&&navigator.clipboard.writeText(JSON_DATA).then(()=>alert('복사됐어요!'))" style="margin-top:8px;font-size:14px;padding:10px;">📋 JSON 복사</button>
-  <pre>JSON_PREVIEW</pre>
+  <summary style="cursor:pointer;font-size:13px;color:#1d4ed8;margin-bottom:8px;">JSON 미리보기</summary>
+  <pre id="preview"></pre>
 </details>
 <script>
-var MAILTO = ${JSON.stringify(mailtoUrl)};
-var JSON_DATA = ${JSON.stringify(jsonStr)};
-document.querySelector('pre').textContent = JSON_DATA.slice(0,2000) + (JSON_DATA.length>2000?'\n...':'');
+var JSON_DATA_VAR = JSON_DATA_PLACEHOLDER;
+document.getElementById('preview').textContent = JSON_DATA_VAR.slice(0,1000)+'\n...';
 </script>
 </body></html>`;
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const url  = URL.createObjectURL(blob);
+  // mailto URL과 JSON을 HTML에 직접 삽입 (JS 변수로)
+  const finalHtml = html
+    .replace('MAILTO_PLACEHOLDER', mailtoUrl.replace(/&/g, '&amp;'))
+    .replace('JSON_DATA_PLACEHOLDER', JSON.stringify(jsonStr));
 
-  // iOS PWA: <a target="_blank">를 DOM에 추가하고 자동 클릭
-  // → 사용자 제스처 안에서 실행되므로 팝업 허용됨
-  const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-  showToast('📧 메일 발송 페이지를 새 탭으로 열었어요');
+  const blob = new Blob([finalHtml], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  // 설정 화면에 직접 탭 가능한 <a> 링크를 표시
+  // 기존 링크가 있으면 제거
+  const existingLink = document.getElementById('backupOpenLink');
+  if (existingLink) existingLink.remove();
+
+  const linkWrap = document.createElement('div');
+  linkWrap.id = 'backupOpenLink';
+  linkWrap.style.cssText = 'position:fixed;bottom:80px;left:16px;right:16px;z-index:9999;';
+  linkWrap.innerHTML = \`<a href="\${blobUrl}" target="_blank" rel="noopener"
+    style="display:block;padding:18px;font-size:17px;font-weight:700;background:#1d4ed8;color:#fff;border-radius:14px;text-align:center;text-decoration:none;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+    📧 여기를 탭해서 메일 발송 페이지 열기
+  </a>
+  <div style="text-align:center;margin-top:8px;">
+    <button onclick="document.getElementById('backupOpenLink').remove()" style="font-size:13px;color:#888;background:none;border:none;padding:4px 12px;">취소</button>
+  </div>\`;
+  document.body.appendChild(linkWrap);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
 }
 
 async function exportData(startYm, endYm) {
