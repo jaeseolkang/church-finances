@@ -1,7 +1,7 @@
-// 2026-06-27 22:00 KST | 수정: CACHE_NAME v179 (통계 지출 page2만 인쇄)
+// 2026-06-27 22:20 KST | 수정: CACHE_NAME v180 (통계 차트/지출현황 탭 분리)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v179';
+const CACHE_NAME = 'gaegyebu-v180';
 const ASSETS = [
   './',
   './index.html',

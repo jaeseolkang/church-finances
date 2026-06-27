@@ -1,4 +1,4 @@
-// v2.75 | 2026-06-27 22:00 KST | 수정: 통계 지출 인쇄 page2(지출현황)만 출력 | cache:v179
+// v2.76 | 2026-06-27 22:20 KST | 수정: 통계 탭 차트/지출현황 페이지 탭 분리 | cache:v180
 'use strict';
 
 /* =========================================================
@@ -177,6 +177,7 @@ const State = {
   transactions: [],
   statsType: 'expense',
   statsView: 'stats',        // 'stats'(통계) | 'detail'(내용)
+  statsPage: 'chart',        // 'chart'(차트) | 'table'(지출현황/헌금명세)
   // 통계 기간 모드
   statsPeriod: 'month',      // 'week' | 'month' | 'year' | 'custom'
   statsCustomStart: null,    // 'YYYY-MM-DD'
@@ -2073,10 +2074,10 @@ function printStats() {
       </div>`;
   }
 
-  // 수입: 헌금피벗 / 지출: 지출현황 테이블만 (page2)
+  // 현재 보이는 페이지만 인쇄
   const html = isIncome
     ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
-    : page2;
+    : ((State.statsPage||'chart') === 'table' ? page2 : page2); // 지출은 항상 지출현황 테이블
 
   doPrint(html);
 }
@@ -2180,8 +2181,17 @@ function renderStats() {
       </div>
     </div>
 
-    ${State.statsView === 'stats' ? renderStatsTabBars(statRows, statTotal, isIncome) : renderStatsTabDetail(detailTx, isIncome)}
-    ${State.statsView === 'stats' && !isIncome ? renderExpenseTableA4(list, range) : ''}
+    ${State.statsView === 'stats'
+      ? `<div class="stats-page-tabs">
+           <button class="stats-page-tab ${(State.statsPage||'chart')==='chart'?'active':''}" data-page="chart">📊 차트</button>
+           <button class="stats-page-tab ${(State.statsPage||'chart')==='table'?'active':''}" data-page="table">📋 ${isIncome?'헌금명세':'지출현황'}</button>
+         </div>
+         ${(State.statsPage||'chart')==='chart'
+           ? renderStatsTabBars(statRows, statTotal, isIncome)
+           : (isIncome ? '' : renderExpenseTableA4(list, range))
+         }`
+      : renderStatsTabDetail(detailTx, isIncome)
+    }
   `;
 
   // 이벤트
@@ -2190,6 +2200,10 @@ function renderStats() {
     else exportExpenseToExcel();
   });
   page.querySelector('#statsPrint').addEventListener('click', () => printStats());
+
+  page.querySelectorAll('.stats-page-tab').forEach(b => {
+    b.addEventListener('click', () => { State.statsPage = b.dataset.page; renderStats(); });
+  });
 
   page.querySelectorAll('.segctrl')[0].querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => { State.statsView = b.dataset.view; renderStats(); });

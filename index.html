@@ -817,6 +817,10 @@ input,textarea,select{font-family:inherit; color:inherit;}
   background:var(--expense-light); color:var(--expense);
   font-size:14px; font-weight:700;
 }
+/* ── 통계 페이지 탭 ── */
+.stats-page-tabs{display:flex;gap:0;margin-bottom:12px;border-radius:12px;overflow:hidden;border:1.5px solid var(--border);}
+.stats-page-tab{flex:1;padding:10px 0;font-size:14px;font-weight:700;color:var(--text-3);background:transparent;border:none;transition:all .15s;cursor:pointer;}
+.stats-page-tab.active{background:var(--primary);color:#fff;}
 /* ── 자산합계 카드 ── */
 .acct-grand-card{
   border-radius:16px; padding:16px 18px 14px;
