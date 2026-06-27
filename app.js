@@ -1,4 +1,4 @@
-// v2.58 | 2026-06-27 15:30 KST | 수정: 계정 탭 최상단 자산합계 카드 (재정+일반+정기예금) | cache:v162
+// v2.59 | 2026-06-27 15:50 KST | 수정: 정기예금 목록 만기일 컬럼 추가, 편집시트 만기일 입력 | cache:v163
 'use strict';
 
 /* =========================================================
@@ -3011,18 +3011,32 @@ async function renderAccounts() {
     : '등록된 계정이 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>';
 
   const rowsHTML = accounts.length === 0
-    ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
+    ? `<tr><td colspan="${sub==='deposit'?6:5}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
     : accounts.map(a => {
         const t = totals[a.name] || {income:0, expense:0};
         const carry = a.carryover || 0;
         const net   = carry + t.income - t.expense;
         const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
+        // 만기일 표시 (정기예금 탭)
+        let maturityTd = '';
+        if (sub === 'deposit') {
+          const md = a.maturityDate || '';
+          const matLabel = md ? md.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1.$2.$3') : '-';
+          // 만기 경과 여부
+          let matColor = 'var(--text-3)';
+          if (md) {
+            const today = new Date().toISOString().slice(0,10);
+            matColor = md < today ? 'var(--expense)' : 'var(--primary)';
+          }
+          maturityTd = `<td class="acct-tbl-num" style="color:${matColor};font-size:12px;">${matLabel}</td>`;
+        }
         return `<tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;">
           <td class="acct-tbl-name">${escapeHTML(shortName(a.name))}</td>
           <td class="acct-tbl-num">${fmt(carry)}</td>
           <td class="acct-tbl-num income">${fmt(t.income)}</td>
           <td class="acct-tbl-num expense">${fmt(t.expense)}</td>
           <td class="acct-tbl-num" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
+          ${maturityTd}
         </tr>`;
       }).join('');
 
@@ -3078,6 +3092,7 @@ async function renderAccounts() {
             <th class="acct-tbl-num">수입금</th>
             <th class="acct-tbl-num">지출금</th>
             <th class="acct-tbl-num">합계</th>
+            ${sub==='deposit' ? '<th class="acct-tbl-num">만기일</th>' : ''}
           </tr>
         </thead>
         <tbody>${rowsHTML}</tbody>
@@ -5772,6 +5787,13 @@ function openLinkedAccountEditSheet(acct, kind) {
           value="${isNew ? '' : (acct.carryover||0)}">
         <div style="font-size:12px;color:var(--text-3);margin-top:4px;">이 계좌의 이전기간 이월금액을 입력하세요</div>
       </div>
+      ${accountKind === 'deposit' ? `
+      <div class="form-field" style="margin-top:16px;">
+        <label class="form-label">만기일</label>
+        <input id="laeMaturityInput" class="form-input" type="date"
+          value="${isNew ? '' : (acct.maturityDate||'')}">
+        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">정기예금 만기일을 입력하세요 (선택)</div>
+      </div>` : ''}
       <div class="la-default-row">
         <label class="la-default-label" for="laeDefaultChk">대표계정으로 설정</label>
         <label class="toggle-switch">
@@ -5802,6 +5824,8 @@ function openLinkedAccountEditSheet(acct, kind) {
     const name = sheet.querySelector('#laeNameInput').value.trim();
     const carryover = parseInt(sheet.querySelector('#laeCarryInput').value) || 0;
     const isDefaultChk = sheet.querySelector('#laeDefaultChk').checked;
+    const maturityInput = sheet.querySelector('#laeMaturityInput');
+    const maturityDate = maturityInput ? (maturityInput.value || '') : (acct && acct.maturityDate ? acct.maturityDate : '');
     if (!name) { alert('계좌 이름을 입력해주세요.'); return; }
     const dup = (State.linkedAccounts||[]).find(a => a.name === name && (!acct || a.id !== acct.id));
     if (dup) { alert('같은 이름의 계좌가 이미 있어요.'); return; }
@@ -5821,6 +5845,7 @@ function openLinkedAccountEditSheet(acct, kind) {
       carryover,
       isDefault: isDefaultChk,
       accountKind,
+      maturityDate,
       createdAt: isNew ? Date.now() : acct.createdAt
     };
     await DB.put('linkedAccounts', record);
