@@ -2083,7 +2083,10 @@ function printStats() {
 
     let tableRows = '';
     let grandTotal = 0;
-    let sumRows = '';
+
+    // 스타일 상수
+    const S  = (extra='') => `padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;${extra}`;
+    const SB = (bg,extra='') => `padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;background:${bg};-webkit-print-color-adjust:exact;print-color-adjust:exact;${extra}`;
 
     for (const cat of usedCats) {
       const catPivot = expPivot[cat.id];
@@ -2091,13 +2094,12 @@ function printStats() {
         .filter(s => s.categoryId === cat.id)
         .sort((a,b) => (a.order||0)-(b.order||0));
 
-      // subGroup별 그룹핑
+      // 중분류별 그룹핑
       const sgMap = new Map();
       const direct = [];
       for (const s of allSubs) {
-        if (!catPivot[s.id]) continue; // 금액 없는 소분류 제외
-        const sg = s.subGroupId
-          ? (State.subGroups||[]).find(g=>g.id===s.subGroupId) : null;
+        if (!catPivot[s.id]) continue;
+        const sg = s.subGroupId ? (State.subGroups||[]).find(g=>g.id===s.subGroupId) : null;
         if (sg) {
           if (!sgMap.has(sg.id)) sgMap.set(sg.id, {name:sg.name, items:[]});
           sgMap.get(sg.id).items.push(s);
@@ -2106,53 +2108,44 @@ function printStats() {
         }
       }
 
-      const catRows = [];
-      // 중분류별
+      // 평탄화: {catName, sgName, subName, amt, remark}
+      const flatRows = [];
+      const isDepCat = depositCat && cat.id === depositCat.id;
       for (const [,grp] of sgMap) {
-        const items = grp.items;
-        items.forEach((s, i) => {
+        for (const s of grp.items) {
           const amt = catPivot[s.id]||0;
-          catRows.push({
-            sgName: i===0 ? grp.name : null, sgRowspan: i===0 ? items.length : 0,
-            subName: s.name, amt, isDirect: false
-          });
-        });
+          const remark = isDepCat && acctBalanceMap[s.name] !== undefined
+            ? acctBalanceMap[s.name].toLocaleString('ko-KR')+'원' : '';
+          flatRows.push({catName:cat.name, sgName:grp.name, subName:s.name, amt, remark});
+        }
       }
-      // 직속 소분류 (중분류 없는 것)
       for (const s of direct) {
-        catRows.push({ sgName: null, sgRowspan: 0, subName: s.name, amt: catPivot[s.id]||0, isDirect: true });
+        const amt = catPivot[s.id]||0;
+        const remark = isDepCat && acctBalanceMap[s.name] !== undefined
+          ? acctBalanceMap[s.name].toLocaleString('ko-KR')+'원' : '';
+        flatRows.push({catName:cat.name, sgName:'', subName:s.name, amt, remark});
       }
 
-      const isDepCat = depositCat && cat.id === depositCat.id;
-      const catTotal = catRows.reduce((s,r)=>s+r.amt, 0);
+      const catTotal = flatRows.reduce((s,r)=>s+r.amt, 0);
       grandTotal += catTotal;
 
-      const catRowspan = catRows.length + 1; // +1 소계행
-      catRows.forEach((r, i) => {
-        const sgTd = r.sgRowspan > 0
-          ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
-          : r.isDirect
-            ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>`
-            : '';
-        const catTd = i===0
-          ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
-          : '';
-        const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
-          ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
-        const remarkColor = remark && acctBalanceMap[r.subName] < 0 ? '#CC0000' : '#1F497D';
+      // rowspan 없이 모든 셀 명시 출력
+      flatRows.forEach(r => {
+        const remarkColor = r.remark && acctBalanceMap[r.subName] < 0 ? '#CC0000' : '#1F497D';
         tableRows += `<tr>
-          ${catTd}
-          ${sgTd}
-          <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
-          <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
-          <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
+          <td style="${SB('#fff','font-weight:700;text-align:center;')}">${escapeHTML(r.catName)}</td>
+          <td style="${SB('#DEEAF1')}">${escapeHTML(r.sgName)}</td>
+          <td style="${SB('#BDD7EE')}">${escapeHTML(r.subName)}</td>
+          <td style="${S('text-align:right;')}">${r.amt.toLocaleString('ko-KR')}</td>
+          <td style="${S('text-align:right;color:'+remarkColor+';font-weight:'+(r.remark?'700':'400')+';')}">${escapeHTML(r.remark)}</td>
         </tr>`;
       });
-      // 소계행 — 대분류는 rowspan 점유 중 → 남은 4칸: colspan=2(중+소) + 금액 + 비고
+      // 소계행
       tableRows += `<tr>
-        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
-        <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
-        <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>
+        <td style="${SB('#D6E4F0','font-weight:700;')}"></td>
+        <td colspan="2" style="${SB('#D6E4F0','font-weight:700;')}">소 계</td>
+        <td style="${SB('#D6E4F0','font-weight:700;text-align:right;')}">${catTotal.toLocaleString('ko-KR')}</td>
+        <td style="${SB('#D6E4F0')}"></td>
       </tr>`;
     }
 
