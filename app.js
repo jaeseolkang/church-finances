@@ -1964,25 +1964,29 @@ function printStats() {
       if (rows.length > 0) {
         const colTotals = orderedCols.map(c=>rows.reduce((s,r)=>s+(pivot[r][c]||0),0));
         const grandTotal = colTotals.reduce((s,v)=>s+v,0);
-        // 셀 스타일
-        const TH_S = 'padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;font-size:7pt;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
-        const TD_N = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;white-space:nowrap;';
-        const TD_SUM = 'padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;text-align:right;font-weight:400;white-space:nowrap;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
-        const FT_S = 'padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7pt;font-weight:700;text-align:right;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+        // 모든 열 동일 너비: 전체 열 수로 100% 균등 분할
+        const totalCols = orderedCols.length + 2; // 이름 + 헌금종류들 + 합계
+        const colPct = (100 / totalCols).toFixed(4);
+        const colgroup = '<colgroup>' + Array(totalCols).fill(`<col style="width:${colPct}%">`).join('') + '</colgroup>';
+        const TH_S = 'padding:2pt 1pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;font-size:6pt;text-align:center;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+        const TD_N = 'padding:2pt 1pt;border:0.5pt solid #aaa;font-size:6.5pt;text-align:right;overflow:hidden;';
+        const TD_SUM = 'padding:2pt 1pt;border:0.5pt solid #aaa;font-size:6.5pt;text-align:right;overflow:hidden;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+        const FT_S = 'padding:2pt 1pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:6.5pt;text-align:right;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         pivotHTML = `
-          <div style="margin-top:6pt;overflow-x:auto;">
+          <div style="margin-top:6pt;">
             <div style="font-size:10pt;font-weight:800;margin-bottom:4pt;border-bottom:0.5pt solid #000;padding-bottom:2pt;">🙏 헌금 개인별 명세</div>
-            <table style="border-collapse:collapse;width:100%;table-layout:auto;font-size:7pt;">
+            <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.5pt;">
+              ${colgroup}
               <thead><tr>
-                <th style="${TH_S}text-align:left;min-width:40pt;">이름</th>
-                ${orderedCols.map(c=>`<th style="${TH_S}text-align:right;min-width:50pt;">${escapeHTML(c)}</th>`).join('')}
-                <th style="${TH_S}text-align:right;min-width:55pt;">합계</th>
+                <th style="${TH_S}text-align:left;">이름</th>
+                ${orderedCols.map(c=>`<th style="${TH_S}">${escapeHTML(c)}</th>`).join('')}
+                <th style="${TH_S}">합계</th>
               </tr></thead>
               <tbody>
                 ${rows.map(name => {
                   const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
                   return `<tr>
-                    <td style="padding:2pt 2pt;border:0.5pt solid #aaa;font-size:7pt;font-weight:700;white-space:nowrap;">${escapeHTML(name)}</td>
+                    <td style="${TD_N}font-weight:700;text-align:left;">${escapeHTML(name)}</td>
                     ${orderedCols.map(c=>`<td style="${TD_N}">${pivot[name][c]?pivot[name][c].toLocaleString('ko-KR'):''}</td>`).join('')}
                     <td style="${TD_SUM}">${rowTotal.toLocaleString('ko-KR')}</td>
                   </tr>`;
