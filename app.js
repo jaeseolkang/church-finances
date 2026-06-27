@@ -4878,6 +4878,7 @@ pre{text-align:left;background:#f5f5f5;padding:12px;border-radius:8px;font-size:
 <h3>📧 백업 메일 발송</h3>
 <button onclick="location.href=MAILTO">메일 앱으로 열기</button>
 <div class="note">버튼을 누르면 메일 앱이 열리고<br>JSON 데이터가 본문에 자동 입력됩니다.<br>보내기만 누르세요.</div>
+<button onclick="window.close()" style="background:#6b7280;margin-top:8px;">✕ 탭 닫기</button>
 <details style="margin-top:16px;text-align:left;">
   <summary style="cursor:pointer;font-size:13px;color:#1d4ed8;">JSON 미리보기 / 복사</summary>
   <button onclick="navigator.clipboard&&navigator.clipboard.writeText(JSON_DATA).then(()=>alert('복사됐어요!'))" style="margin-top:8px;font-size:14px;padding:10px;">📋 JSON 복사</button>
@@ -4892,9 +4893,18 @@ document.querySelector('pre').textContent = JSON_DATA.slice(0,2000) + (JSON_DATA
 
   const blob = new Blob([html], { type: 'text/html' });
   const url  = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+
+  // iOS PWA: <a target="_blank">를 DOM에 추가하고 자동 클릭
+  // → 사용자 제스처 안에서 실행되므로 팝업 허용됨
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
-  showToast('📧 메일 발송 페이지를 열었어요');
+  showToast('📧 메일 발송 페이지를 새 탭으로 열었어요');
 }
 
 async function exportData(startYm, endYm) {
