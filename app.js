@@ -4832,14 +4832,16 @@ async function sendBackupByEmail() {
   const appName = State.appName || '교회 회계부';
   const today = todayStr();
 
+  const allTemplates = await DB.getAll('templates');
   const data = {
     exportedAt: new Date().toISOString(),
     categories: State.categories,
     persons: State.persons,
     subItems: State.subItems,
-    subGroups: State.subGroups,
+    subGroups: State.subGroups || [],
     linkedAccounts: State.linkedAccounts || [],
     transactions: State.transactions,
+    templates: allTemplates || [],
   };
   const jsonStr = JSON.stringify(data);
   const txCount = State.transactions.length;
@@ -4997,6 +4999,7 @@ async function restoreFromData(data) {
   for (const g of (data.subGroups||[])) await DB.put('subGroups', g);
   for (const a of (data.linkedAccounts||[])) await DB.put('linkedAccounts', a);
   for (const t of (data.transactions||[])) await DB.put('transactions', t);
+  for (const tpl of (data.templates||[])) await DB.put('templates', tpl);
   await reloadData();
   renderCurrentPage();
   showToast(`✅ 복원 완료 — 거래 ${(data.transactions||[]).length}건`);
@@ -5048,19 +5051,21 @@ function importData(e) {
 }
 
 async function resetAllData() {
-  if (!confirm('모든 거래와 항목이 삭제됩니다. 계속할까요?')) return;
+  if (!confirm('사용자가 입력한 모든 데이터(거래, 항목, 계정, 명부 등)가 삭제됩니다.\n계속할까요?')) return;
   if (!confirm('정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
-  const [cats, persons, subItems, txs] = await Promise.all([
-    DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'), DB.getAll('transactions')
-  ]);
-  for (const c of cats) await DB.del('categories', c.id);
-  for (const p of persons) await DB.del('persons', p.id);
-  for (const s of subItems) await DB.del('subItems', s.id);
-  for (const t of txs) await DB.del('transactions', t.id);
+
+  // 사용자 데이터 전체 삭제 (settings 제외 — 이메일·자동백업 설정은 유지)
+  const stores = ['categories','persons','subItems','subGroups','transactions','linkedAccounts','templates'];
+  for (const store of stores) {
+    const all = await DB.getAll(store);
+    for (const x of all) await DB.del(store, x.id || x.key);
+  }
+
+  // 기본 항목 재생성
   await seedIfEmpty();
   await reloadData();
   renderCurrentPage();
-  showToast('초기화 완료');
+  showToast('✅ 초기화 완료 — 모든 데이터가 삭제됐어요');
 }
 
 /* =========================================================
