@@ -634,7 +634,7 @@ function _doPrintBlob(html) {
     table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}
     th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
     td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;min-width:0;}
-    tr:nth-child(even) td{background:#f7f9fc!important;}
+    tbody tr:nth-child(even) td{background:#f7f9fc!important;}
     tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
     .print-title{font-size:13pt;font-weight:800;margin-bottom:5pt;}
     .print-period{font-size:9pt;color:#555;margin-bottom:7pt;}
@@ -663,7 +663,7 @@ function _doPrintBlob(html) {
       tr{page-break-inside:avoid;}
       th{background:#1F4E79!important;color:#fff!important;}
       tfoot td{background:#1F4E79!important;color:#fff!important;}
-      tr:nth-child(even) td{background:#f7f9fc!important;}
+      tbody tr:nth-child(even) td{background:#f7f9fc!important;}
       #print-btn{display:none!important;}
     }
   `;
@@ -2153,84 +2153,57 @@ function printStats() {
       </tr>`;
     }
 
-    // page2: 지출현황을 독립 HTML로 만들어 별도 탭에서 열기
     const FT = 'padding:3pt 4pt;border:1pt solid #1a5fa8;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
-    const expenseHTML = `<!DOCTYPE html><html lang="ko"><head>
-      <meta charset="UTF-8">
-      <style>
-        *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
-        html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;background:#fff;color:#000;}
-        #wrap{padding:10mm 14mm;width:210mm;min-height:297mm;}
-        #inner{transform-origin:top left;}
-        table{border-collapse:collapse;width:100%;table-layout:fixed;}
-        th{padding:3pt 3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-        td{padding:2.5pt 3pt;border:0.5pt solid #aaa;font-size:8pt;}
-        .ft{${FT}}
-        .title{font-size:13pt;font-weight:800;margin-bottom:4pt;}
-        .period{font-size:9pt;color:#555;margin-bottom:8pt;}
-        #print-btn{display:block;width:calc(100% - 32px);margin:16px auto;padding:14px;background:#1d4ed8;color:#fff;font-size:16px;font-weight:800;border:none;border-radius:12px;cursor:pointer;}
-        @media print{
-          #print-btn{display:none!important;}
-          @page{size:A4 portrait;margin:0;}
-          html,body{margin:0;padding:0;}
-          #wrap{padding:10mm 14mm;}
-        }
-      </style>
-    </head><body>
-      <button id="print-btn" onclick="window.print()">🖨️ 인쇄</button>
-      <div id="wrap"><div id="inner">
-        ${pageHeader}
-        <div class="title">${range.label} 지출현황</div>
-        <table>
-          <colgroup>
-            <col style="width:15%"><col style="width:13%"><col style="width:26%"><col style="width:23%"><col style="width:23%">
-          </colgroup>
-          <thead><tr>
-            ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
-          </tr></thead>
-          <tbody>${tableRows}</tbody>
-          <tbody>
-            <tr><td colspan="3" class="ft">합  계</td><td colspan="2" class="ft" style="text-align:right;">${grandTotal.toLocaleString('ko-KR')}</td></tr>
-            <tr><td colspan="3" class="ft">순지출(지출-예금)</td><td colspan="2" class="ft" style="text-align:right;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td></tr>
-          </tbody>
-        </table>
-      </div></div>
+    page2 = `
+      <div class="print-page" style="page-break-before:always;break-before:page;">
+        <div id="expInner">
+          ${pageHeader}
+          <div style="font-size:11pt;font-weight:800;margin-bottom:5pt;">${range.label} 지출현황</div>
+          <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+            <colgroup>
+              <col style="width:15%"><col style="width:13%"><col style="width:26%"><col style="width:23%"><col style="width:23%">
+            </colgroup>
+            <thead><tr>
+              ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
+            </tr></thead>
+            <tbody>${tableRows}
+              <tr style="background:#2E74B5!important;">
+                <td colspan="3" style="${FT}">합  계</td>
+                <td style="${FT}text-align:right;">${grandTotal.toLocaleString('ko-KR')}</td>
+                <td style="${FT}"></td>
+              </tr>
+              <tr style="background:#2E74B5!important;">
+                <td colspan="3" style="${FT}">순지출(지출-예금)</td>
+                <td style="${FT}text-align:right;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
+                <td style="${FT}"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       <script>
         (function(){
-          var inner = document.getElementById('inner');
-          var wrap  = document.getElementById('wrap');
-          if(!inner||!wrap) return;
-          var availH = wrap.clientHeight || (297*3.7795 - 76*3.7795);
-          var contentH = inner.scrollHeight;
-          if(contentH > availH){
-            var s = availH / contentH;
-            inner.style.transform = 'scale('+s+')';
-            inner.style.width = (100/s)+'%';
-            wrap.style.overflow = 'hidden';
+          var el = document.getElementById('expInner');
+          if(!el) return;
+          var maxH = 960;
+          var h = el.scrollHeight;
+          if(h > maxH){
+            var s = maxH / h;
+            el.style.transformOrigin = 'top left';
+            el.style.transform = 'scale('+s+')';
+            el.style.width = Math.round(100/s)+'%';
+            el.parentElement.style.overflow = 'hidden';
+            el.parentElement.style.height = maxH+'px';
           }
         })();
-      </script>
-    </body></html>`;
-
-    // page2는 별도 탭으로 열기 (page1과 분리)
-    const expBlob = new Blob([expenseHTML], {type:'text/html'});
-    const expUrl  = URL.createObjectURL(expBlob);
-    page2 = { url: expUrl };
+      </script>`;
   }
 
   // 현재 보이는 페이지만 인쇄
-  if (isIncome) {
-    const html = pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '';
-    doPrint(html);
-  } else {
-    doPrint(page1);
-    if (page2 && page2.url) {
-      setTimeout(() => {
-        window.open(page2.url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(page2.url), 60000);
-      }, 800);
-    }
-  }
+  const html = isIncome
+    ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
+    : page1 + page2;
+  doPrint(html);
 }
 
 function renderStats() {
