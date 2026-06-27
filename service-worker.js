@@ -1,7 +1,7 @@
-// 2026-06-27 17:50 KST | 수정: CACHE_NAME v167 (인쇄 배율 font-size 스케일링)
+// 2026-06-27 18:10 KST | 수정: CACHE_NAME v168 (인쇄 body zoom 균일 배율)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v167';
+const CACHE_NAME = 'gaegyebu-v168';
 const ASSETS = [
   './',
   './index.html',

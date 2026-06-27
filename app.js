@@ -1,4 +1,4 @@
-// v2.63 | 2026-06-27 17:50 KST | 수정: 인쇄 배율 font-size 직접 스케일링, 새탭 방식 통일 | cache:v167
+// v2.64 | 2026-06-27 18:10 KST | 수정: 인쇄 배율 body zoom 적용 (텍스트+박스+보더 전체 균일 축소) | cache:v168
 'use strict';
 
 /* =========================================================
@@ -664,51 +664,45 @@ function _showPrintScaleSheet(html) {
 
 function _executePrint(html, scalePct) {
   const scale = Math.min(Math.max(scalePct, 40), 120) / 100;
-  // font-size, padding 등을 배율에 맞게 직접 계산
-  const fs = (pt) => (pt * scale).toFixed(2) + 'pt';
-  const px = (pt) => (pt * scale).toFixed(1) + 'pt';
 
+  // 기본 CSS — 크기 값은 100% 기준 고정 (zoom으로 전체 축소)
   const printCSS = `
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-    body{margin:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:${fs(10)};color:#000;background:#fff;}
-    table{border-collapse:collapse;width:100%;font-size:${fs(8)};table-layout:fixed;border:0.5pt solid #555;}
+    body{
+      margin:0;
+      font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
+      font-size:10pt;color:#000;background:#fff;
+    }
+    table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:0.5pt solid #555;}
     th{
       background:#1F4E79!important;color:#fff!important;
-      padding:${px(3)} ${px(4)};
-      border:0.5pt solid #3a6fa0!important;
-      font-size:${fs(8)};font-weight:700;
+      padding:3pt 4pt;border:0.5pt solid #3a6fa0!important;
+      font-size:8pt;font-weight:700;
     }
-    td{
-      padding:${px(2)} ${px(4)};
-      border:0.5pt solid #aaa!important;
-      font-size:${fs(8)};
-    }
+    td{padding:2pt 4pt;border:0.5pt solid #aaa!important;font-size:8pt;}
     tr:nth-child(even) td{background:#f7f9fc!important;}
     tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
-    .print-title{font-size:${fs(14)};font-weight:800;margin-bottom:${px(6)};}
-    .print-period{font-size:${fs(10)};color:#555;margin-bottom:${px(8)};}
-    .print-summary{display:flex;gap:${px(16)};margin-bottom:${px(10)};border-bottom:1pt solid #000;padding-bottom:${px(6)};flex-wrap:wrap;}
-    .print-summary-item{flex:1;min-width:${px(80)};}
-    .print-summary-label{font-size:${fs(8)};color:#666;}
-    .print-summary-value{font-size:${fs(12)};font-weight:800;}
+    .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
+    .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
+    .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
+    .print-summary-item{flex:1;min-width:80pt;}
+    .print-summary-label{font-size:8pt;color:#666;}
+    .print-summary-value{font-size:12pt;font-weight:800;}
     .print-summary-value.income{color:#1F5C8B;}
     .print-summary-value.expense{color:#B00;}
-    .print-bar-row{display:flex;justify-content:space-between;padding:${px(4)} 2pt;border-bottom:0.5pt solid #ccc;font-size:${fs(9)};}
+    .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #ccc;font-size:9pt;}
     .print-bar-label{flex:1;}
-    .print-bar-amt{font-weight:700;min-width:${px(70)};text-align:right;}
-    .print-bar-pct{min-width:${px(30)};text-align:right;color:#555;}
-    .print-section-title{font-size:${fs(12)};font-weight:800;margin-bottom:${px(6)};margin-top:${px(8)};}
+    .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
+    .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
+    .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
     @media print{
       @page{size:A4 portrait;margin:15mm 18mm;}
+      body{zoom:${scale};}
       .print-page{
-        page-break-after:always!important;
-        break-after:page!important;
+        page-break-after:always!important;break-after:page!important;
         page-break-inside:avoid!important;
       }
-      .print-page:last-child{
-        page-break-after:avoid!important;
-        break-after:avoid!important;
-      }
+      .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
       table{page-break-inside:auto;border:0.5pt solid #555!important;}
       tr{page-break-inside:avoid;}
       th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}
@@ -724,35 +718,34 @@ function _executePrint(html, scalePct) {
     <title>인쇄 (${scalePct}%)</title>
     <style>
       ${printCSS}
-      html,body{margin:0;padding:0;background:#f0f0f0;}
+      html{background:#f0f0f0;}
+      body{zoom:${scale};background:#f0f0f0;}
       .print-page{
-        width:210mm;
-        min-height:10mm;
-        margin:8px auto;
-        padding:10mm;
-        box-sizing:border-box;
-        background:#fff;
-        display:block;
+        width:210mm;min-height:10mm;margin:8px auto;padding:10mm;
+        box-sizing:border-box;background:#fff;display:block;
         box-shadow:0 2px 8px rgba(0,0,0,0.15);
       }
       .top-bar{
         position:sticky;top:0;z-index:99;
         display:flex;align-items:center;gap:12px;
-        padding:10px 16px;
-        background:#1d4ed8;
+        padding:10px 16px;background:#1d4ed8;
+        /* zoom 적용된 body 안에 있으므로 역방향으로 키워서 항상 전체 폭 유지 */
+        width:${(100/scale).toFixed(4)}%;
+        margin-left:0;
+        box-sizing:border-box;
       }
       .btn-print{
-        flex:1;padding:12px 0;
-        background:#fff;color:#1d4ed8;
-        font-size:15px;font-weight:800;border:none;
+        flex:1;padding:12px 0;background:#fff;color:#1d4ed8;
+        font-size:${Math.round(15/scale)}px;font-weight:800;border:none;
         border-radius:8px;cursor:pointer;
       }
       .scale-info{
-        color:#fff;font-size:13px;font-weight:600;white-space:nowrap;
-        background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;
+        color:#fff;font-size:${Math.round(13/scale)}px;font-weight:600;
+        white-space:nowrap;background:rgba(255,255,255,0.2);
+        padding:6px 12px;border-radius:6px;
       }
       @media print{
-        html,body{background:#fff;}
+        html{background:#fff;}
         .top-bar{display:none!important;}
         .print-page{
           width:100%!important;margin:0!important;padding:0!important;
