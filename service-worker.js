@@ -1,7 +1,7 @@
-// 2026-06-27 22:40 KST | 수정: CACHE_NAME v181 (인쇄 배율 @page size 역산)
+// 2026-06-27 23:00 KST | 수정: CACHE_NAME v182 (인쇄 단순화)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v181';
+const CACHE_NAME = 'gaegyebu-v182';
 const ASSETS = [
   './',
   './index.html',
