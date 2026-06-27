@@ -1,4 +1,4 @@
-// v2.91 | 2026-06-28 01:50 KST | 수정: iOS 인쇄 빈페이지 제거, min-height 제거, 화면연속표시 | cache:v195
+// v2.92 | 2026-06-28 02:10 KST | 수정: 설정 버전 표시 업데이트, 앱 업데이트 버튼 추가 | cache:v196
 'use strict';
 
 /* =========================================================
@@ -3556,11 +3556,15 @@ function renderSettings() {
       <input type="file" id="importFile" accept="application/json" style="display:none;">
     </div>
 
-    <div class="settings-group">
+      <div class="settings-group">
       <div class="settings-group-title">정보</div>
       <div class="settings-row">
         <div class="settings-label">버전</div>
-        <div class="settings-value">1.0.0 (로컬 저장)</div>
+        <div class="settings-value">v2.91 (cache v195)</div>
+      </div>
+      <div class="settings-row" id="rowUpdate" style="cursor:pointer;">
+        <div class="settings-label">앱 업데이트</div>
+        <div class="settings-value" style="color:var(--primary);font-size:12px;">새로고침으로 최신버전 로드</div>
       </div>
       <div class="settings-row" style="flex-direction:column; align-items:flex-start; gap:2px;">
         <div class="settings-label">개발</div>
@@ -3621,6 +3625,17 @@ function renderSettings() {
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
   page.querySelector('#importFile').addEventListener('change', importData);
+  page.querySelector('#rowUpdate').addEventListener('click', async () => {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        await reg.unregister();
+      }
+    }
+    showToast('캐시를 비웠습니다. 새로고침합니다...');
+    setTimeout(() => location.reload(true), 800);
+  });
+
   page.querySelector('#rowReset').addEventListener('click', resetAllData);
 }
 
