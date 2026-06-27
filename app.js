@@ -1,4 +1,4 @@
-// v2.66 | 2026-06-27 18:50 KST | 수정: 모든 인쇄 새탭 통일, print-area 제거, printScaleSheet 제거 | cache:v170
+// v2.67 | 2026-06-27 19:10 KST | 수정: 인쇄 배율 zoom-style 태그 교체로 화면/인쇄 완전 동기화 | cache:v171
 'use strict';
 
 /* =========================================================
@@ -570,44 +570,41 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  // 새 탭을 열고, 탭 안의 툴바에서 배율 조정 + 인쇄
+  const DEFAULT_SCALE = 100;
+
   const printHTML = `<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8">
     <title>인쇄</title>
-    <style>
-      /* ── 툴바 (zoom 바깥에 고정) ── */
+    <style id="base-style">
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
+      html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;}
+      /* ── 화면 레이아웃 ── */
       #toolbar{
         position:fixed;top:0;left:0;right:0;z-index:9999;
-        display:flex;align-items:center;gap:12px;
+        display:flex;align-items:center;gap:14px;
         padding:10px 20px;background:#1d4ed8;
         font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
       }
       #toolbar button{
         padding:9px 24px;background:#fff;color:#1d4ed8;
         font-size:14px;font-weight:800;border:none;
-        border-radius:8px;cursor:pointer;white-space:nowrap;
+        border-radius:8px;cursor:pointer;
       }
-      #toolbar button:hover{background:#e0e7ff;}
-      #toolbar label{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;}
-      #scaleSlider{width:140px;accent-color:#fff;}
-      #scaleVal{
-        color:#fff;font-size:13px;font-weight:700;
-        min-width:36px;text-align:right;
-      }
-      /* ── 콘텐츠 래퍼 ── */
+      #toolbar label{color:#fff;font-size:13px;font-weight:600;}
+      #scaleSlider{width:160px;accent-color:#fff;}
+      #scaleVal{color:#fff;font-size:14px;font-weight:800;min-width:44px;}
       #wrap{
-        margin-top:56px;   /* 툴바 높이만큼 밀기 */
+        margin-top:60px;
         background:#e5e7eb;
         padding:20px 0;
-        min-height:calc(100vh - 56px);
+        min-height:calc(100vh - 60px);
+        transform-origin:top left;
       }
-      /* ── 공통 인쇄 CSS ── */
-      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
       .print-page{
         width:210mm;margin:0 auto 12px;padding:12mm;
         background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);
       }
-      body{font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;}
+      /* ── 공통 콘텐츠 CSS ── */
       table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:0.5pt solid #555;}
       th{background:#1F4E79!important;color:#fff!important;padding:3pt 4pt;border:0.5pt solid #3a6fa0!important;font-size:8pt;font-weight:700;}
       td{padding:2pt 4pt;border:0.5pt solid #aaa!important;font-size:8pt;}
@@ -626,49 +623,59 @@ function doPrint(html) {
       .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
       .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
       .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
-      /* ── 인쇄 미디어 ── */
-      @media print{
-        #toolbar{display:none!important;}
-        #wrap{margin-top:0!important;padding:0!important;background:#fff!important;}
-        .print-page{width:100%!important;margin:0!important;padding:0!important;box-shadow:none!important;}
-        @page{size:A4 portrait;margin:15mm 18mm;}
-        table{page-break-inside:auto;}
-        tr{page-break-inside:avoid;}
-        th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}
-        td{border:0.5pt solid #aaa!important;}
-        tfoot td{background:#1F4E79!important;color:#fff!important;}
-        .print-page{page-break-after:always;break-after:page;}
-        .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+    </style>
+    <!-- 배율 전용 style: JS가 슬라이더 값에 따라 내용 교체 -->
+    <style id="zoom-style">
+      #wrap { zoom: 1; }
+      @media print {
+        #toolbar { display:none!important; }
+        html, body { background:#fff!important; margin:0; padding:0; }
+        #wrap { zoom: 1; margin:0!important; padding:0!important; background:#fff!important; }
+        .print-page { width:100%!important; margin:0!important; padding:0!important; box-shadow:none!important; }
+        @page { size:A4 portrait; margin:15mm 18mm; }
+        table { page-break-inside:auto; }
+        tr { page-break-inside:avoid; }
+        th { background:#1F4E79!important; color:#fff!important; border:0.5pt solid #3a6fa0!important; }
+        td { border:0.5pt solid #aaa!important; }
+        tfoot td { background:#1F4E79!important; color:#fff!important; }
+        .print-page { page-break-after:always; break-after:page; }
+        .print-page:last-child { page-break-after:avoid; break-after:avoid; }
       }
     </style>
   </head><body>
     <div id="toolbar">
       <button onclick="window.print()">🖨️ 인쇄</button>
       <label for="scaleSlider">배율</label>
-      <input id="scaleSlider" type="range" min="50" max="110" value="100" step="5"
+      <input id="scaleSlider" type="range" min="50" max="110" value="${DEFAULT_SCALE}" step="5"
              oninput="applyScale(this.value)">
-      <span id="scaleVal">100%</span>
+      <span id="scaleVal">${DEFAULT_SCALE}%</span>
     </div>
     <div id="wrap">
       ${html}
     </div>
     <script>
       function applyScale(v) {
+        v = parseInt(v);
         document.getElementById('scaleVal').textContent = v + '%';
-        document.getElementById('wrap').style.zoom = (v / 100);
+        var z = v / 100;
+        // zoom-style 전체를 교체 → 화면 zoom과 @media print zoom이 항상 같은 값
+        document.getElementById('zoom-style').textContent =
+          '#wrap{zoom:' + z + ';}\n' +
+          '@media print{\n' +
+          '  #toolbar{display:none!important;}\n' +
+          '  html,body{background:#fff!important;margin:0;padding:0;}\n' +
+          '  #wrap{zoom:' + z + ';margin:0!important;padding:0!important;background:#fff!important;}\n' +
+          '  .print-page{width:100%!important;margin:0!important;padding:0!important;box-shadow:none!important;}\n' +
+          '  @page{size:A4 portrait;margin:15mm 18mm;}\n' +
+          '  table{page-break-inside:auto;}\n' +
+          '  tr{page-break-inside:avoid;}\n' +
+          '  th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}\n' +
+          '  td{border:0.5pt solid #aaa!important;}\n' +
+          '  tfoot td{background:#1F4E79!important;color:#fff!important;}\n' +
+          '  .print-page{page-break-after:always;break-after:page;}\n' +
+          '  .print-page:last-child{page-break-after:avoid;break-after:avoid;}\n' +
+          '}\n';
       }
-      // 인쇄 전에 wrap의 zoom을 @media print body에 반영
-      window.addEventListener('beforeprint', function() {
-        var z = document.getElementById('wrap').style.zoom || 1;
-        var s = document.createElement('style');
-        s.id = '__pz__';
-        s.textContent = '@media print { #wrap { zoom:' + z + ' !important; } }';
-        document.head.appendChild(s);
-      });
-      window.addEventListener('afterprint', function() {
-        var s = document.getElementById('__pz__');
-        if (s) s.remove();
-      });
     </script>
   </body></html>`;
 

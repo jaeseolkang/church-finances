@@ -1,7 +1,7 @@
-// 2026-06-27 18:50 KST | 수정: CACHE_NAME v170 (모든 인쇄 새탭, print-area 제거)
+// 2026-06-27 19:10 KST | 수정: CACHE_NAME v171 (인쇄 zoom-style 동기화)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v170';
+const CACHE_NAME = 'gaegyebu-v171';
 const ASSETS = [
   './',
   './index.html',
