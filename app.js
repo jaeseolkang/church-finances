@@ -1,4 +1,4 @@
-// v2.92 | 2026-06-28 02:10 KST | 수정: 설정 버전 표시 업데이트, 앱 업데이트 버튼 추가 | cache:v196
+// v2.93 | 2026-06-28 02:20 KST | 수정: 월장부 인쇄 매 페이지 thead 반복 | cache:v197
 'use strict';
 
 /* =========================================================
@@ -624,6 +624,7 @@ function _doPrintBlob(html) {
       }
       .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
       table{page-break-inside:auto;}
+      thead{display:table-header-group!important;}
       tr{page-break-inside:avoid;}
       th{background:#1F4E79!important;color:#fff!important;}
       tfoot td{background:#1F4E79!important;color:#fff!important;}
@@ -2753,7 +2754,7 @@ function openLedgerSheet() {
           <col style="width:9%"><col style="width:13%"><col style="width:13%">
           <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
         </colgroup>
-        <thead><tr>
+        <thead style="display:table-header-group;"><tr>
           <th style="${TH}text-align:center;">일자</th>
           <th style="${TH}">대분류</th>
           <th style="${TH}">중분류</th>

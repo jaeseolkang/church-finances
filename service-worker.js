@@ -1,7 +1,7 @@
-// 2026-06-28 02:10 KST | 수정: CACHE_NAME v196 (설정 업데이트 버튼)
+// 2026-06-28 02:20 KST | 수정: CACHE_NAME v197 (월장부 thead 반복)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v196';
+const CACHE_NAME = 'gaegyebu-v197';
 const ASSETS = [
   './',
   './index.html',
