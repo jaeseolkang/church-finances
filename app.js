@@ -1,4 +1,4 @@
-// v2.73 | 2026-06-27 21:20 KST | 수정: 인쇄 화면 미리보기 overflow 방지, 반응형 폭 | cache:v177
+// v2.74 | 2026-06-27 21:40 KST | 수정: 인쇄 새탭 제거 → window.print() 직접 호출 | cache:v178
 'use strict';
 
 /* =========================================================
@@ -570,99 +570,17 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  const printHTML = `<!DOCTYPE html><html lang="ko"><head>
-    <meta charset="UTF-8">
-    <title>인쇄</title>
-    <style>
-      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-      html,body{margin:0;padding:0;
-        font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;}
-
-      /* ── 화면 미리보기 ── */
-      body{background:#e8e8e8;}
-      html,body{overflow-x:hidden;}
-      .print-page{
-        width:calc(100% - 32px);
-        max-width:640px;
-        margin:12px auto;
-        padding:10mm 12mm;
-        background:#fff;
-        box-shadow:0 2px 10px rgba(0,0,0,.18);
-        overflow:hidden;
-      }
-      .page-inner{margin:0;padding:0;}
-
-      /* ── 인쇄 버튼 바 ── */
-      #toolbar{
-        position:sticky;top:0;z-index:99;
-        background:#1d4ed8;padding:8px 16px;
-        display:flex;align-items:center;gap:10px;
-        font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
-      }
-      #toolbar button{
-        padding:7px 18px;background:#fff;color:#1d4ed8;
-        font-size:13px;font-weight:800;border:none;border-radius:7px;cursor:pointer;
-        flex-shrink:0;white-space:nowrap;
-      }
-      #toolbar span{color:rgba(255,255,255,0.75);font-size:11px;}
-
-      /* ── 공통 콘텐츠 스타일 ── */
-      table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}
-      th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;
-         border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
-      td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
-      tr:nth-child(even) td{background:#f7f9fc!important;}
-      tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
-      .print-title{font-size:13pt;font-weight:800;margin-bottom:5pt;}
-      .print-period{font-size:9pt;color:#555;margin-bottom:7pt;}
-      .print-summary{display:flex;gap:14pt;margin-bottom:9pt;border-bottom:1pt solid #000;padding-bottom:5pt;flex-wrap:wrap;}
-      .print-summary-item{flex:1;min-width:60pt;}
-      .print-summary-label{font-size:7.5pt;color:#666;}
-      .print-summary-value{font-size:11pt;font-weight:800;}
-      .print-summary-value.income{color:#1F5C8B;}
-      .print-summary-value.expense{color:#B00;}
-      .print-bar-row{display:flex;justify-content:space-between;padding:3.5pt 2pt;border-bottom:0.5pt solid #ddd;font-size:8.5pt;}
-      .print-bar-label{flex:1;}
-      .print-bar-amt{font-weight:700;min-width:60pt;text-align:right;}
-      .print-bar-pct{min-width:26pt;text-align:right;color:#555;}
-      .print-section-title{font-size:11pt;font-weight:800;margin-bottom:5pt;margin-top:7pt;}
-
-      /* ── 인쇄 — 브라우저 배율이 가로·세로 모두 적용되도록 ── */
-      @media print{
-        html,body{background:#fff!important;margin:0;padding:0;}
-        #toolbar{display:none!important;}
-        /* print-page: 고정 폭 완전 제거, @page 여백에만 의존 */
-        .print-page{
-          width:100%!important;
-          max-width:none!important;
-          margin:0!important;
-          padding:0!important;
-          box-shadow:none!important;
-          page-break-after:always;
-          break-after:page;
-        }
-        .print-page:last-child{page-break-after:avoid;break-after:avoid;}
-        .page-inner{margin:0;padding:0;}
-        @page{size:A4 portrait;margin:15mm 18mm;}
-        table{page-break-inside:auto;}
-        tr{page-break-inside:avoid;}
-        th{background:#1F4E79!important;color:#fff!important;}
-        tfoot td{background:#1F4E79!important;color:#fff!important;}
-        tr:nth-child(even) td{background:#f7f9fc!important;}
-      }
-    </style>
-  </head><body>
-    <div id="toolbar" style="position:sticky;top:0;z-index:99;background:#1d4ed8;padding:8px 16px;display:flex;align-items:center;gap:10px;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;">
-      <button onclick="window.print()" style="padding:7px 18px;background:#fff;color:#1d4ed8;font-size:13px;font-weight:800;border:none;border-radius:7px;cursor:pointer;flex-shrink:0;white-space:nowrap;">🖨️ 인쇄</button>
-      <span style="color:rgba(255,255,255,0.75);font-size:11px;">인쇄 크기는 브라우저 인쇄 설정의 배율로 조정하세요</span>
-    </div>
-    ${html}
-  </body></html>`;
-
-  const blob = new Blob([printHTML], {type:'text/html'});
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 300000);
+  // print-area에 콘텐츠 삽입 후 window.print() — 새 탭 없음
+  const area = document.getElementById('print-area');
+  area.innerHTML = html;
+  area.style.display = 'block';
+  const cleanup = () => {
+    area.style.display = 'none';
+    area.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(() => window.print(), 80);
 }
 
 /* =========================================================

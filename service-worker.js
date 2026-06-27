@@ -1,7 +1,7 @@
-// 2026-06-27 21:20 KST | 수정: CACHE_NAME v177 (인쇄 미리보기 overflow 방지)
+// 2026-06-27 21:40 KST | 수정: CACHE_NAME v178 (인쇄 window.print 직접)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v177';
+const CACHE_NAME = 'gaegyebu-v178';
 const ASSETS = [
   './',
   './index.html',
