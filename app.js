@@ -1,4 +1,4 @@
-// v2.62 | 2026-06-27 17:30 KST | 수정: 인쇄 비율 선택 시트 (40~120%), PC zoom / iOS transform 적용 | cache:v166
+// v2.63 | 2026-06-27 17:50 KST | 수정: 인쇄 배율 font-size 직접 스케일링, 새탭 방식 통일 | cache:v167
 'use strict';
 
 /* =========================================================
@@ -664,39 +664,40 @@ function _showPrintScaleSheet(html) {
 
 function _executePrint(html, scalePct) {
   const scale = Math.min(Math.max(scalePct, 40), 120) / 100;
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  // font-size, padding 등을 배율에 맞게 직접 계산
+  const fs = (pt) => (pt * scale).toFixed(2) + 'pt';
+  const px = (pt) => (pt * scale).toFixed(1) + 'pt';
 
-  // 공통 CSS (iOS 새탭 + PC 모두 사용)
   const printCSS = `
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-    body{margin:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;background:#fff;}
-    table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:1pt solid #555;}
+    body{margin:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:${fs(10)};color:#000;background:#fff;}
+    table{border-collapse:collapse;width:100%;font-size:${fs(8)};table-layout:fixed;border:0.5pt solid #555;}
     th{
       background:#1F4E79!important;color:#fff!important;
-      padding:3pt 4pt;
+      padding:${px(3)} ${px(4)};
       border:0.5pt solid #3a6fa0!important;
-      font-size:8pt;font-weight:700;
+      font-size:${fs(8)};font-weight:700;
     }
     td{
-      padding:2pt 4pt;
-      border:1pt solid #666!important;
-      font-size:8pt;
+      padding:${px(2)} ${px(4)};
+      border:0.5pt solid #aaa!important;
+      font-size:${fs(8)};
     }
     tr:nth-child(even) td{background:#f7f9fc!important;}
     tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
-    .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
-    .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
-    .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
-    .print-summary-item{flex:1;min-width:80pt;}
-    .print-summary-label{font-size:8pt;color:#666;}
-    .print-summary-value{font-size:12pt;font-weight:800;}
+    .print-title{font-size:${fs(14)};font-weight:800;margin-bottom:${px(6)};}
+    .print-period{font-size:${fs(10)};color:#555;margin-bottom:${px(8)};}
+    .print-summary{display:flex;gap:${px(16)};margin-bottom:${px(10)};border-bottom:1pt solid #000;padding-bottom:${px(6)};flex-wrap:wrap;}
+    .print-summary-item{flex:1;min-width:${px(80)};}
+    .print-summary-label{font-size:${fs(8)};color:#666;}
+    .print-summary-value{font-size:${fs(12)};font-weight:800;}
     .print-summary-value.income{color:#1F5C8B;}
     .print-summary-value.expense{color:#B00;}
-    .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #ccc;font-size:9pt;}
+    .print-bar-row{display:flex;justify-content:space-between;padding:${px(4)} 2pt;border-bottom:0.5pt solid #ccc;font-size:${fs(9)};}
     .print-bar-label{flex:1;}
-    .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
-    .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
-    .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
+    .print-bar-amt{font-weight:700;min-width:${px(70)};text-align:right;}
+    .print-bar-pct{min-width:${px(30)};text-align:right;color:#555;}
+    .print-section-title{font-size:${fs(12)};font-weight:800;margin-bottom:${px(6)};margin-top:${px(8)};}
     @media print{
       @page{size:A4 portrait;margin:15mm 18mm;}
       .print-page{
@@ -708,113 +709,69 @@ function _executePrint(html, scalePct) {
         page-break-after:avoid!important;
         break-after:avoid!important;
       }
-      table{page-break-inside:auto;border:1pt solid #555!important;}
+      table{page-break-inside:auto;border:0.5pt solid #555!important;}
       tr{page-break-inside:avoid;}
       th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}
       td{border:0.5pt solid #aaa!important;}
       tfoot td{background:#1F4E79!important;color:#fff!important;}
+      .no-print{display:none!important;}
     }
   `;
 
-  // scale을 적용한 래퍼 스타일
-  const scaleStyle = scale !== 1 ? `
-    #print-scale-wrap {
-      transform: scale(${scale});
-      transform-origin: top left;
-      width: ${(100/scale).toFixed(2)}%;
-    }
-  ` : '';
-
-  if (isIOS) {
-    const printHTML = `<!DOCTYPE html><html lang="ko"><head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>인쇄</title>
-      <style>
-        ${printCSS}
-        ${scaleStyle}
-        html,body{margin:0;padding:0;background:#f0f0f0;}
+  const printHTML = `<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>인쇄 (${scalePct}%)</title>
+    <style>
+      ${printCSS}
+      html,body{margin:0;padding:0;background:#f0f0f0;}
+      .print-page{
+        width:210mm;
+        min-height:10mm;
+        margin:8px auto;
+        padding:10mm;
+        box-sizing:border-box;
+        background:#fff;
+        display:block;
+        box-shadow:0 2px 8px rgba(0,0,0,0.15);
+      }
+      .top-bar{
+        position:sticky;top:0;z-index:99;
+        display:flex;align-items:center;gap:12px;
+        padding:10px 16px;
+        background:#1d4ed8;
+      }
+      .btn-print{
+        flex:1;padding:12px 0;
+        background:#fff;color:#1d4ed8;
+        font-size:15px;font-weight:800;border:none;
+        border-radius:8px;cursor:pointer;
+      }
+      .scale-info{
+        color:#fff;font-size:13px;font-weight:600;white-space:nowrap;
+        background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;
+      }
+      @media print{
+        html,body{background:#fff;}
+        .top-bar{display:none!important;}
         .print-page{
-          width:210mm;
-          margin:8px auto;
-          padding:12mm 10mm;
-          box-sizing:border-box;
-          background:#fff;
-          display:block;
-          page-break-after:always!important;
-          break-after:page!important;
-          box-shadow:0 2px 8px rgba(0,0,0,0.15);
+          width:100%!important;margin:0!important;padding:0!important;
+          box-shadow:none!important;
         }
-        .print-page:last-child{
-          page-break-after:avoid!important;
-          break-after:avoid!important;
-        }
-        .btn{
-          display:block;width:calc(100% - 24px);margin:12px auto;padding:14px;
-          background:#1d4ed8;color:#fff;text-align:center;
-          font-size:16px;font-weight:700;border:none;
-          border-radius:10px;cursor:pointer;position:sticky;top:0;z-index:99;
-        }
-        .scale-badge{
-          display:block;text-align:center;font-size:12px;color:#888;
-          margin:-4px auto 10px;
-        }
-        @media print{
-          html,body{margin:0;padding:0;background:#fff;}
-          .btn,.scale-badge{display:none!important;}
-          .print-page{
-            width:100%!important;
-            margin:0!important;
-            padding:0!important;
-            box-shadow:none!important;
-            page-break-after:always!important;
-            break-after:page!important;
-          }
-          .print-page:last-child{
-            page-break-after:avoid!important;
-            break-after:avoid!important;
-          }
-          @page{size:A4 portrait;margin:12mm 18mm;}
-        }
-      </style>
-    </head><body>
-      <button class="btn" onclick="window.print()">🖨️ 프린트</button>
-      <span class="scale-badge">인쇄 비율: ${scalePct}%</span>
-      <div id="print-scale-wrap">${html}</div>
-    </body></html>`;
-    const blob = new Blob([printHTML], {type:'text/html'});
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    return;
-  }
+      }
+    </style>
+  </head><body>
+    <div class="top-bar">
+      <button class="btn-print" onclick="window.print()">🖨️ 인쇄</button>
+      <span class="scale-info">배율 ${scalePct}%</span>
+    </div>
+    ${html}
+  </body></html>`;
 
-  // PC / Android
-  const area = document.getElementById('print-area');
-  // scale 래퍼 적용
-  if (scale !== 1) {
-    area.innerHTML = `<div id="print-scale-wrap" style="transform:scale(${scale});transform-origin:top left;width:${(100/scale).toFixed(2)}%;">${html}</div>`;
-  } else {
-    area.innerHTML = html;
-  }
-  area.style.display = 'block';
-
-  // PC 인쇄 시 @page scale 반영 (CSS zoom)
-  const styleId = '__print_scale_style__';
-  let pStyle = document.getElementById(styleId);
-  if (!pStyle) { pStyle = document.createElement('style'); pStyle.id = styleId; document.head.appendChild(pStyle); }
-  pStyle.textContent = scale !== 1
-    ? `@media print { #print-area { zoom: ${scale}; } @page { size: A4 portrait; margin: 15mm 18mm; } }`
-    : `@media print { @page { size: A4 portrait; margin: 15mm 18mm; } }`;
-
-  const cleanup = () => {
-    area.style.display = 'none';
-    area.innerHTML = '';
-    pStyle.textContent = '';
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  setTimeout(() => window.print(), 150);
+  const blob = new Blob([printHTML], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* =========================================================

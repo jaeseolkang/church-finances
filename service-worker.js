@@ -1,7 +1,7 @@
-// 2026-06-27 17:30 KST | 수정: CACHE_NAME v166 (인쇄 비율 선택)
+// 2026-06-27 17:50 KST | 수정: CACHE_NAME v167 (인쇄 배율 font-size 스케일링)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v166';
+const CACHE_NAME = 'gaegyebu-v167';
 const ASSETS = [
   './',
   './index.html',
