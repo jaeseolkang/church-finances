@@ -651,9 +651,9 @@ function _doPrintBlob(html) {
     .print-section-title{font-size:11pt;font-weight:800;margin-bottom:5pt;margin-top:7pt;}
     .page-inner{margin:0;padding:0;}
     #pivot-tbl{table-layout:fixed!important;width:100%!important;}
-    #pivot-tbl th{font-size:6pt!important;padding:2pt 1pt!important;text-align:center!important;overflow:hidden!important;word-break:break-all!important;}
-    #pivot-tbl td{font-size:6.5pt!important;padding:2pt 1pt!important;overflow:hidden!important;word-break:break-all!important;}
-    #pivot-tbl col{width:var(--cw)!important;}
+    #pivot-tbl col{width:var(--pcw);}
+    #pivot-tbl th{font-size:6pt!important;padding:2pt 1pt!important;text-align:center!important;overflow:hidden!important;word-break:break-all!important;min-width:0!important;box-sizing:border-box!important;}
+    #pivot-tbl td{font-size:6.5pt!important;padding:2pt 1pt!important;overflow:hidden!important;word-break:break-all!important;min-width:0!important;box-sizing:border-box!important;}
     @media print{
       @page{size:A4 portrait;margin:15mm 25mm;}
       .print-page{
@@ -1971,12 +1971,18 @@ function printStats() {
         // 모든 열 동일 너비: 전체 열 수로 100% 균등 분할
         const totalCols = orderedCols.length + 2; // 이름 + 헌금종류들 + 합계
         const colPct = (100 / totalCols).toFixed(4);
-        const colgroup = '<colgroup>' + Array(totalCols).fill(`<col style="width:${colPct}%">`).join('') + '</colgroup>';
+        const colgroup = `<colgroup>${Array(totalCols).fill('').map((_,i)=>`<col style="width:${colPct}%;">`).join('')}</colgroup>`;
+        // 인쇄 CSS 강제 override용 style 태그
+        const pivotStyle = `<style>
+          #pivot-tbl col { width: ${colPct}% !important; }
+          #pivot-tbl th, #pivot-tbl td { min-width: 0 !important; box-sizing: border-box !important; }
+        </style>`;
         const TH_S = 'padding:2pt 1pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;font-size:6pt;text-align:center;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         const TD_N = 'padding:2pt 1pt;border:0.5pt solid #aaa;font-size:6.5pt;text-align:right;overflow:hidden;';
         const TD_SUM = 'padding:2pt 1pt;border:0.5pt solid #aaa;font-size:6.5pt;text-align:right;overflow:hidden;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         const FT_S = 'padding:2pt 1pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:6.5pt;text-align:right;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
         pivotHTML = `
+          ${pivotStyle}
           <div style="margin-top:6pt;">
             <div style="font-size:10pt;font-weight:800;margin-bottom:4pt;border-bottom:0.5pt solid #000;padding-bottom:2pt;">🙏 헌금 개인별 명세</div>
             <table id="pivot-tbl" style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:6.5pt;">
