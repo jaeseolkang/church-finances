@@ -2153,58 +2153,84 @@ function printStats() {
       </tr>`;
     }
 
-    page2 = `
-      <div class="print-page" id="expensePage2" style="page-break-before:always;break-before:page;">
-        <div class="page-inner" id="expensePageInner">
-          ${pageHeader}
-          <div class="print-section-title">${range.label} 지출현황</div>
-          <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
-            <colgroup>
-              <col style="width:15%">
-              <col style="width:13%">
-              <col style="width:26%">
-              <col style="width:23%">
-              <col style="width:23%">
-            </colgroup>
-            <thead><tr>
-              ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
-            </tr></thead>
-            <tbody>${tableRows}
-              <tr>
-                <td colspan="3" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
-                <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
-              </tr>
-              <tr>
-                <td colspan="3" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
-                <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    // page2: 지출현황을 독립 HTML로 만들어 별도 탭에서 열기
+    const FT = 'padding:3pt 4pt;border:1pt solid #1a5fa8;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+    const expenseHTML = `<!DOCTYPE html><html lang="ko"><head>
+      <meta charset="UTF-8">
+      <style>
+        *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+        html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;background:#fff;color:#000;}
+        #wrap{padding:10mm 14mm;width:210mm;min-height:297mm;}
+        #inner{transform-origin:top left;}
+        table{border-collapse:collapse;width:100%;table-layout:fixed;}
+        th{padding:3pt 3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+        td{padding:2.5pt 3pt;border:0.5pt solid #aaa;font-size:8pt;}
+        .ft{${FT}}
+        .title{font-size:13pt;font-weight:800;margin-bottom:4pt;}
+        .period{font-size:9pt;color:#555;margin-bottom:8pt;}
+        #print-btn{display:block;width:calc(100% - 32px);margin:16px auto;padding:14px;background:#1d4ed8;color:#fff;font-size:16px;font-weight:800;border:none;border-radius:12px;cursor:pointer;}
+        @media print{
+          #print-btn{display:none!important;}
+          @page{size:A4 portrait;margin:0;}
+          html,body{margin:0;padding:0;}
+          #wrap{padding:10mm 14mm;}
+        }
+      </style>
+    </head><body>
+      <button id="print-btn" onclick="window.print()">🖨️ 인쇄</button>
+      <div id="wrap"><div id="inner">
+        ${pageHeader}
+        <div class="title">${range.label} 지출현황</div>
+        <table>
+          <colgroup>
+            <col style="width:15%"><col style="width:13%"><col style="width:26%"><col style="width:23%"><col style="width:23%">
+          </colgroup>
+          <thead><tr>
+            ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+          <tbody>
+            <tr><td colspan="3" class="ft">합  계</td><td colspan="2" class="ft" style="text-align:right;">${grandTotal.toLocaleString('ko-KR')}</td></tr>
+            <tr><td colspan="3" class="ft">순지출(지출-예금)</td><td colspan="2" class="ft" style="text-align:right;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td></tr>
+          </tbody>
+        </table>
+      </div></div>
       <script>
         (function(){
-          var inner = document.getElementById('expensePageInner');
-          if(!inner) return;
-          // A4 portrait 인쇄 가능 영역 높이: 297mm - 30mm margin = 267mm = ~756pt
-          var maxH = 756;
-          var h = inner.scrollHeight;
-          if(h > maxH){
-            var scale = maxH / h;
-            inner.style.transformOrigin = 'top left';
-            inner.style.transform = 'scale(' + scale + ')';
-            inner.style.width = (100/scale) + '%';
+          var inner = document.getElementById('inner');
+          var wrap  = document.getElementById('wrap');
+          if(!inner||!wrap) return;
+          var availH = wrap.clientHeight || (297*3.7795 - 76*3.7795);
+          var contentH = inner.scrollHeight;
+          if(contentH > availH){
+            var s = availH / contentH;
+            inner.style.transform = 'scale('+s+')';
+            inner.style.width = (100/s)+'%';
+            wrap.style.overflow = 'hidden';
           }
         })();
-      </script>`;
+      </script>
+    </body></html>`;
+
+    // page2는 별도 탭으로 열기 (page1과 분리)
+    const expBlob = new Blob([expenseHTML], {type:'text/html'});
+    const expUrl  = URL.createObjectURL(expBlob);
+    page2 = { url: expUrl };
   }
 
   // 현재 보이는 페이지만 인쇄
-  const html = isIncome
-    ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
-    : page1 + page2;
-
-  doPrint(html);
+  if (isIncome) {
+    const html = pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '';
+    doPrint(html);
+  } else {
+    doPrint(page1);
+    if (page2 && page2.url) {
+      setTimeout(() => {
+        window.open(page2.url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(page2.url), 60000);
+      }, 800);
+    }
+  }
 }
 
 function renderStats() {
