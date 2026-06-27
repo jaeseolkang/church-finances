@@ -2804,21 +2804,27 @@ function openLedgerSheet() {
       </table>`;
 
     const approvalBoxScreen = `
-      <div style="display:flex;justify-content:flex-end;margin-top:16px;margin-bottom:8px;">
-        <table style="border-collapse:collapse;font-size:9px;border:1px solid #555;">
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;margin-bottom:8px;">
+        <table style="border-collapse:collapse;table-layout:fixed;width:155px;border:1px solid #555;">
+          <colgroup>
+            <col style="width:17px;">
+            <col style="width:46px;">
+            <col style="width:46px;">
+            <col style="width:46px;">
+          </colgroup>
           <tbody>
             <tr>
-              <td rowspan="2" style="border:1px solid #555;padding:0;text-align:center;font-weight:700;width:9px;vertical-align:middle;">
-                <div style="writing-mode:vertical-lr;text-orientation:mixed;font-size:9px;font-weight:700;letter-spacing:1px;padding:3px 2px;color:inherit;">결재</div>
+              <td rowspan="2" style="border:1px solid #555;padding:0;text-align:center;font-weight:700;font-size:8px;vertical-align:middle;overflow:hidden;">
+                <span style="display:inline-block;writing-mode:vertical-lr;text-orientation:mixed;letter-spacing:2px;font-size:8px;font-weight:700;">결재</span>
               </td>
-              <td style="border:1px solid #555;padding:2px 0;text-align:center;font-weight:700;width:42px;font-size:8px;white-space:nowrap;">담 당</td>
-              <td style="border:1px solid #555;padding:2px 0;text-align:center;font-weight:700;width:42px;font-size:8px;white-space:nowrap;">부 장</td>
-              <td style="border:1px solid #555;padding:2px 0;text-align:center;font-weight:700;width:42px;font-size:8px;white-space:nowrap;">담임목사</td>
+              <td style="border:1px solid #555;padding:2px 0;text-align:center;font-weight:700;font-size:8px;white-space:nowrap;overflow:hidden;">담당</td>
+              <td style="border:1px solid #555;padding:2px 0;text-align:center;font-weight:700;font-size:8px;white-space:nowrap;overflow:hidden;">부장</td>
+              <td style="border:1px solid #555;padding:2px 0;text-align:center;font-weight:700;font-size:8px;white-space:nowrap;overflow:hidden;">담임목사</td>
             </tr>
             <tr>
-              <td style="border:1px solid #555;height:63px;width:42px;"></td>
-              <td style="border:1px solid #555;height:63px;width:42px;"></td>
-              <td style="border:1px solid #555;height:63px;width:42px;"></td>
+              <td style="border:1px solid #555;height:42px;"></td>
+              <td style="border:1px solid #555;height:42px;"></td>
+              <td style="border:1px solid #555;height:42px;"></td>
             </tr>
           </tbody>
         </table>
