@@ -280,6 +280,42 @@ function subItemsOfGroup(groupId) {
     .sort((a,b) => (a.order??0)-(b.order??0));
 }
 
+// 한 대분류(예: 헌금) 안의 모든 중분류(헌금자 이름)들이 공통으로 가져야 하는
+// 소분류(헌금종류) 이름 목록. 어느 중분류에든 한 번이라도 등록된 이름이면 전체 후보가 됨.
+// TX_ENTRY_ITEM_ORDER에 있는 이름은 그 순서를 우선하고, 나머지는 등장 순서대로 뒤에 붙인다.
+function canonicalSubItemNamesForCategory(catId) {
+  const groups = subGroupsOfCategory(catId);
+  const seen = [];
+  for (const g of groups) {
+    for (const s of subItemsOfGroup(g.id)) {
+      if (!seen.includes(s.name)) seen.push(s.name);
+    }
+  }
+  const known = TX_ENTRY_ITEM_ORDER.filter(n => seen.includes(n));
+  const rest = seen.filter(n => !TX_ENTRY_ITEM_ORDER.includes(n));
+  return [...known, ...rest];
+}
+
+// 새 중분류(헌금자 이름)를 만들 때, 기존에 다른 중분류들이 갖고 있는
+// 공통 소분류(헌금종류)들을 기본값으로 자동 생성해준다.
+async function seedDefaultSubItemsForGroup(groupId, catId) {
+  const names = canonicalSubItemNamesForCategory(catId);
+  for (let i = 0; i < names.length; i++) {
+    await DB.put('subItems', { id: uid(), categoryId: catId, subGroupId: groupId, name: names[i], order: i, budget: 0 });
+  }
+}
+
+// 한 중분류에 새 소분류(헌금종류)를 추가했을 때, 같은 대분류의 다른 모든 중분류에도
+// 같은 이름의 소분류가 없으면 자동으로 똑같이 만들어 전체에 적용한다.
+async function propagateSubItemToSiblingGroups(catId, groupId, name) {
+  const groups = subGroupsOfCategory(catId).filter(g => g.id !== groupId);
+  for (const g of groups) {
+    const existing = subItemsOfGroup(g.id);
+    if (existing.find(s => s.name === name)) continue;
+    await DB.put('subItems', { id: uid(), categoryId: catId, subGroupId: g.id, name, order: existing.length, budget: 0 });
+  }
+}
+
 function personsOfCategory(catId, includeHidden = false) {
   return State.persons
     .filter(p => p.categoryId === catId && (includeHidden || !p.hidden))
@@ -6231,6 +6267,7 @@ function renderCatTree(sheet) {
       const list = subItemsOfGroup(gId);
       if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
       await DB.put('subItems', { id: uid(), categoryId: catId, subGroupId: gId, name, order: list.length, budget: 0 });
+      await propagateSubItemToSiblingGroups(catId, gId, name);
       await reloadData(); renderCatManageSheet();
     });
   });
@@ -6274,8 +6311,11 @@ function renderCatTree(sheet) {
       if (!name) { showToast('이름을 입력해주세요'); return; }
       const groups = subGroupsOfCategory(catId);
       if (groups.find(g => g.name === name)) { showToast('이미 있는 이름이에요'); return; }
-      await DB.put('subGroups', { id: uid(), categoryId: catId, name, order: groups.length });
+      const newGroupId = uid();
+      await DB.put('subGroups', { id: newGroupId, categoryId: catId, name, order: groups.length });
+      await seedDefaultSubItemsForGroup(newGroupId, catId);
       catManageExpanded.add(catId);
+      catManageExpanded.add(newGroupId);
       await reloadData(); renderCatManageSheet();
     });
   });
