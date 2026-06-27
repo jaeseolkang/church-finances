@@ -633,7 +633,7 @@ function _doPrintBlob(html) {
     html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;background:#fff;}
     table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}
     th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
-    td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
+    td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;min-width:0;}
     tr:nth-child(even) td{background:#f7f9fc!important;}
     tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
     .print-title{font-size:13pt;font-weight:800;margin-bottom:5pt;}
@@ -656,7 +656,6 @@ function _doPrintBlob(html) {
         page-break-after:always!important;
         break-after:page!important;
         display:block!important;
-        page-break-inside:avoid!important;
       }
       .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
       table{page-break-inside:auto;}
@@ -2131,7 +2130,7 @@ function printStats() {
       catRows.forEach((r, i) => {
         const sgTd = r.sgRowspan > 0
           ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
-          : r.isDirect ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;"></td>` : '';
+          : `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>`;
         const catTd = i===0
           ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
           : '';
@@ -2155,8 +2154,8 @@ function printStats() {
     }
 
     page2 = `
-      <div class="print-page" style="page-break-before:always;break-before:page;">
-        <div class="page-inner">
+      <div class="print-page" id="expensePage2" style="page-break-before:always;break-before:page;">
+        <div class="page-inner" id="expensePageInner">
           ${pageHeader}
           <div class="print-section-title">${range.label} 지출현황</div>
           <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
@@ -2182,7 +2181,22 @@ function printStats() {
             </tbody>
           </table>
         </div>
-      </div>`;
+      </div>
+      <script>
+        (function(){
+          var inner = document.getElementById('expensePageInner');
+          if(!inner) return;
+          // A4 portrait 인쇄 가능 영역 높이: 297mm - 30mm margin = 267mm = ~756pt
+          var maxH = 756;
+          var h = inner.scrollHeight;
+          if(h > maxH){
+            var scale = maxH / h;
+            inner.style.transformOrigin = 'top left';
+            inner.style.transform = 'scale(' + scale + ')';
+            inner.style.width = (100/scale) + '%';
+          }
+        })();
+      </script>`;
   }
 
   // 현재 보이는 페이지만 인쇄
@@ -2432,7 +2446,7 @@ function renderExpenseTableA4(list, range) {
       const catTd = i===0 ? `<td rowspan="${catRowspan}" style="${cellStyle({bold:true,center:true,bg:'#EBF3FB'})}vertical-align:middle;">${escapeHTML(cat.name)}</td>` : '';
       const sgTd = r.sgRowspan > 0
         ? `<td rowspan="${r.sgRowspan}" style="${cellStyle({bg:'#DEEAF1'})}vertical-align:middle;">${escapeHTML(r.sgName)}</td>`
-        : r.isDirect ? `<td style="${cellStyle()}"></td>` : '';
+        : `<td style="${cellStyle({bg:'#DEEAF1'})}"></td>`;
       const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
         ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
       tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle({right:true,color:remark&&acctBalanceMap[r.subName]<0?'#CC0000':'#1F497D'})}">${escapeHTML(remark)}</td></tr>`;
