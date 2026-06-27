@@ -2459,7 +2459,9 @@ function renderExpenseTableA4(list, range) {
       const catTd = i===0 ? `<td rowspan="${catRowspan}" style="${cellStyle({bold:true,center:true,bg:'#EBF3FB'})}vertical-align:middle;">${escapeHTML(cat.name)}</td>` : '';
       const sgTd = r.sgRowspan > 0
         ? `<td rowspan="${r.sgRowspan}" style="${cellStyle({bg:'#DEEAF1'})}vertical-align:middle;">${escapeHTML(r.sgName)}</td>`
-        : `<td style="${cellStyle({bg:'#DEEAF1'})}"></td>`;
+        : r.isDirect
+          ? `<td style="${cellStyle({bg:'#DEEAF1'})}"></td>`
+          : '';
       const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
         ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
       tableRows += `<tr>${catTd}${sgTd}<td style="${cellStyle({bg:'#BDD7EE'})}">${escapeHTML(r.subName)}</td><td style="${cellStyle({right:true})}">${r.amt.toLocaleString('ko-KR')}</td><td style="${cellStyle({right:true,color:remark&&acctBalanceMap[r.subName]<0?'#CC0000':'#1F497D'})}">${escapeHTML(remark)}</td></tr>`;
@@ -4132,34 +4134,16 @@ async function checkMaturityAndNotify(force = false) {
   const subject = `[${appName}] 정기예금 만기 알림 (${today})`;
   const body = `안녕하세요.\n\n정기예금 만기 계좌를 알려드립니다.\n\n${rows}\n\n확인 후 적절한 조치를 취해주세요.\n\n— ${appName}`;
 
-  // Anthropic API로 Gmail MCP 호출
+  // mailto로 메일 앱 열기
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail-mcp' }],
-        messages: [{
-          role: 'user',
-          content: `Send an email using Gmail. To: ${email}, Subject: ${subject}, Body: ${body}. Just send it directly without asking anything.`
-        }]
-      })
-    });
-
-    if (response.ok) {
-      await DB.put('settings', { key: 'maturityLastCheck', date: today });
-      showToast(`📧 만기 알림 ${targets.length}건 발송 완료`);
-      return targets.length;
-    } else {
-      console.error('Gmail MCP error:', await response.text());
-      showToast('메일 발송 실패 — 설정을 확인해주세요');
-      return 0;
-    }
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+    await DB.put('settings', { key: 'maturityLastCheck', date: today });
+    showToast(`📧 만기 알림 ${targets.length}건 — 메일 앱을 열었어요`);
+    return targets.length;
   } catch (e) {
     console.error('maturity notify error:', e);
-    showToast('메일 발송 중 오류가 발생했어요');
+    showToast('메일 앱 열기 실패');
     return 0;
   }
 }
@@ -4840,8 +4824,6 @@ async function sendBackupByEmail() {
   const appName = State.appName || '교회 회계부';
   const today = todayStr();
 
-  showToast('메일 발송 준비 중...');
-
   // 전체 데이터 JSON 생성
   const data = {
     exportedAt: new Date().toISOString(),
@@ -4852,40 +4834,32 @@ async function sendBackupByEmail() {
     linkedAccounts: State.linkedAccounts || [],
     transactions: State.transactions,
   };
-  const jsonStr = JSON.stringify(data, null, 2);
+  const jsonStr = JSON.stringify(data);
   const txCount = State.transactions.length;
-  const subject = `[${appName}] 데이터 백업 ${today}`;
-  const body = `안녕하세요.\n\n${appName} 전체 데이터 백업입니다.\n\n` +
-    `백업일시: ${new Date().toLocaleString('ko-KR')}\n` +
-    `거래 건수: ${txCount}건\n` +
-    `카테고리: ${State.categories.length}개\n\n` +
-    `아래 JSON 데이터를 복사하여 .json 파일로 저장한 후 앱에서 복원하세요.\n\n` +
-    `--- 백업 데이터 시작 ---\n${jsonStr}\n--- 백업 데이터 끝 ---`;
 
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail-mcp' }],
-        messages: [{
-          role: 'user',
-          content: `Send an email using Gmail. To: ${email}, Subject: ${subject}, Body: ${body}. Send it directly now.`
-        }]
-      })
-    });
-    if (response.ok) {
-      showToast(`📧 백업 메일 발송 완료 → ${email}`);
-    } else {
-      console.error('backup email error:', await response.text());
-      showToast('메일 발송 실패 — 이메일 설정을 확인해주세요');
-    }
-  } catch (e) {
-    console.error('sendBackupByEmail error:', e);
-    showToast('메일 발송 중 오류가 발생했어요');
-  }
+  // mailto: URL 크기 제한(약 2000자) 초과 시 JSON 다운로드 후 메일 앱 열기
+  const subject = `[${appName}] 데이터 백업 ${today}`;
+  const bodyShort = `${appName} 백업\n\n` +
+    `백업일시: ${new Date().toLocaleString('ko-KR')}\n` +
+    `거래 건수: ${txCount}건\n\n` +
+    `첨부된 JSON 파일을 앱의 [데이터 가져오기]로 복원하세요.`;
+
+  // 1) JSON 파일 자동 다운로드
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backup-${today}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+  // 2) 메일 앱 열기 (짧은 안내 본문)
+  const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyShort)}`;
+  window.location.href = mailtoUrl;
+
+  showToast('📧 JSON 다운로드 후 메일 앱을 열었어요 — 파일을 첨부해 발송해주세요');
 }
 
 async function exportData(startYm, endYm) {
