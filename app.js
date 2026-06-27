@@ -1,4 +1,4 @@
-// v2.88 | 2026-06-28 01:10 KST | 수정: 계정 인쇄 자산합계 줄바꿈 방지, 간격 축소 | cache:v192
+// v2.89 | 2026-06-28 01:25 KST | 수정: iOS 인쇄 백지 수정 - Blob 새탭, PC는 print-area 유지 | cache:v193
 'use strict';
 
 /* =========================================================
@@ -571,16 +571,75 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  const area = document.getElementById('print-area');
-  area.innerHTML = html;
-  area.style.display = 'block';
-  const cleanup = () => {
-    area.style.display = 'none';
-    area.innerHTML = '';
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  setTimeout(() => window.print(), 80);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  if (isIOS) {
+    // iOS: 새 탭(Blob)으로 열어야 인쇄 가능
+    _doPrintBlob(html);
+  } else {
+    // PC/Android: print-area 방식
+    const area = document.getElementById('print-area');
+    area.innerHTML = html;
+    area.style.display = 'block';
+    const cleanup = () => {
+      area.style.display = 'none';
+      area.innerHTML = '';
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => window.print(), 80);
+  }
+}
+
+function _doPrintBlob(html) {
+  const printCSS = `
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
+    html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;background:#fff;}
+    table{border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;}
+    th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
+    td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
+    tr:nth-child(even) td{background:#f7f9fc!important;}
+    tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
+    .print-title{font-size:13pt;font-weight:800;margin-bottom:5pt;}
+    .print-period{font-size:9pt;color:#555;margin-bottom:7pt;}
+    .print-summary{display:flex;gap:14pt;margin-bottom:9pt;border-bottom:1pt solid #000;padding-bottom:5pt;flex-wrap:wrap;}
+    .print-summary-item{flex:1;min-width:60pt;}
+    .print-summary-label{font-size:7.5pt;color:#666;}
+    .print-summary-value{font-size:11pt;font-weight:800;}
+    .print-summary-value.income{color:#1F5C8B;}
+    .print-summary-value.expense{color:#B00;}
+    .print-bar-row{display:flex;justify-content:space-between;padding:3.5pt 2pt;border-bottom:0.5pt solid #ddd;font-size:8.5pt;}
+    .print-bar-label{flex:1;}
+    .print-bar-amt{font-weight:700;min-width:60pt;text-align:right;}
+    .print-bar-pct{min-width:26pt;text-align:right;color:#555;}
+    .print-section-title{font-size:11pt;font-weight:800;margin-bottom:5pt;margin-top:7pt;}
+    .page-inner{margin:0;padding:0;}
+    @media print{
+      @page{size:A4 portrait;margin:15mm 25mm;}
+      .print-page{page-break-after:always;break-after:page;display:block!important;}
+      .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+      table{page-break-inside:auto;}
+      tr{page-break-inside:avoid;}
+      th{background:#1F4E79!important;color:#fff!important;}
+      tfoot td{background:#1F4E79!important;color:#fff!important;}
+      tr:nth-child(even) td{background:#f7f9fc!important;}
+    }
+  `;
+
+  const fullHTML = `<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>인쇄</title>
+    <style>${printCSS}</style>
+  </head><body>
+    ${html}
+    <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const blob = new Blob([fullHTML], {type:'text/html'});
+  const url  = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 /* =========================================================

@@ -1,7 +1,7 @@
-// 2026-06-28 01:10 KST | 수정: CACHE_NAME v192 (계정 인쇄 자산합계 줄바꿈 방지)
+// 2026-06-28 01:25 KST | 수정: CACHE_NAME v193 (iOS 인쇄 Blob 새탭)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v192';
+const CACHE_NAME = 'gaegyebu-v193';
 const ASSETS = [
   './',
   './index.html',
