@@ -1,7 +1,7 @@
-// 2026-06-27 23:40 KST | 수정: CACHE_NAME v186 (@page 좌우여백 25mm)
+// 2026-06-27 23:55 KST | 수정: CACHE_NAME v187 (@media print 페이지나눔 강제)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v186';
+const CACHE_NAME = 'gaegyebu-v187';
 const ASSETS = [
   './',
   './index.html',
