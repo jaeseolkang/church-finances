@@ -1,7 +1,7 @@
-// 2026-06-27 23:55 KST | 수정: CACHE_NAME v187 (@media print 페이지나눔 강제)
+// 2026-06-28 00:10 KST | 수정: CACHE_NAME v188 (계정탭 모바일 가로스크롤)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v187';
+const CACHE_NAME = 'gaegyebu-v188';
 const ASSETS = [
   './',
   './index.html',

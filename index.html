@@ -746,15 +746,15 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .acct-summary-row b{font-weight:700;}
 .acct-summary-row b.income{color:#a8d8ff;}
 .acct-summary-row b.expense{color:#ffb3b3;}
-.acct-tbl-wrap{border-radius:14px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.08);}
-.acct-tbl{width:100%; border-collapse:collapse; font-size:13.5px; background:var(--card);}
+.acct-tbl-wrap{border-radius:14px; overflow-x:auto; -webkit-overflow-scrolling:touch; box-shadow:0 1px 6px rgba(0,0,0,0.08);}
+.acct-tbl{width:100%; min-width:480px; border-collapse:collapse; font-size:13px; background:var(--card);}
 .acct-tbl thead tr{background:var(--primary); color:#fff;}
-.acct-tbl th{padding:10px 8px; font-weight:700; font-size:12px;}
-.acct-tbl td{padding:11px 8px; border-bottom:1px solid var(--border);}
+.acct-tbl th{padding:10px 6px; font-weight:700; font-size:11px; white-space:nowrap;}
+.acct-tbl td{padding:11px 6px; border-bottom:1px solid var(--border); white-space:nowrap;}
 .acct-tbl tbody tr:last-child td{border-bottom:none;}
 .acct-tbl tbody tr:active{background:var(--primary-light);}
-.acct-tbl-name{text-align:left; padding-left:14px !important; font-weight:600;}
-.acct-tbl-num{text-align:right; padding-right:12px !important;}
+.acct-tbl-name{text-align:left; padding-left:12px !important; font-weight:600; white-space:nowrap;}
+.acct-tbl-num{text-align:right; padding-right:10px !important; white-space:nowrap;}
 .acct-tbl-num.income{color:var(--primary);}
 .acct-tbl-num.expense{color:var(--expense);}
 
@@ -925,10 +925,12 @@ input,textarea,select{font-family:inherit; color:inherit;}
     page-break-after: always !important;
     break-after: page !important;
     page-break-inside: avoid !important;
+    min-height: 247mm; /* 297mm - 상하여백 15mm×2 = 267mm, 여유 20mm */
   }
   .print-page:last-child {
     page-break-after: avoid !important;
     break-after: avoid !important;
+    min-height: 0;
   }
   .page-inner { display: block !important; margin: 0; padding: 0; }
   table { border-collapse: collapse; width: 100%; font-size: 7.5pt; table-layout: fixed; page-break-inside: auto; }

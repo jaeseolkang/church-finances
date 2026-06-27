@@ -1,4 +1,4 @@
-// v2.83 | 2026-06-27 23:55 KST | 수정: @media print 구조 수정 - 페이지 나눔 강제 | cache:v187
+// v2.84 | 2026-06-28 00:10 KST | 수정: 계정 탭 테이블 모바일 가로스크롤, nowrap, min-width | cache:v188
 'use strict';
 
 /* =========================================================
@@ -1911,7 +1911,7 @@ function printStats() {
 
   // ── 1페이지: 통계 (막대) ──
   const page1 = `
-    <div class="print-page" style="display:block;page-break-after:always;break-after:page;">
+    <div class="print-page" style="display:block;min-height:247mm;page-break-after:always;break-after:page;">
       <div class="page-inner">
         ${pageHeader}
         <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
@@ -2977,7 +2977,7 @@ async function renderAccounts() {
     </div>
 
     <div class="acct-tbl-wrap">
-      <table class="acct-tbl">
+      <table class="acct-tbl" style="min-width:${sub==='deposit'?'580px':'460px'};">
         <thead>
           <tr>
             <th class="acct-tbl-name ${sub==='deposit'?'acct-th-sort':''}" data-sort="name">
