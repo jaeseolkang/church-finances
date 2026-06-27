@@ -1,7 +1,7 @@
-// 2026-06-27 21:40 KST | 수정: CACHE_NAME v178 (인쇄 window.print 직접)
+// 2026-06-27 22:00 KST | 수정: CACHE_NAME v179 (통계 지출 page2만 인쇄)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v178';
+const CACHE_NAME = 'gaegyebu-v179';
 const ASSETS = [
   './',
   './index.html',

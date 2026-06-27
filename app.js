@@ -1,4 +1,4 @@
-// v2.74 | 2026-06-27 21:40 KST | 수정: 인쇄 새탭 제거 → window.print() 직접 호출 | cache:v178
+// v2.75 | 2026-06-27 22:00 KST | 수정: 통계 지출 인쇄 page2(지출현황)만 출력 | cache:v179
 'use strict';
 
 /* =========================================================
@@ -2042,7 +2042,7 @@ function printStats() {
     }
 
     page2 = `
-      <div class="print-page" style="page-break-before:always;break-before:page;">
+      <div class="print-page">
         <div class="page-inner">
           ${pageHeader}
           <div class="print-section-title">${range.label} 지출현황</div>
@@ -2073,10 +2073,10 @@ function printStats() {
       </div>`;
   }
 
-  // 수입: 헌금피벗만 / 지출: 막대 + 월지출표
+  // 수입: 헌금피벗 / 지출: 지출현황 테이블만 (page2)
   const html = isIncome
     ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
-    : page1 + page2;
+    : page2;
 
   doPrint(html);
 }
