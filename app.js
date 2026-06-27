@@ -2870,7 +2870,7 @@ function openLedgerSheet() {
     const appName = State.appName || '교회 회계부';
     // thead repeat을 위해 table을 print-page div 없이 직접 출력
     // @media print에서 thead가 매 페이지 반복됨
-    const BD = 'border:2.5pt solid #000;';
+    const BO = '2.5pt solid #000';
     const approvalBox = `
       <div style="page-break-inside:avoid;break-inside:avoid;margin-top:4pt;">
         <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
@@ -2881,25 +2881,23 @@ function openLedgerSheet() {
           <tbody>
             <tr>
               <td colspan="3" style="border:none;padding:0;"></td>
-              <td rowspan="4" style="${BD}padding:2pt;text-align:center;font-weight:700;font-size:7pt;vertical-align:middle;">
-                <span style="writing-mode:vertical-lr;text-orientation:mixed;letter-spacing:2pt;">결재</span>
+              <td rowspan="6" style="border-top:${BO};border-bottom:${BO};border-left:${BO};border-right:${BO};padding:0;text-align:center;font-weight:700;font-size:7pt;vertical-align:middle;">
+                <span style="writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:3pt;font-size:7pt;font-weight:700;">결재</span>
               </td>
-              <td style="${BD}padding:2pt;text-align:center;font-weight:700;font-size:7pt;">담당</td>
-              <td style="${BD}padding:2pt;text-align:center;font-weight:700;font-size:7pt;">부장</td>
-              <td style="${BD}padding:2pt;text-align:center;font-weight:700;font-size:7pt;">담임목사</td>
+              <td style="border-top:${BO};border-left:${BO};border-right:${BO};border-bottom:${BO};padding:2pt;text-align:center;font-weight:700;font-size:7pt;">담당</td>
+              <td style="border-top:${BO};border-left:${BO};border-right:${BO};border-bottom:${BO};padding:2pt;text-align:center;font-weight:700;font-size:7pt;">부장</td>
+              <td style="border-top:${BO};border-left:${BO};border-right:${BO};border-bottom:${BO};padding:2pt;text-align:center;font-weight:700;font-size:7pt;">담임목사</td>
             </tr>
             <tr>
               <td colspan="3" style="border:none;padding:0;"></td>
-              <td rowspan="3" style="${BD}height:30pt;"></td>
-              <td rowspan="3" style="${BD}height:30pt;"></td>
-              <td rowspan="3" style="${BD}height:30pt;"></td>
+              <td rowspan="5" style="border-top:none;border-bottom:${BO};border-left:${BO};border-right:${BO};height:50pt;"></td>
+              <td rowspan="5" style="border-top:none;border-bottom:${BO};border-left:${BO};border-right:${BO};height:50pt;"></td>
+              <td rowspan="5" style="border-top:none;border-bottom:${BO};border-left:${BO};border-right:${BO};height:50pt;"></td>
             </tr>
-            <tr>
-              <td colspan="3" style="border:none;padding:0;"></td>
-            </tr>
-            <tr>
-              <td colspan="3" style="border:none;padding:0;"></td>
-            </tr>
+            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
+            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
+            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
+            <tr><td colspan="3" style="border:none;padding:0;"></td></tr>
           </tbody>
         </table>
       </div>`;
