@@ -3696,18 +3696,12 @@ function renderSettings() {
       </div>
       <div class="settings-row" id="rowImport">
         <div>
-          <div class="settings-label">데이터 가져오기 (파일)</div>
+          <div class="settings-label">데이터 가져오기</div>
           <div class="settings-sub">백업 JSON 파일에서 복원</div>
         </div>
         ${ICONS.upload}
       </div>
-      <div class="settings-row" id="rowImportText">
-        <div>
-          <div class="settings-label">데이터 가져오기 (텍스트)</div>
-          <div class="settings-sub">메일 본문의 JSON을 붙여넣어 복원</div>
-        </div>
-        <span style="font-size:18px;">📋</span>
-      </div>
+
       <input type="file" id="importFile" accept="application/json" style="display:none;">
     </div>
 
@@ -3780,7 +3774,6 @@ function renderSettings() {
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
-  page.querySelector('#rowImportText').addEventListener('click', importDataFromText);
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
     if ('serviceWorker' in navigator) {
