@@ -4824,7 +4824,6 @@ async function sendBackupByEmail() {
   const appName = State.appName || '교회 회계부';
   const today = todayStr();
 
-  // 전체 데이터 JSON 생성
   const data = {
     exportedAt: new Date().toISOString(),
     categories: State.categories,
@@ -4834,42 +4833,58 @@ async function sendBackupByEmail() {
     linkedAccounts: State.linkedAccounts || [],
     transactions: State.transactions,
   };
-  const jsonStr = JSON.stringify(data, null, 2);
+  const jsonStr = JSON.stringify(data);
   const txCount = State.transactions.length;
-  const fileName = `backup-${today}.json`;
   const subject = `[${appName}] 데이터 백업 ${today}`;
-  const blob = new Blob([jsonStr], { type: 'application/json' });
 
-  // iOS/Android: Web Share API로 파일 공유 (메일 앱에 첨부 가능)
-  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'application/json' })] })) {
-    const file = new File([blob], fileName, { type: 'application/json' });
-    try {
-      await navigator.share({
-        title: subject,
-        text: `${appName} 전체 데이터 백업\n거래 ${txCount}건\n백업일시: ${new Date().toLocaleString('ko-KR')}`,
-        files: [file],
-      });
-      showToast('📧 공유 완료');
-      return;
-    } catch (e) {
-      if (e.name !== 'AbortError') console.error('share error:', e);
-      // 취소하거나 실패 시 아래 fallback으로
-    }
-  }
+  // Blob HTML 페이지를 열어서 거기서 mailto: 실행
+  // → iOS에서 긴 본문도 메일 앱으로 전달 가능
+  const bodyText =
+    `[${appName}] 데이터 백업
+` +
+    `백업일시: ${new Date().toLocaleString('ko-KR')}
+` +
+    `거래 건수: ${txCount}건
 
-  // fallback: 파일 다운로드 + 메일 앱 열기
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+` +
+    `아래 JSON을 복사 후 .json 파일로 저장하여 [데이터 가져오기]로 복원하세요.
 
-  const bodyShort = `${appName} 백업\n\n백업일시: ${new Date().toLocaleString('ko-KR')}\n거래 건수: ${txCount}건\n\n다운로드된 JSON 파일을 첨부해 보내주세요.`;
-  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyShort)}`;
-  showToast('📥 JSON 다운로드 완료 — 메일에 첨부해 발송해주세요');
+` +
+    `===== JSON START =====
+${jsonStr}
+===== JSON END =====`;
+
+  const encodedSubject = encodeURIComponent(subject);
+  const encodedBody    = encodeURIComponent(bodyText);
+  const mailtoUrl      = `mailto:${encodeURIComponent(email)}?subject=${encodedSubject}&body=${encodedBody}`;
+
+  // mailto: URL이 너무 길면 브라우저가 잘라냄 → Blob 페이지 경유
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>body{font-family:-apple-system,sans-serif;padding:24px;text-align:center;}
+button{padding:16px 32px;font-size:18px;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:12px;cursor:pointer;width:100%;margin-bottom:12px;}
+.note{font-size:13px;color:#555;margin-top:8px;line-height:1.6;}
+pre{text-align:left;background:#f5f5f5;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;word-break:break-all;white-space:pre-wrap;margin-top:16px;}
+</style></head><body>
+<h3>📧 백업 메일 발송</h3>
+<button onclick="location.href=MAILTO">메일 앱으로 열기</button>
+<div class="note">버튼을 누르면 메일 앱이 열리고<br>JSON 데이터가 본문에 자동 입력됩니다.<br>보내기만 누르세요.</div>
+<details style="margin-top:16px;text-align:left;">
+  <summary style="cursor:pointer;font-size:13px;color:#1d4ed8;">JSON 미리보기 / 복사</summary>
+  <button onclick="navigator.clipboard&&navigator.clipboard.writeText(JSON_DATA).then(()=>alert('복사됐어요!'))" style="margin-top:8px;font-size:14px;padding:10px;">📋 JSON 복사</button>
+  <pre>JSON_PREVIEW</pre>
+</details>
+<script>
+var MAILTO = ${JSON.stringify(mailtoUrl)};
+var JSON_DATA = ${JSON.stringify(jsonStr)};
+document.querySelector('pre').textContent = JSON_DATA.slice(0,2000) + (JSON_DATA.length>2000?'\n...':'');
+</script>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  showToast('📧 메일 발송 페이지를 열었어요');
 }
 
 async function exportData(startYm, endYm) {
