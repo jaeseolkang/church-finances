@@ -1,7 +1,7 @@
-// 2026-06-27 19:10 KST | 수정: CACHE_NAME v171 (인쇄 zoom-style 동기화)
+// 2026-06-27 20:10 KST | 수정: CACHE_NAME v173 (모든 인쇄 A4 170mm 통일)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v171';
+const CACHE_NAME = 'gaegyebu-v173';
 const ASSETS = [
   './',
   './index.html',

@@ -1,4 +1,4 @@
-// v2.67 | 2026-06-27 19:10 KST | 수정: 인쇄 배율 zoom-style 태그 교체로 화면/인쇄 완전 동기화 | cache:v171
+// v2.69 | 2026-06-27 20:10 KST | 수정: 모든 인쇄 콘텐츠 A4 170mm 기준 통일, font 7.5pt, border 0.5pt | cache:v173
 'use strict';
 
 /* =========================================================
@@ -570,113 +570,72 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  const DEFAULT_SCALE = 100;
-
+  // A4 기준 인쇄 CSS — 배율 조작 없음, 브라우저 기본 100%로 출력
   const printHTML = `<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8">
     <title>인쇄</title>
-    <style id="base-style">
+    <style>
       *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-      html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:10pt;color:#000;}
-      /* ── 화면 레이아웃 ── */
+      html,body{margin:0;padding:0;background:#f0f0f0;
+        font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;}
+      /* 화면 미리보기 */
+      .print-page{
+        width:170mm; /* A4 210mm - 좌우여백 20mm×2 */
+        margin:12px auto;padding:0;
+        background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);
+      }
+      .page-inner{padding:8mm;}
+      /* 인쇄 버튼 바 */
       #toolbar{
-        position:fixed;top:0;left:0;right:0;z-index:9999;
-        display:flex;align-items:center;gap:14px;
-        padding:10px 20px;background:#1d4ed8;
+        position:sticky;top:0;z-index:99;
+        background:#1d4ed8;padding:10px 20px;
+        display:flex;align-items:center;gap:12px;
         font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
       }
       #toolbar button{
-        padding:9px 24px;background:#fff;color:#1d4ed8;
-        font-size:14px;font-weight:800;border:none;
-        border-radius:8px;cursor:pointer;
+        padding:9px 28px;background:#fff;color:#1d4ed8;
+        font-size:14px;font-weight:800;border:none;border-radius:8px;cursor:pointer;
       }
-      #toolbar label{color:#fff;font-size:13px;font-weight:600;}
-      #scaleSlider{width:160px;accent-color:#fff;}
-      #scaleVal{color:#fff;font-size:14px;font-weight:800;min-width:44px;}
-      #wrap{
-        margin-top:60px;
-        background:#e5e7eb;
-        padding:20px 0;
-        min-height:calc(100vh - 60px);
-        transform-origin:top left;
-      }
-      .print-page{
-        width:210mm;margin:0 auto 12px;padding:12mm;
-        background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);
-      }
-      /* ── 공통 콘텐츠 CSS ── */
-      table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;border:0.5pt solid #555;}
-      th{background:#1F4E79!important;color:#fff!important;padding:3pt 4pt;border:0.5pt solid #3a6fa0!important;font-size:8pt;font-weight:700;}
-      td{padding:2pt 4pt;border:0.5pt solid #aaa!important;font-size:8pt;}
+      #toolbar span{color:rgba(255,255,255,0.8);font-size:12px;}
+      /* 공통 콘텐츠 스타일 */
+      table{border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;}
+      th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;
+         border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
+      td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
       tr:nth-child(even) td{background:#f7f9fc!important;}
       tfoot td{background:#1F4E79!important;color:#fff!important;font-weight:700!important;border:0.5pt solid #3a6fa0!important;}
-      .print-title{font-size:14pt;font-weight:800;margin-bottom:6pt;}
-      .print-period{font-size:10pt;color:#555;margin-bottom:8pt;}
-      .print-summary{display:flex;gap:16pt;margin-bottom:10pt;border-bottom:1pt solid #000;padding-bottom:6pt;flex-wrap:wrap;}
-      .print-summary-item{flex:1;min-width:80pt;}
-      .print-summary-label{font-size:8pt;color:#666;}
-      .print-summary-value{font-size:12pt;font-weight:800;}
+      .print-title{font-size:13pt;font-weight:800;margin-bottom:5pt;}
+      .print-period{font-size:9pt;color:#555;margin-bottom:7pt;}
+      .print-summary{display:flex;gap:14pt;margin-bottom:9pt;border-bottom:1pt solid #000;padding-bottom:5pt;flex-wrap:wrap;}
+      .print-summary-item{flex:1;min-width:60pt;}
+      .print-summary-label{font-size:7.5pt;color:#666;}
+      .print-summary-value{font-size:11pt;font-weight:800;}
       .print-summary-value.income{color:#1F5C8B;}
       .print-summary-value.expense{color:#B00;}
-      .print-bar-row{display:flex;justify-content:space-between;padding:4pt 2pt;border-bottom:0.5pt solid #ccc;font-size:9pt;}
+      .print-bar-row{display:flex;justify-content:space-between;padding:3.5pt 2pt;border-bottom:0.5pt solid #ddd;font-size:8.5pt;}
       .print-bar-label{flex:1;}
-      .print-bar-amt{font-weight:700;min-width:70pt;text-align:right;}
-      .print-bar-pct{min-width:30pt;text-align:right;color:#555;}
-      .print-section-title{font-size:12pt;font-weight:800;margin-bottom:6pt;margin-top:8pt;}
-    </style>
-    <!-- 배율 전용 style: JS가 슬라이더 값에 따라 내용 교체 -->
-    <style id="zoom-style">
-      #wrap { zoom: 1; }
-      @media print {
-        #toolbar { display:none!important; }
-        html, body { background:#fff!important; margin:0; padding:0; }
-        #wrap { zoom: 1; margin:0!important; padding:0!important; background:#fff!important; }
-        .print-page { width:100%!important; margin:0!important; padding:0!important; box-shadow:none!important; }
-        @page { size:A4 portrait; margin:15mm 18mm; }
-        table { page-break-inside:auto; }
-        tr { page-break-inside:avoid; }
-        th { background:#1F4E79!important; color:#fff!important; border:0.5pt solid #3a6fa0!important; }
-        td { border:0.5pt solid #aaa!important; }
-        tfoot td { background:#1F4E79!important; color:#fff!important; }
-        .print-page { page-break-after:always; break-after:page; }
-        .print-page:last-child { page-break-after:avoid; break-after:avoid; }
+      .print-bar-amt{font-weight:700;min-width:60pt;text-align:right;}
+      .print-bar-pct{min-width:26pt;text-align:right;color:#555;}
+      .print-section-title{font-size:11pt;font-weight:800;margin-bottom:5pt;margin-top:7pt;}
+      /* 인쇄 */
+      @media print{
+        html,body{background:#fff!important;}
+        #toolbar{display:none!important;}
+        .print-page{width:100%!important;margin:0!important;box-shadow:none!important;}
+        .page-inner{padding:0!important;}
+        @page{size:A4 portrait;margin:15mm 20mm;}
+        .print-page{page-break-after:always;break-after:page;}
+        .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+        table{page-break-inside:auto;}
+        tr{page-break-inside:avoid;}
       }
     </style>
   </head><body>
     <div id="toolbar">
       <button onclick="window.print()">🖨️ 인쇄</button>
-      <label for="scaleSlider">배율</label>
-      <input id="scaleSlider" type="range" min="50" max="110" value="${DEFAULT_SCALE}" step="5"
-             oninput="applyScale(this.value)">
-      <span id="scaleVal">${DEFAULT_SCALE}%</span>
+      <span>브라우저 인쇄 설정의 배율로 크기를 조정하세요</span>
     </div>
-    <div id="wrap">
-      ${html}
-    </div>
-    <script>
-      function applyScale(v) {
-        v = parseInt(v);
-        document.getElementById('scaleVal').textContent = v + '%';
-        var z = v / 100;
-        // zoom-style 전체를 교체 → 화면 zoom과 @media print zoom이 항상 같은 값
-        document.getElementById('zoom-style').textContent =
-          '#wrap{zoom:' + z + ';}\n' +
-          '@media print{\n' +
-          '  #toolbar{display:none!important;}\n' +
-          '  html,body{background:#fff!important;margin:0;padding:0;}\n' +
-          '  #wrap{zoom:' + z + ';margin:0!important;padding:0!important;background:#fff!important;}\n' +
-          '  .print-page{width:100%!important;margin:0!important;padding:0!important;box-shadow:none!important;}\n' +
-          '  @page{size:A4 portrait;margin:15mm 18mm;}\n' +
-          '  table{page-break-inside:auto;}\n' +
-          '  tr{page-break-inside:avoid;}\n' +
-          '  th{background:#1F4E79!important;color:#fff!important;border:0.5pt solid #3a6fa0!important;}\n' +
-          '  td{border:0.5pt solid #aaa!important;}\n' +
-          '  tfoot td{background:#1F4E79!important;color:#fff!important;}\n' +
-          '  .print-page{page-break-after:always;break-after:page;}\n' +
-          '  .print-page:last-child{page-break-after:avoid;break-after:avoid;}\n' +
-          '}\n';
-      }
-    </script>
+    ${html}
   </body></html>`;
 
   const blob = new Blob([printHTML], {type:'text/html'});
@@ -1962,29 +1921,29 @@ function printStats() {
           <col style="width:11%">
         </colgroup>`;
         pivotHTML = `
-          <div style="margin-top:8pt;">
-            <div style="font-size:11pt;font-weight:800;margin-bottom:4pt;border-bottom:1pt solid #000;padding-bottom:3pt;">🙏 헌금 개인별 명세</div>
-            <table>
+          <div style="margin-top:6pt;">
+            <div style="font-size:10pt;font-weight:800;margin-bottom:4pt;border-bottom:0.5pt solid #000;padding-bottom:2pt;">🙏 헌금 개인별 명세</div>
+            <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
               ${colgroup}
               <thead><tr>
-                <th class="left">이름</th>
-                ${orderedCols.map(c=>`<th>${escapeHTML(c)}</th>`).join('')}
-                <th>합계</th>
+                <th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact;">이름</th>
+                ${orderedCols.map(c=>`<th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(c)}</th>`).join('')}
+                <th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합계</th>
               </tr></thead>
               <tbody>
                 ${rows.map(name => {
                   const rowTotal = orderedCols.reduce((s,c)=>s+(pivot[name][c]||0),0);
                   return `<tr>
-                    <td class="left">${escapeHTML(name)}</td>
-                    ${orderedCols.map(c=>`<td>${pivot[name][c]?fmtMoney(pivot[name][c]):''}</td>`).join('')}
-                    <td>${fmtMoney(rowTotal)}</td>
+                    <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;">${escapeHTML(name)}</td>
+                    ${orderedCols.map(c=>`<td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${pivot[name][c]?pivot[name][c].toLocaleString('ko-KR'):''}</td>`).join('')}
+                    <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;">${rowTotal.toLocaleString('ko-KR')}</td>
                   </tr>`;
                 }).join('')}
               </tbody>
               <tfoot><tr>
-                <td class="left">합계</td>
-                ${colTotals.map(v=>`<td>${fmtMoney(v)}</td>`).join('')}
-                <td>${fmtMoney(grandTotal)}</td>
+                <td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합계</td>
+                ${colTotals.map(v=>`<td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${v?v.toLocaleString('ko-KR'):''}</td>`).join('')}
+                <td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-size:7.5pt;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
               </tr></tfoot>
             </table>
           </div>`;
@@ -2013,17 +1972,19 @@ function printStats() {
 
   // ── 1페이지: 통계 (막대) ──
   const page1 = `
-    <div class="print-page" style="page-break-after:always;break-after:page;display:block;">
-      ${pageHeader}
-      <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
-      ${statRows.map(r => {
-        const pct = statTotal > 0 ? Math.round(r.amt/statTotal*100) : 0;
-        return `<div class="print-bar-row">
-          <div class="print-bar-label">${r.icon} ${escapeHTML(r.name)}</div>
-          <div class="print-bar-pct">${pct}%</div>
-          <div class="print-bar-amt">${fmtMoney(r.amt)}원</div>
-        </div>`;
-      }).join('')}
+    <div class="print-page" style="page-break-after:always;break-after:page;">
+      <div class="page-inner">
+        ${pageHeader}
+        <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>
+        ${statRows.map(r => {
+          const pct = statTotal > 0 ? Math.round(r.amt/statTotal*100) : 0;
+          return `<div class="print-bar-row">
+            <div class="print-bar-label">${r.icon} ${escapeHTML(r.name)}</div>
+            <div class="print-bar-pct">${pct}%</div>
+            <div class="print-bar-amt">${fmtMoney(r.amt)}원</div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>`;
 
   // ── 2페이지: 월지출 (지출일 때) ──
@@ -2058,14 +2019,14 @@ function printStats() {
       const cs  = colspan>1 ? ` colspan="${colspan}"` : '';
       const rs  = rowspan>1 ? ` rowspan="${rowspan}"` : '';
       const vStr = typeof val==='number' ? val.toLocaleString('ko-KR') : (val||'');
-      return `<td${cs}${rs} style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;${fw}${ta}${bgc}">${escapeHTML ? escapeHTML(String(vStr)) : vStr}</td>`;
+      return `<td${cs}${rs} style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;${fw}${ta}${bgc}">${escapeHTML ? escapeHTML(String(vStr)) : vStr}</td>`;
     };
     const th = (val, opts={}) => {
       const {right=false, center=true, colspan=1, rowspan=1} = opts;
       const ta = right ? 'text-align:right;' : 'text-align:center;';
       const cs = colspan>1 ? ` colspan="${colspan}"` : '';
       const rs = rowspan>1 ? ` rowspan="${rowspan}"` : '';
-      return `<th${cs}${rs} style="padding:3pt 3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;${ta}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${val}</th>`;
+      return `<th${cs}${rs} style="padding:3pt 3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:7.5pt;font-weight:700;color:#fff;background:#1F4E79;${ta}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${val}</th>`;
     };
 
     let tableRows = '';
@@ -2117,10 +2078,10 @@ function printStats() {
       const catRowspan = catRows.length + 1; // +1 소계행
       catRows.forEach((r, i) => {
         const sgTd = r.sgRowspan > 0
-          ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
-          : r.isDirect ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;"></td>` : '';
+          ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
+          : r.isDirect ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;"></td>` : '';
         const catTd = i===0
-          ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
+          ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
           : '';
         const remark = isDepCat && acctBalanceMap[r.subName] !== undefined
           ? acctBalanceMap[r.subName].toLocaleString('ko-KR') + '원' : '';
@@ -2128,52 +2089,54 @@ function printStats() {
         tableRows += `<tr>
           ${catTd}
           ${sgTd}
-          <td style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
-          <td style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
-          <td style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;text-align:right;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;background:#BDD7EE;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.subName)}</td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${r.amt.toLocaleString('ko-KR')}</td>
+          <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:${remarkColor};font-weight:${remark?'700':'400'};">${escapeHTML(remark)}</td>
         </tr>`;
       });
       // 소계행 — 대분류는 rowspan 점유 중 → 남은 4칸: colspan=2(중+소) + 금액 + 비고
       tableRows += `<tr>
-        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
-        <td style="padding:2pt 3pt;border:0.7pt solid #888;font-size:8pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
-        <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:8pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>
+        <td colspan="2" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:left;padding-left:6pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">소 계</td>
+        <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;text-align:right;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${catTotal.toLocaleString('ko-KR')}</td>
+        <td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;background:#D6E4F0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>
       </tr>`;
     }
 
     page2 = `
-      <div class="print-page" style="page-break-before:always;break-before:page;display:block;">
-        ${pageHeader}
-        <div class="print-section-title">${range.label} 지출현황</div>
-        <table style="border-collapse:collapse;width:97%;font-size:8pt;table-layout:fixed;">
-          <colgroup>
-            <col style="width:16%">
-            <col style="width:14%">
-            <col style="width:24%">
-            <col style="width:23%">
-            <col style="width:23%">
-          </colgroup>
-          <thead><tr>
-            ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
-          </tr></thead>
-          <tbody>${tableRows}</tbody>
-          <tfoot>
-            <tr>
-              <td colspan="3" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
-              <td colspan="2" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
-            </tr>
-            <tr>
-              <td colspan="3" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
-              <td colspan="2" style="padding:3pt 3pt;border:0.5pt solid #bbb;font-size:8pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
-            </tr>
-          </tfoot>
-        </table>
+      <div class="print-page" style="page-break-before:always;break-before:page;">
+        <div class="page-inner">
+          ${pageHeader}
+          <div class="print-section-title">${range.label} 지출현황</div>
+          <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
+            <colgroup>
+              <col style="width:15%">
+              <col style="width:13%">
+              <col style="width:26%">
+              <col style="width:23%">
+              <col style="width:23%">
+            </colgroup>
+            <thead><tr>
+              ${th('대분류')}${th('중분류')}${th('소분류')}${th('금액(원)',{right:true})}${th('비고/잔액')}
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합  계</td>
+                <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${grandTotal.toLocaleString('ko-KR')}</td>
+              </tr>
+              <tr>
+                <td colspan="3" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">순지출(지출-예금)</td>
+                <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:right;background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${(grandTotal-depositTotal).toLocaleString('ko-KR')}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>`;
   }
 
   // 수입: 헌금피벗만 / 지출: 막대 + 월지출표
   const html = isIncome
-    ? (pivotHTML ? `<div class="print-page">${pageHeader}${pivotHTML}</div>` : '')
+    ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
     : page1 + page2;
 
   doPrint(html);
@@ -2384,7 +2347,7 @@ function renderExpenseTableA4(list, range) {
     const ta=right?'text-align:right;':center?'text-align:center;':'text-align:left;padding-left:6pt;';
     const bgc=bg?`background:${bg};`:'';
     const fg=color?`color:${color};`:'';
-    return `padding:3pt 4pt;border:0.5pt solid #ccc;font-size:8pt;${fw}${ta}${bgc}${fg}`;
+    return `padding:3pt 4pt;border:0.5pt solid #ccc;font-size:7.5pt;${fw}${ta}${bgc}${fg}`;
   };
 
   let tableRows = '';
@@ -2423,14 +2386,14 @@ function renderExpenseTableA4(list, range) {
     tableRows += `<tr><td colspan="2" style="${cellStyle({bold:true,bg:'#D6E4F0'})}">소 계</td><td style="${cellStyle({bold:true,right:true,bg:'#D6E4F0'})}">${catTotal.toLocaleString('ko-KR')}</td><td style="${cellStyle({bg:'#D6E4F0'})}"></td></tr>`;
   }
 
-  const thStyle = `padding:4pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:8pt;font-weight:700;color:#fff;background:#1F4E79;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
-  const ftStyle = (right=false) => `padding:3pt 4pt;border:0.5pt solid #ccc;font-size:8pt;font-weight:700;text-align:${right?'right':'center'};background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+  const thStyle = `padding:4pt 4pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:7.5pt;font-weight:700;color:#fff;background:#1F4E79;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+  const ftStyle = (right=false) => `padding:3pt 4pt;border:0.5pt solid #ccc;font-size:7.5pt;font-weight:700;text-align:${right?'right':'center'};background:#2E74B5;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
 
   return `
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px;margin-bottom:16px;">
       <div style="width:100%;">
         <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:6px;padding:0 2px;">📋 ${range.label} 지출현황</div>
-        <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">
+        <table style="border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;">
           <colgroup>
             <col style="width:16%"><col style="width:14%"><col style="width:22%"><col style="width:24%"><col style="width:24%">
           </colgroup>
@@ -2627,8 +2590,8 @@ function openLedgerSheet() {
     const depCat = State.categories.find(c=>c.name==='예금'&&c.type==='expense');
     const deposit = depCat ? txs.filter(t=>t.categoryId===depCat.id).reduce((s,t)=>s+t.amount,0) : 0;
 
-    const TD = 'padding:2pt 4pt;border:0.5pt solid #ccc;font-size:8pt;white-space:nowrap;';
-    const TH = 'padding:3pt 4pt;border:0.5pt solid #aaa;font-size:8pt;font-weight:700;background:#DCE6F1;';
+    const TD = 'padding:2pt 3pt;border:0.5pt solid #ccc;font-size:7.5pt;';
+    const TH = 'padding:2.5pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;background:#DCE6F1;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
 
     const dataRows = rows.map(r => `<tr>
       <td style="${TD}text-align:center;">${r.date.slice(5)}</td>
@@ -2640,7 +2603,7 @@ function openLedgerSheet() {
       <td style="${TD}text-align:right;">${r.acc.toLocaleString('ko-KR')}</td>
     </tr>`).join('');
 
-    const SUM = 'padding:3pt 4pt;border:0.5pt solid #aaa;font-size:8pt;font-weight:700;background:#FFFFF0;';
+    const SUM = 'padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;background:#FFFFF0;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
     const summaryRows = [
       [month+'월 결산', '수입/지출', inc, exp],
       [null, '통장이동(선교)', transfer, null],
@@ -2657,8 +2620,8 @@ function openLedgerSheet() {
     const tableHTML = `
       <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
         <colgroup>
-          <col style="width:8%"><col style="width:13%"><col style="width:13%">
-          <col style="width:15%"><col style="width:17%"><col style="width:17%"><col style="width:17%">
+          <col style="width:9%"><col style="width:13%"><col style="width:13%">
+          <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
         </colgroup>
         <thead><tr>
           <th style="${TH}text-align:center;">일자</th>
@@ -2735,7 +2698,7 @@ function openLedgerSheet() {
           </tbody>
         </table>
       </div>`;
-    doPrint(currentTableHTML + approvalBox);
+    doPrint(`<div class="print-page"><div class="page-inner">${currentTableHTML}${approvalBox}</div></div>`);
   });
 
   openSheet('ledgerSheet');
@@ -2829,7 +2792,7 @@ function openItemStructureSheet() {
   sheet.querySelector('#isClose').addEventListener('click', () => closeSheet('itemStructureSheet'));
   sheet.querySelector('#isPrint').addEventListener('click', () => {
     const appTitle = document.title || '교회 회계부';
-    doPrint(`<div class="print-title">📋 항목구조표</div><div class="print-period">${appTitle}</div><div style="margin-top:8pt;">${tableHTML}</div>`);
+    doPrint(`<div class="print-page"><div class="page-inner"><div class="print-title">📋 항목구조표</div><div class="print-period">${appTitle}</div><div style="margin-top:8pt;">${tableHTML}</div></div></div>`);
   });
 
   openSheet('itemStructureSheet');
@@ -3242,39 +3205,41 @@ function printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, sh
     const sign = item.type === 'income' ? '+' : '-';
     const col  = item.type === 'income' ? '#1F497D' : '#CC0000';
     return `<tr>
-      <td style="padding:2pt 4pt;border:0.7pt solid #888;font-size:8pt;text-align:center;">${item.date}</td>
-      <td style="padding:2pt 4pt;border:0.7pt solid #888;font-size:8pt;">${escapeHTML(label)}</td>
-      <td style="padding:2pt 4pt;border:0.7pt solid #888;font-size:8pt;text-align:right;color:${col};font-weight:700;">${sign}${item.amount.toLocaleString('ko-KR')}</td>
-      <td style="padding:2pt 4pt;border:0.7pt solid #888;font-size:8pt;text-align:right;">${running.toLocaleString('ko-KR')}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:center;">${item.date}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;">${escapeHTML(label)}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:${col};font-weight:700;">${sign}${item.amount.toLocaleString('ko-KR')}</td>
+      <td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${running.toLocaleString('ko-KR')}</td>
     </tr>`;
   }).join('');
 
   const html = `
     <div class="print-page">
-      <div class="print-title">📋 ${escapeHTML(acct.name)} 장부</div>
-      <div class="print-summary">
-        <div class="print-summary-item"><div class="print-summary-label">이월금액</div><div class="print-summary-value">${carry.toLocaleString('ko-KR')}원</div></div>
-        <div class="print-summary-item"><div class="print-summary-label">수입합계</div><div class="print-summary-value income">${totalIncome.toLocaleString('ko-KR')}원</div></div>
-        <div class="print-summary-item"><div class="print-summary-label">지출합계</div><div class="print-summary-value expense">${totalExpense.toLocaleString('ko-KR')}원</div></div>
-        <div class="print-summary-item"><div class="print-summary-label">잔액</div><div class="print-summary-value" style="color:${netColor}">${net.toLocaleString('ko-KR')}원</div></div>
+      <div class="page-inner">
+        <div class="print-title">📋 ${escapeHTML(acct.name)} 장부</div>
+        <div class="print-summary">
+          <div class="print-summary-item"><div class="print-summary-label">이월금액</div><div class="print-summary-value">${carry.toLocaleString('ko-KR')}원</div></div>
+          <div class="print-summary-item"><div class="print-summary-label">수입합계</div><div class="print-summary-value income">${totalIncome.toLocaleString('ko-KR')}원</div></div>
+          <div class="print-summary-item"><div class="print-summary-label">지출합계</div><div class="print-summary-value expense">${totalExpense.toLocaleString('ko-KR')}원</div></div>
+          <div class="print-summary-item"><div class="print-summary-label">잔액</div><div class="print-summary-value" style="color:${netColor}">${net.toLocaleString('ko-KR')}원</div></div>
+        </div>
+        <table style="border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;">
+          <colgroup><col style="width:17%"><col style="width:43%"><col style="width:20%"><col style="width:20%"></colgroup>
+          <thead><tr style="background:#1F4E79;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+            <th style="color:#fff;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;text-align:center;">날짜</th>
+            <th style="color:#fff;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;text-align:left;">내용</th>
+            <th style="color:#fff;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;text-align:right;">금액</th>
+            <th style="color:#fff;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;text-align:right;">잔액</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="background:#2E74B5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+              <td colspan="2" style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;font-weight:700;color:#fff;text-align:center;">합 계</td>
+              <td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;font-weight:700;color:#fff;text-align:right;">${(totalIncome-totalExpense>=0?'+':'')+(totalIncome-totalExpense).toLocaleString('ko-KR')}</td>
+              <td style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;font-weight:700;color:${netColor};text-align:right;">${net.toLocaleString('ko-KR')}</td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
-      <table style="border-collapse:collapse;width:100%;font-size:8pt;table-layout:fixed;">
-        <colgroup><col style="width:18%"><col style="width:42%"><col style="width:20%"><col style="width:20%"></colgroup>
-        <thead><tr style="background:#1F4E79;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <th style="color:#fff;padding:3pt;border:0.7pt solid #555;text-align:center;">날짜</th>
-          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:left;">내용</th>
-          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:right;">금액</th>
-          <th style="color:#fff;padding:3pt;border:0.5pt solid #555;text-align:right;">잔액</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>
-          <tr style="background:#2E74B5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-            <td colspan="2" style="padding:3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;color:#fff;text-align:center;">합 계</td>
-            <td style="padding:3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;color:#fff;text-align:right;">${(totalIncome-totalExpense>=0?'+':'')+(totalIncome-totalExpense).toLocaleString('ko-KR')}</td>
-            <td style="padding:3pt;border:0.5pt solid #555;font-size:8pt;font-weight:700;color:${netColor};text-align:right;">${net.toLocaleString('ko-KR')}</td>
-          </tr>
-        </tfoot>
-      </table>
     </div>`;
 
   doPrint(html);
@@ -5467,12 +5432,12 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
     </div>`;
 
   // ── 공통 테이블 스타일 ──
-  const TS = 'border-collapse:collapse;width:100%;font-size:7pt;table-layout:fixed;border:1.5pt solid #333;line-height:1.4;';
+  const TS = 'border-collapse:collapse;width:100%;font-size:7.5pt;table-layout:fixed;';
   const TH = (txt, right=false, w='') =>
-    `<th style="padding:3pt 4pt;border:1pt solid #1a3a5c;font-size:7pt;background:#1F4E79;color:#fff;text-align:${right?'right':'left'};${w?'width:'+w+';':''}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</th>`;
+    `<th style="padding:2.5pt 3pt;border:0.5pt solid #3a6fa0;font-size:7.5pt;background:#1F4E79;color:#fff;text-align:${right?'right':'left'};${w?'width:'+w+';':''}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</th>`;
   const TD = (txt, opts={}) => {
     const {right=false,bold=false,bg=''} = opts;
-    return `<td style="padding:2.5pt 4pt;border:0.8pt solid #555;font-size:7pt;text-align:${right?'right':'left'};font-weight:${bold?'700':'400'};${bg?'background:'+bg+';-webkit-print-color-adjust:exact;print-color-adjust:exact;':''}">${txt}</td>`;
+    return `<td style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:${right?'right':'left'};font-weight:${bold?'700':'400'};${bg?'background:'+bg+';-webkit-print-color-adjust:exact;print-color-adjust:exact;':''}">${txt}</td>`;
   };
 
   // ── 페이지 분할 헬퍼: rows 배열을 ROWS_PER_PAGE씩 잘라 페이지 HTML 반환 ──
@@ -5482,12 +5447,14 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
       const chunk = rows.slice(i, i+rowsPerPage);
       const isLast = i+rowsPerPage >= rows.length;
       pages.push(`<div class="print-page">
+        <div class="page-inner">
         ${i===0 ? pageHeader : ''}
         <table style="${TS}">
           <thead>${headerHTML}</thead>
           <tbody>${chunk.map(makeRowHTML).join('')}</tbody>
           ${isLast && footerRow ? `<tfoot>${footerRow}</tfoot>` : ''}
         </table>
+        </div>
       </div>`);
     }
     return pages.join('');
@@ -5555,6 +5522,7 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
         </tr>`;
       };
       pages.push(`<div class="print-page">
+        <div class="page-inner">
         ${pages.length === 0 ? pageHeader : ''}
         <table style="${TS.replace('font-size:7pt','font-size:'+fontSize)}">
           ${colgroup}
@@ -5562,6 +5530,7 @@ function printCatStatDetail(cat, range, list, total, isHeon) {
           <tbody>${chunk.map(makeRow).join('')}</tbody>
           ${isLast ? `<tfoot>${footerRow}</tfoot>` : ''}
         </table>
+        </div>
       </div>`);
       i += rowsPerPage;
     }
