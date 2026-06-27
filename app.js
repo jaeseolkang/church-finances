@@ -1,4 +1,4 @@
-// v2.80 | 2026-06-27 23:20 KST | 수정: 통계 탭 차트+지출현황 한 화면에 표시, 인쇄 2페이지 | cache:v184
+// v2.82 | 2026-06-27 23:40 KST | 수정: @page 좌우 여백 18mm → 25mm | cache:v186
 'use strict';
 
 /* =========================================================
@@ -1911,7 +1911,7 @@ function printStats() {
 
   // ── 1페이지: 통계 (막대) ──
   const page1 = `
-    <div class="print-page" style="page-break-after:always;break-after:page;">
+    <div class="print-page" style="display:block;page-break-after:always;break-after:page;">
       <div class="page-inner">
         ${pageHeader}
         <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>

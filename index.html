@@ -909,7 +909,7 @@ input,textarea,select{font-family:inherit; color:inherit;}
 
 /* ===== 인쇄 스타일 ===== */
 @media print {
-  @page { size: A4 portrait; margin: 15mm 18mm; }
+  @page { size: A4 portrait; margin: 15mm 25mm; }
   /* 앱 UI 전체 숨김 */
   body > * { display: none !important; }
   /* print-area만 표시 */
@@ -939,8 +939,8 @@ input,textarea,select{font-family:inherit; color:inherit;}
   .print-bar-amt { font-weight: 700; min-width: 60pt; text-align: right; }
   .print-bar-pct { min-width: 26pt; text-align: right; color: #555; }
   .print-section-title { font-size: 11pt; font-weight: 800; margin-bottom: 5pt; margin-top: 7pt; }
-  .print-page { page-break-after: always; break-after: page; }
-  .print-page:last-child { page-break-after: avoid; break-after: avoid; }
+  .print-page { display:block !important; page-break-after: always !important; break-after: page !important; }
+  .print-page:last-child { page-break-after: avoid !important; break-after: avoid !important; }
   .page-inner { margin: 0; padding: 0; }
   table { page-break-inside: auto; }
   tr { page-break-inside: avoid; }

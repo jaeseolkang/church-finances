@@ -1,7 +1,7 @@
-// 2026-06-27 23:20 KST | 수정: CACHE_NAME v184 (통계 차트+지출현황 한화면)
+// 2026-06-27 23:40 KST | 수정: CACHE_NAME v186 (@page 좌우여백 25mm)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v184';
+const CACHE_NAME = 'gaegyebu-v186';
 const ASSETS = [
   './',
   './index.html',
