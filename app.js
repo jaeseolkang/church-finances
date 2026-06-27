@@ -5052,6 +5052,17 @@ function renderTxStepPickGroup(sheet) {
           `).join('')}
         </div>
       </div>
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <button id="txAddGroupBtn" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 중분류 추가</button>
+        </div>
+        <div id="txAddGroupForm" style="display:none;margin-top:2px;">
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="txAddGroupName" placeholder="이름 입력 (예: 홍길동)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+            <button id="txAddGroupSave" style="background:var(--primary);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;">추가</button>
+          </div>
+        </div>
+      </div>
     </div>
   `;
   sheet.querySelector('#txBack').addEventListener('click', () => {
@@ -5071,6 +5082,35 @@ function renderTxStepPickGroup(sheet) {
       closeTxSheet();
     }
   });
+
+  // 중분류 추가 인라인 폼
+  sheet.querySelector('#txAddGroupBtn').addEventListener('click', () => {
+    const form = sheet.querySelector('#txAddGroupForm');
+    const visible = form.style.display !== 'none';
+    form.style.display = visible ? 'none' : 'block';
+    if (!visible) setTimeout(() => sheet.querySelector('#txAddGroupName').focus(), 50);
+  });
+  const doAddGroup = async () => {
+    const input = sheet.querySelector('#txAddGroupName');
+    const name = input.value.trim();
+    if (!name) { showToast('이름을 입력해주세요'); return; }
+    const catId = State.formCategoryId;
+    const list = subGroupsOfCategory(catId);
+    if (list.find(g => g.name === name)) { showToast('이미 있는 이름이에요'); return; }
+    const newGroup = { id: uid(), categoryId: catId, name, order: list.length };
+    await DB.put('subGroups', newGroup);
+    // 기존 공통 소분류(헌금종류)를 새 중분류에도 자동 생성
+    await reloadData();
+    await seedDefaultSubItemsForGroup(newGroup.id, catId);
+    await reloadData();
+    showToast(`"${name}" 추가됐어요`);
+    renderTxStepPickGroup(sheet);
+  };
+  sheet.querySelector('#txAddGroupSave').addEventListener('click', doAddGroup);
+  sheet.querySelector('#txAddGroupName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doAddGroup();
+  });
+
   sheet.querySelectorAll('[data-pick-group]').forEach(b => {
     b.addEventListener('click', async () => {
       State.formSubGroupId = b.dataset.pickGroup;
