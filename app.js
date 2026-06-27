@@ -2131,7 +2131,9 @@ function printStats() {
       catRows.forEach((r, i) => {
         const sgTd = r.sgRowspan > 0
           ? `<td rowspan="${r.sgRowspan}" style="padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:left;padding-left:6pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(r.sgName)}</td>`
-          : `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>`;
+          : r.isDirect
+            ? `<td style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;background:#DEEAF1;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></td>`
+            : '';
         const catTd = i===0
           ? `<td rowspan="${catRowspan}" style="padding:2pt 3pt;border:0.5pt solid #bbb;font-size:7.5pt;font-weight:700;text-align:center;vertical-align:middle;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.name)}</td>`
           : '';
@@ -2163,7 +2165,6 @@ function printStats() {
           #exp-page table{border-collapse:collapse;width:100%;table-layout:fixed;}
           #exp-page thead th{padding:3pt;border:0.5pt solid rgba(255,255,255,0.3);font-size:7.5pt;font-weight:700;color:#fff!important;background:#1F4E79!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
           #exp-page td{padding:2.5pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;}
-          #exp-page tbody:first-of-type tr:nth-child(even) td{background:#f7f9fc!important;}
           #exp-page .sum-row td{background:#2E74B5!important;color:#fff!important;font-weight:700!important;border:1pt solid #1a5fa8!important;font-size:8pt!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
         </style>
         <div id="exp-inner">
