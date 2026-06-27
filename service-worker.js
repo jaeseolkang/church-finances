@@ -1,7 +1,7 @@
-// 2026-06-28 00:45 KST | 수정: CACHE_NAME v190 (계정 인쇄 합계행)
+// 2026-06-28 01:00 KST | 수정: CACHE_NAME v191 (계정 인쇄버튼 flex 명시)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v190';
+const CACHE_NAME = 'gaegyebu-v191';
 const ASSETS = [
   './',
   './index.html',

@@ -1,4 +1,4 @@
-// v2.86 | 2026-06-28 00:45 KST | 수정: 계정 인쇄 합계행 추가 | cache:v190
+// v2.87 | 2026-06-28 01:00 KST | 수정: 계정 appbar flex 명시, 인쇄 버튼 표시 | cache:v191
 'use strict';
 
 /* =========================================================
@@ -3048,7 +3048,7 @@ async function renderAccounts() {
   const summaryTitle = sub === 'deposit' ? '정기예금 합계' : '계좌 합계';
 
   page.innerHTML = `
-    <div class="appbar" style="padding-left:0;padding-right:0;">
+    <div class="appbar" style="padding-left:0;padding-right:0;display:flex;align-items:center;justify-content:space-between;">
       <h1>계정</h1>
       <button id="acctPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
     </div>
