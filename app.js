@@ -4834,32 +4834,42 @@ async function sendBackupByEmail() {
     linkedAccounts: State.linkedAccounts || [],
     transactions: State.transactions,
   };
-  const jsonStr = JSON.stringify(data);
+  const jsonStr = JSON.stringify(data, null, 2);
   const txCount = State.transactions.length;
-
-  // mailto: URL 크기 제한(약 2000자) 초과 시 JSON 다운로드 후 메일 앱 열기
+  const fileName = `backup-${today}.json`;
   const subject = `[${appName}] 데이터 백업 ${today}`;
-  const bodyShort = `${appName} 백업\n\n` +
-    `백업일시: ${new Date().toLocaleString('ko-KR')}\n` +
-    `거래 건수: ${txCount}건\n\n` +
-    `첨부된 JSON 파일을 앱의 [데이터 가져오기]로 복원하세요.`;
-
-  // 1) JSON 파일 자동 다운로드
   const blob = new Blob([jsonStr], { type: 'application/json' });
+
+  // iOS/Android: Web Share API로 파일 공유 (메일 앱에 첨부 가능)
+  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'application/json' })] })) {
+    const file = new File([blob], fileName, { type: 'application/json' });
+    try {
+      await navigator.share({
+        title: subject,
+        text: `${appName} 전체 데이터 백업\n거래 ${txCount}건\n백업일시: ${new Date().toLocaleString('ko-KR')}`,
+        files: [file],
+      });
+      showToast('📧 공유 완료');
+      return;
+    } catch (e) {
+      if (e.name !== 'AbortError') console.error('share error:', e);
+      // 취소하거나 실패 시 아래 fallback으로
+    }
+  }
+
+  // fallback: 파일 다운로드 + 메일 앱 열기
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `backup-${today}.json`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 
-  // 2) 메일 앱 열기 (짧은 안내 본문)
-  const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyShort)}`;
-  window.location.href = mailtoUrl;
-
-  showToast('📧 JSON 다운로드 후 메일 앱을 열었어요 — 파일을 첨부해 발송해주세요');
+  const bodyShort = `${appName} 백업\n\n백업일시: ${new Date().toLocaleString('ko-KR')}\n거래 건수: ${txCount}건\n\n다운로드된 JSON 파일을 첨부해 보내주세요.`;
+  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyShort)}`;
+  showToast('📥 JSON 다운로드 완료 — 메일에 첨부해 발송해주세요');
 }
 
 async function exportData(startYm, endYm) {
