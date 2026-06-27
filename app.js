@@ -1,4 +1,4 @@
-// v2.90 | 2026-06-28 01:35 KST | 수정: iOS 인쇄 자동실행 제거, 수동 버튼으로 변경 | cache:v194
+// v2.91 | 2026-06-28 01:50 KST | 수정: iOS 인쇄 빈페이지 제거, min-height 제거, 화면연속표시 | cache:v195
 'use strict';
 
 /* =========================================================
@@ -616,13 +616,19 @@ function _doPrintBlob(html) {
     .page-inner{margin:0;padding:0;}
     @media print{
       @page{size:A4 portrait;margin:15mm 25mm;}
-      .print-page{page-break-after:always;break-after:page;display:block!important;}
-      .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+      .print-page{
+        page-break-after:always!important;
+        break-after:page!important;
+        display:block!important;
+        page-break-inside:avoid!important;
+      }
+      .print-page:last-child{page-break-after:avoid!important;break-after:avoid!important;}
       table{page-break-inside:auto;}
       tr{page-break-inside:avoid;}
       th{background:#1F4E79!important;color:#fff!important;}
       tfoot td{background:#1F4E79!important;color:#fff!important;}
       tr:nth-child(even) td{background:#f7f9fc!important;}
+      #print-btn{display:none!important;}
     }
   `;
 
@@ -638,6 +644,8 @@ function _doPrintBlob(html) {
         border:none;border-radius:12px;cursor:pointer;
         font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
       }
+      /* 화면에서는 페이지 구분 없이 연속 표시 */
+      .print-page{display:block;margin-bottom:24px;}
       @media print{#print-btn{display:none!important;}}
     </style>
   </head><body>
@@ -1979,7 +1987,7 @@ function printStats() {
 
   // ── 1페이지: 통계 (막대) ──
   const page1 = `
-    <div class="print-page" style="display:block;min-height:247mm;page-break-after:always;break-after:page;">
+    <div class="print-page" style="display:block;page-break-after:always;break-after:page;">
       <div class="page-inner">
         ${pageHeader}
         <div class="print-section-title">${isIncome?'개인별 헌금액':'대분류별 지출'} · ${fmtMoney(statTotal)}원</div>

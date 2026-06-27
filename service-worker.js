@@ -1,7 +1,7 @@
-// 2026-06-28 01:35 KST | 수정: CACHE_NAME v194 (iOS 인쇄 수동버튼)
+// 2026-06-28 01:50 KST | 수정: CACHE_NAME v195 (iOS 인쇄 빈페이지 제거)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v194';
+const CACHE_NAME = 'gaegyebu-v195';
 const ASSETS = [
   './',
   './index.html',
