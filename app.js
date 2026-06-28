@@ -5531,14 +5531,15 @@ async function renderTxStepItems(sheet) {
       <!-- 커스텀 숫자 패드 -->
       <div id="txNumpad" style="display:block;margin-top:8px;">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">
-          ${['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'].map((k,i) => k===''
-            ? `<div></div>`
-            : `<button class="numpad-key" data-key="${k}"
-                style="padding:12px 0;font-size:16px;font-weight:700;border-radius:10px;
-                  background:${k==='✓'?'var(--primary)':k==='←'?'var(--surface-2)':'var(--card)'};
-                  color:${k==='✓'?'#fff':'var(--text-1)'};
-                  border:1px solid var(--border);box-shadow:var(--shadow-sm);">${k}</button>`
-          ).join('')}
+          ${(()=>{
+            const keys=['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'];
+            return keys.map(k=>{
+              if(!k) return '<div></div>';
+              const bg=k==='✓'?'var(--primary)':k==='←'?'var(--surface-2)':'var(--card)';
+              const cl=k==='✓'?'#fff':'var(--text-1)';
+              return '<button class="numpad-key" data-key="'+k+'" style="padding:12px 0;font-size:16px;font-weight:700;border-radius:10px;background:'+bg+';color:'+cl+';border:1px solid var(--border);">'+k+'</button>';
+            }).join('');
+          })()}
         </div>
       </div>
 
