@@ -319,9 +319,9 @@ async function seedIfEmpty() {
 /* =========================================================
    APP STATE
    ========================================================= */
-// 관리자 권한 상태 (sessionStorage에 저장 - 앱 종료 시 초기화)
-function getIsAdmin() { return sessionStorage.getItem('churchAdmin') === '1'; }
-function setIsAdmin(v) { v ? sessionStorage.setItem('churchAdmin','1') : sessionStorage.removeItem('churchAdmin'); }
+// 관리자 권한 상태 (localStorage에 저장 - 명시적 로그아웃 전까지 유지)
+function getIsAdmin() { return localStorage.getItem('churchAdmin') === '1'; }
+function setIsAdmin(v) { v ? localStorage.setItem('churchAdmin','1') : localStorage.removeItem('churchAdmin'); }
 
 const State = {
   tab: 'home',
@@ -3909,7 +3909,7 @@ function renderSettings() {
       </div>
       <div class="settings-row" id="rowImport">
         <div>
-          <div class="settings-label">데이터 가져오기</div>
+          <div class="settings-label">데이터 가져오기${getIsAdmin()?'':' 🔒'}</div>
           <div class="settings-sub">백업 JSON 파일에서 복원</div>
         </div>
         ${ICONS.upload}
@@ -3979,13 +3979,13 @@ function renderSettings() {
       showToast('앱 이름이 변경됐어요');
     });
   });
-  page.querySelector('#rowLinkedAccounts').addEventListener('click', () => openLinkedAccountsSheet());
-  page.querySelector('#rowCats').addEventListener('click', () => openCatManageSheet());
+  page.querySelector('#rowLinkedAccounts').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openLinkedAccountsSheet(); });
+  page.querySelector('#rowCats').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openCatManageSheet(); });
   page.querySelector('#rowItemStructure').addEventListener('click', () => openItemStructureSheet());
   page.querySelector('#rowLedger').addEventListener('click', () => openLedgerSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
-  page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
+  page.querySelector('#rowEmailBackup').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } sendBackupByEmail(); });
   // 로그아웃
   const btnLogout = page.querySelector('#btnLogout');
   if (btnLogout) {
@@ -4077,7 +4077,7 @@ function renderSettings() {
     if (pwInp) pwInp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   }
 
-  page.querySelector('#rowSyncUp').addEventListener('click', async () => {
+  page.querySelector('#rowSyncUp').addEventListener('click', async () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; }
     showToast('⬆️ 업로드 중...');
     const ok = await syncToFirebase();
     showToast(ok ? '☁️ 업로드 완료!' : '업로드 실패 — 네트워크 확인해주세요');
@@ -4087,7 +4087,7 @@ function renderSettings() {
     const ok = await syncFromFirebase();
     if (!ok) showToast('이미 최신 데이터예요');
   });
-  page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
+  page.querySelector('#rowImport').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } page.querySelector('#importFile').click(); });
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
     if ('serviceWorker' in navigator) {
@@ -4119,7 +4119,7 @@ function renderSettings() {
     if (count === 0) showToast('만기 임박 계좌가 없어요');
   });
 
-  page.querySelector('#rowReset').addEventListener('click', resetAllData);
+  page.querySelector('#rowReset').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } resetAllData(); });
 }
 
 /* =========================================================
@@ -6556,7 +6556,7 @@ function renderLinkedAccountsSheet() {
   sheet.querySelector('#laClose').addEventListener('click', () => closeSheet('linkedAccountsSheet'));
 
   sheet.querySelectorAll('.la-add-small').forEach(btn => {
-    btn.addEventListener('click', () => openLinkedAccountEditSheet(null, btn.dataset.kind));
+    btn.addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openLinkedAccountEditSheet(null, btn.dataset.kind); });
   });
 
   sheet.querySelectorAll('.la-item').forEach(el => {
