@@ -4041,7 +4041,9 @@ function renderSettings() {
       page.querySelector('#adminPwInput').value = '';
       if (ok) {
         showToast('🔐 비밀번호가 저장됐어요');
-        renderSettings(); // 저장 후 화면 갱신 (최초 설정이면 숨겨짐)
+        // 즉시 숨기기 (renderSettings 재호출 없이)
+        const pwRow = page.querySelector('#pwChangeRow');
+        if (pwRow && !getIsAdmin()) pwRow.style.display = 'none';
       } else {
         showToast('저장 실패 — 네트워크 확인해주세요');
       }
