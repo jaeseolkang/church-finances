@@ -5647,7 +5647,6 @@ async function renderTxStepItems(sheet) {
     const wrap = input.closest('.amt-input-wrap');
     if (wrap) wrap.classList.add('focus');
     activeAmtInput = input;
-    // 선택된 항목 이름 표시
     if (numpadLabel) {
       const label = input.closest('.formrow')?.querySelector('label');
       numpadLabel.textContent = label ? '✏️ ' + label.textContent : '';
@@ -5658,41 +5657,44 @@ async function renderTxStepItems(sheet) {
   if (allInputs.length > 0) selectAmtInput(allInputs[0]);
 
   allInputs.forEach(input => {
+    input.addEventListener('touchend', (e) => { e.preventDefault(); selectAmtInput(input); }, { passive: false });
     input.addEventListener('click', () => selectAmtInput(input));
-    input.addEventListener('touchstart', () => selectAmtInput(input), { passive: true });
   });
 
-  // numpad 키 처리
+  const handleNumKey = (key) => {
+    if (!activeAmtInput) return;
+    const cur = rawDigits(activeAmtInput.value);
+    let next;
+    if (key === '←') {
+      next = cur.slice(0, -1);
+    } else if (key === '✓') {
+      const arr = Array.from(allInputs);
+      const idx = arr.indexOf(activeAmtInput);
+      const nextInput = arr[idx + 1];
+      if (nextInput) selectAmtInput(nextInput);
+      return;
+    } else {
+      const appended = cur + key;
+      next = appended.replace(/^0+(\d)/, '$1');
+      if (next.length > 9) return;
+    }
+    activeAmtInput.value = next ? Number(next).toLocaleString('ko-KR') : '';
+    const numVal = next ? Number(next) : null;
+    const itemKey = activeAmtInput.dataset.item;
+    if (numVal === null) delete State.formAmounts[itemKey];
+    else State.formAmounts[itemKey] = numVal;
+    const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
+    const totalEl = sheet.querySelector('.card .tabular');
+    if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
+  };
+
+  // numpad 키 처리 - touchend로 iOS 대응
   numpadGrid.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('mousedown', e => e.preventDefault());
-    btn.addEventListener('click', () => {
-      if (!activeAmtInput) return;
-      const key = btn.dataset.key;
-      const cur = rawDigits(activeAmtInput.value);
-      let next;
-      if (key === '←') {
-        next = cur.slice(0, -1);
-      } else if (key === '✓') {
-        // 다음 빈 항목으로 이동
-        const arr = Array.from(allInputs);
-        const idx = arr.indexOf(activeAmtInput);
-        const nextEmpty = arr.slice(idx + 1).find(i => !rawDigits(i.value));
-        if (nextEmpty) selectAmtInput(nextEmpty);
-        return;
-      } else {
-        const appended = cur + key;
-        next = appended.replace(/^0+(\d)/, '$1');
-        if (next.length > 9) return;
-      }
-      activeAmtInput.value = next ? Number(next).toLocaleString('ko-KR') : '';
-      const numVal = next ? Number(next) : null;
-      const itemKey = activeAmtInput.dataset.item;
-      if (numVal === null) delete State.formAmounts[itemKey];
-      else State.formAmounts[itemKey] = numVal;
-      const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
-      const totalEl = sheet.querySelector('.card .tabular');
-      if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
-    });
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      handleNumKey(btn.dataset.key);
+    }, { passive: false });
+    btn.addEventListener('click', () => handleNumKey(btn.dataset.key));
   });
   sheet.querySelector('#addSubItemBtn').addEventListener('click', () => addSubItemInline(sheet, cat.id));
   sheet.querySelector('#newSubItemName').addEventListener('keydown', (e) => {
