@@ -3821,9 +3821,9 @@ function renderSettings() {
         </div>
         <span style="font-size:18px;">${getIsAdmin() ? '✏️' : '👁️'}</span>
       </div>
-      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-        <div class="settings-label">비밀번호 변경</div>
-        <div class="settings-sub">Firebase에 저장되어 모든 기기에서 동일하게 적용됩니다</div>
+      <div id="pwChangeRow" class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;display:none;">
+        <div class="settings-label" id="pwChangeLabel">비밀번호 설정</div>
+        <div class="settings-sub" id="pwChangeSub">최초 설정 — Firebase에 저장됩니다</div>
         <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
           <input type="password" id="adminPwInput" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
           <button id="adminPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
@@ -4009,16 +4009,44 @@ function renderSettings() {
       showPasswordPrompt(() => renderSettings());
     }
   });
-  // 비밀번호 Firebase 저장
-  page.querySelector('#adminPwSave').addEventListener('click', async () => {
-    const val = page.querySelector('#adminPwInput').value.trim();
-    if (!val) { showToast('비밀번호를 입력해주세요'); return; }
-    if (val.length < 4) { showToast('4자 이상 입력해주세요'); return; }
-    showToast('저장 중...');
-    const ok = await saveAdminPasswordToFirebase(val);
-    page.querySelector('#adminPwInput').value = '';
-    showToast(ok ? '🔐 비밀번호가 Firebase에 저장됐어요' : '저장 실패 — 네트워크 확인해주세요');
-  });
+  // 비밀번호 설정/변경: 최초(미설정)이거나 입력 모드일 때 표시
+  (async () => {
+    const pwRow = page.querySelector('#pwChangeRow');
+    const pwLabel = page.querySelector('#pwChangeLabel');
+    const pwSub = page.querySelector('#pwChangeSub');
+    if (!pwRow) return;
+    const existing = await getAdminPasswordFromFirebase();
+    if (!existing) {
+      // 최초 설정 — 누구나 접근 가능
+      pwLabel.textContent = '비밀번호 최초 설정';
+      pwSub.textContent = '설정 후에는 입력 모드에서만 변경 가능합니다';
+      pwRow.style.display = 'flex';
+    } else if (getIsAdmin()) {
+      // 이미 설정됨 + 입력 모드
+      pwLabel.textContent = '비밀번호 변경';
+      pwSub.textContent = '입력 모드에서만 변경 가능합니다';
+      pwRow.style.display = 'flex';
+    }
+    // 열람 모드 + 비밀번호 이미 있으면 숨김
+  })();
+
+  const adminPwSave = page.querySelector('#adminPwSave');
+  if (adminPwSave) {
+    adminPwSave.addEventListener('click', async () => {
+      const val = page.querySelector('#adminPwInput').value.trim();
+      if (!val) { showToast('비밀번호를 입력해주세요'); return; }
+      if (val.length < 4) { showToast('4자 이상 입력해주세요'); return; }
+      showToast('저장 중...');
+      const ok = await saveAdminPasswordToFirebase(val);
+      page.querySelector('#adminPwInput').value = '';
+      if (ok) {
+        showToast('🔐 비밀번호가 저장됐어요');
+        renderSettings(); // 저장 후 화면 갱신 (최초 설정이면 숨겨짐)
+      } else {
+        showToast('저장 실패 — 네트워크 확인해주세요');
+      }
+    });
+  }
 
   page.querySelector('#rowSyncUp').addEventListener('click', async () => {
     showToast('⬆️ 업로드 중...');
