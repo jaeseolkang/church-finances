@@ -5502,7 +5502,7 @@ async function renderTxStepItems(sheet) {
         <div id="itemsList" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:2px 8px;">
           ${items.map(it => `
             <div class="formrow" style="margin-bottom:4px; min-width:0;">
-              <label style="font-weight:600; color:var(--text-1); margin-bottom:3px; display:block; font-size:12px;">${escapeHTML(it.name)}</label>
+              <label style="font-weight:700; color:var(--text-1); margin-bottom:3px; display:block; font-size:14px;">${escapeHTML(it.name)}</label>
               <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
                 <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
                 <span class="won" style="font-size:11px;">원</span>
@@ -5526,6 +5526,20 @@ async function renderTxStepItems(sheet) {
               <span class="won" style="font-size:13px;">원</span>
             </div>
           </div>` : ''}
+      </div>
+
+      <!-- 커스텀 숫자 패드 -->
+      <div id="txNumpad" style="display:none;margin-top:8px;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">
+          ${['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'].map((k,i) => k===''
+            ? `<div></div>`
+            : `<button class="numpad-key" data-key="${k}"
+                style="padding:12px 0;font-size:16px;font-weight:700;border-radius:10px;
+                  background:${k==='✓'?'var(--primary)':k==='←'?'var(--surface-2)':'var(--card)'};
+                  color:${k==='✓'?'#fff':'var(--text-1)'};
+                  border:1px solid var(--border);box-shadow:var(--shadow-sm);">${k}</button>`
+          ).join('')}
+        </div>
       </div>
 
       <div class="formrow" style="margin-top:10px;">
@@ -5615,19 +5629,52 @@ async function renderTxStepItems(sheet) {
     });
   }
 
+  let activeAmtInput = null;
+  const numpad = sheet.querySelector('#txNumpad');
+
   sheet.querySelectorAll('.item-amt-input').forEach(input => {
     attachMoneyInputFormatter(input, (numVal) => {
       if (numVal === null) delete State.formAmounts[input.dataset.item];
       else State.formAmounts[input.dataset.item] = numVal;
-      // 합계만 갱신 (전체 리렌더 없이 가볍게)
       const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
       const totalEl = sheet.querySelector('.card .tabular');
       if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
-    }, 9); // 억 단위까지 (9자리, 최대 999,999,999원)
+    }, 9);
     const wrap = input.closest('.amt-input-wrap');
-    input.addEventListener('focus', () => wrap.classList.add('focus'));
-    input.addEventListener('blur', () => wrap.classList.remove('focus'));
+    input.addEventListener('focus', () => {
+      wrap.classList.add('focus');
+      activeAmtInput = input;
+      if (numpad) numpad.style.display = 'block';
+    });
+    input.addEventListener('blur', () => {
+      wrap.classList.remove('focus');
+    });
   });
+
+  // numpad 키 처리
+  if (numpad) {
+    numpad.querySelectorAll('.numpad-key').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault()); // blur 방지
+      btn.addEventListener('click', () => {
+        if (!activeAmtInput) return;
+        const key = btn.dataset.key;
+        const cur = rawDigits(activeAmtInput.value);
+        let next;
+        if (key === '←') {
+          next = cur.slice(0, -1);
+        } else if (key === '✓') {
+          numpad.style.display = 'none';
+          activeAmtInput = null;
+          return;
+        } else {
+          next = (cur + key).replace(/^0+(?=\d)/, '');
+          if (next.length > 9) return;
+        }
+        activeAmtInput.value = next ? Number(next).toLocaleString('ko-KR') : '';
+        activeAmtInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  }
 
   sheet.querySelector('#addSubItemBtn').addEventListener('click', () => addSubItemInline(sheet, cat.id));
   sheet.querySelector('#newSubItemName').addEventListener('keydown', (e) => {
