@@ -5496,51 +5496,42 @@ async function renderTxStepItems(sheet) {
         <span class="tabular" style="font-size:19px; font-weight:800; color:${State.formType==='income'?'var(--primary)':'var(--expense)'};">${fmtMoney(total)}원</span>
       </div>
     </div>
-    <div class="sheet-body" style="display:flex;flex-direction:column;padding-bottom:0;overflow:hidden;height:calc(100% - 110px);">
-      <!-- 항목 목록 (스크롤 가능) -->
-      <div style="flex:1;overflow-y:auto;padding:0 16px 8px;">
-        <div class="formrow">
-          <label>세부항목별 금액 입력</label>
-          <div id="itemsList" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:2px 8px;">
-            ${items.map(it => `
-              <div class="formrow" style="margin-bottom:4px; min-width:0;">
-                <label style="font-weight:700; color:var(--text-1); margin-bottom:3px; display:block; font-size:14px;">${escapeHTML(it.name)}</label>
-                <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
-                  <input type="text" readonly class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;caret-color:transparent;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
-                  <span class="won" style="font-size:11px;">원</span>
-                </div>
+    <div class="sheet-body">
+      <div class="formrow">
+        <label>세부항목별 금액 입력</label>
+        <div id="itemsList" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:2px 8px;">
+          ${items.map(it => `
+            <div class="formrow" style="margin-bottom:4px; min-width:0;">
+              <label style="font-weight:700; color:var(--text-1); margin-bottom:3px; display:block; font-size:14px;">${escapeHTML(it.name)}</label>
+              <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
+                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
+                <span class="won" style="font-size:11px;">원</span>
               </div>
-            `).join('')}
-          </div>
-          <div style="display:flex; gap:8px; margin-top:4px;">
-            <input type="text" class="textinput" id="newSubItemName" placeholder="새 세부항목 추가" style="flex:1;">
-            <button class="btn-secondary" id="addSubItemBtn" style="width:auto; padding:0 16px; margin-top:0; color:var(--primary); font-weight:700;">추가</button>
-          </div>
-          ${items.length === 0 ? `
-            <div style="margin-top:8px;">
-              <label style="font-weight:600;color:var(--text-1);margin-bottom:6px;display:block;font-size:13px;">
-                ${subGroup ? escapeHTML(subGroup.name) : cat.name}
-              </label>
-              <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px;padding-bottom:5px;gap:3px;">
-                <input type="text" readonly class="item-amt-input" data-item="__direct__" placeholder="0"
-                  style="font-size:18px;font-weight:700;caret-color:transparent;"
-                  value="${State.formAmounts['__direct__'] != null ? fmtMoney(State.formAmounts['__direct__']) : ''}">
-                <span class="won" style="font-size:13px;">원</span>
-              </div>
-            </div>` : ''}
+            </div>
+          `).join('')}
         </div>
-        <div class="formrow" style="margin-top:8px;">
-          <label>비고</label>
-          <input type="text" class="textinput" id="txMemoInput" placeholder="메모 (선택)" maxlength="100" value="${escapeHTML(State.formMemo || '')}">
+        <div style="display:flex; gap:8px; margin-top:4px;">
+          <input type="text" class="textinput" id="newSubItemName" placeholder="새 세부항목 추가" style="flex:1;">
+          <button class="btn-secondary" id="addSubItemBtn" style="width:auto; padding:0 16px; margin-top:0; color:var(--primary); font-weight:700;">추가</button>
         </div>
-        ${editing ? `<button class="btn-secondary" id="txDelete" style="color:var(--expense);">삭제</button>` : ''}
+        ${items.length === 0 ? `
+          <div style="margin-top:8px;">
+            <label style="font-weight:600;color:var(--text-1);margin-bottom:6px;display:block;font-size:13px;">
+              ${subGroup ? escapeHTML(subGroup.name) : cat.name}
+            </label>
+            <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px;padding-bottom:5px;gap:3px;">
+              <input type="text" inputmode="numeric" class="item-amt-input" data-item="__direct__" placeholder="0"
+                style="font-size:18px;font-weight:700;"
+                value="${State.formAmounts['__direct__'] != null ? fmtMoney(State.formAmounts['__direct__']) : ''}">
+              <span class="won" style="font-size:13px;">원</span>
+            </div>
+          </div>` : ''}
       </div>
-
-      <!-- 선택된 항목 표시 -->
-      <div id="numpadLabel" style="padding:6px 16px;font-size:13px;font-weight:700;color:var(--primary);background:var(--surface-1);border-top:1px solid var(--border);"></div>
-
-      <!-- numpad 하단 고정 -->
-      <div id="txNumpad" style="padding:6px 10px 10px;background:var(--surface-1);border-top:1px solid var(--border);"></div>
+      <div class="formrow" style="margin-top:10px;">
+        <label>비고</label>
+        <input type="text" class="textinput" id="txMemoInput" placeholder="메모 (선택)" maxlength="100" value="${escapeHTML(State.formMemo || '')}">
+      </div>
+      ${editing ? `<button class="btn-secondary" id="txDelete" style="color:var(--expense);">삭제</button>` : ''}
     </div>
   `;
 
@@ -5622,79 +5613,17 @@ async function renderTxStepItems(sheet) {
     });
   }
 
-  let activeAmtInput = null;
-  const numpad = sheet.querySelector('#txNumpad');
-  const numpadLabel = sheet.querySelector('#numpadLabel');
-
-  // numpad DOM 생성
-  const numpadGrid = document.createElement('div');
-  numpadGrid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:4px;';
-  const KEYS = ['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'];
-  KEYS.forEach(k => {
-    if (!k) { numpadGrid.appendChild(document.createElement('div')); return; }
-    const btn = document.createElement('button');
-    btn.textContent = k;
-    btn.dataset.key = k;
-    btn.style.cssText = 'padding:13px 0;font-size:17px;font-weight:700;border-radius:10px;border:1px solid var(--border);' +
-      'background:' + (k==='✓' ? 'var(--primary)' : k==='←' ? 'var(--surface-2)' : 'var(--card)') + ';' +
-      'color:' + (k==='✓' ? '#fff' : 'var(--text-1)') + ';';
-    numpadGrid.appendChild(btn);
-  });
-  numpad.appendChild(numpadGrid);
-
-  const selectAmtInput = (input) => {
-    sheet.querySelectorAll('.item-amt-wrap').forEach(w => w.classList.remove('focus'));
+  sheet.querySelectorAll('.item-amt-input').forEach(input => {
+    attachMoneyInputFormatter(input, (numVal) => {
+      if (numVal === null) delete State.formAmounts[input.dataset.item];
+      else State.formAmounts[input.dataset.item] = numVal;
+      const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
+      const totalEl = sheet.querySelector('.card .tabular');
+      if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
+    }, 9);
     const wrap = input.closest('.amt-input-wrap');
-    if (wrap) wrap.classList.add('focus');
-    activeAmtInput = input;
-    if (numpadLabel) {
-      const label = input.closest('.formrow')?.querySelector('label');
-      numpadLabel.textContent = label ? '✏️ ' + label.textContent : '';
-    }
-  };
-
-  const allInputs = sheet.querySelectorAll('.item-amt-input');
-  if (allInputs.length > 0) selectAmtInput(allInputs[0]);
-
-  allInputs.forEach(input => {
-    input.addEventListener('touchend', (e) => { e.preventDefault(); selectAmtInput(input); }, { passive: false });
-    input.addEventListener('click', () => selectAmtInput(input));
-  });
-
-  const handleNumKey = (key) => {
-    if (!activeAmtInput) return;
-    const cur = rawDigits(activeAmtInput.value);
-    let next;
-    if (key === '←') {
-      next = cur.slice(0, -1);
-    } else if (key === '✓') {
-      const arr = Array.from(allInputs);
-      const idx = arr.indexOf(activeAmtInput);
-      const nextInput = arr[idx + 1];
-      if (nextInput) selectAmtInput(nextInput);
-      return;
-    } else {
-      const appended = cur + key;
-      next = appended.replace(/^0+(\d)/, '$1');
-      if (next.length > 9) return;
-    }
-    activeAmtInput.value = next ? Number(next).toLocaleString('ko-KR') : '';
-    const numVal = next ? Number(next) : null;
-    const itemKey = activeAmtInput.dataset.item;
-    if (numVal === null) delete State.formAmounts[itemKey];
-    else State.formAmounts[itemKey] = numVal;
-    const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
-    const totalEl = sheet.querySelector('.card .tabular');
-    if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
-  };
-
-  // numpad 키 처리 - touchend로 iOS 대응
-  numpadGrid.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      handleNumKey(btn.dataset.key);
-    }, { passive: false });
-    btn.addEventListener('click', () => handleNumKey(btn.dataset.key));
+    input.addEventListener('focus', () => wrap.classList.add('focus'));
+    input.addEventListener('blur', () => wrap.classList.remove('focus'));
   });
   sheet.querySelector('#addSubItemBtn').addEventListener('click', () => addSubItemInline(sheet, cat.id));
   sheet.querySelector('#newSubItemName').addEventListener('keydown', (e) => {
