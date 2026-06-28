@@ -2643,7 +2643,7 @@ function buildStatsAggMap(detailTx, isIncome) {
         if (!aggMap[key]) aggMap[key] = { label: lbl, amount: 0, count: 0, entries: [] };
         aggMap[key].amount += l.amount;
         aggMap[key].count  += 1;
-        aggMap[key].entries.push({ txId: t.id, date: t.date, amount: l.amount, categoryId: t.categoryId });
+        aggMap[key].entries.push({ txId: t.id, date: t.date, amount: l.amount, categoryId: t.categoryId, subGroupId: t.subGroupId || t.personId });
       }
     }
   } else {
@@ -6159,9 +6159,17 @@ function renderSubStatDetail(key) {
             <div class="card" style="padding:0 16px; margin-bottom:14px;">
               ${byDate[d].map(e => {
                 const cat = catById(e.categoryId) || { name: '삭제된 항목', icon:'📦', color:'#9CA3AF' };
+                // 수입(헌금)이면 중분류(사람 이름) 표시, 지출이면 카테고리 이름
+                let rowLabel;
+                if (isIncome && e.subGroupId) {
+                  const sg = (State.subGroups||[]).find(g=>g.id===e.subGroupId);
+                  rowLabel = sg ? sg.name : (cat.icon ? cat.icon+' '+cat.name : cat.name);
+                } else {
+                  rowLabel = (cat.icon ? cat.icon+' ' : '') + cat.name;
+                }
                 return `
                   <div class="stats-agg-row tx-item" data-id="${e.txId}" style="cursor:pointer;">
-                    <div class="stats-agg-label">${cat.icon ? cat.icon + ' ' : ''}${escapeHTML(cat.name)}</div>
+                    <div class="stats-agg-label">${escapeHTML(rowLabel)}</div>
                     <div class="stats-agg-amt tabular ${isIncome ? 'income' : 'expense'}">${fmtMoney(e.amount)}원</div>
                   </div>
                 `;
