@@ -3,23 +3,46 @@
 
 
 /* =========================================================
-   비밀번호 / 관리자 권한 제어
+   비밀번호 / 입력 모드 제어
    ========================================================= */
-function showPasswordPrompt(onSuccess) {
+
+// Firebase에서 비밀번호 가져오기
+async function getAdminPasswordFromFirebase() {
+  try {
+    const db = await initFirebase();
+    if (!db) return null;
+    const snap = await db.ref('adminPassword').once('value');
+    return snap.val();
+  } catch(e) { return null; }
+}
+
+// Firebase에 비밀번호 저장
+async function saveAdminPasswordToFirebase(pw) {
+  try {
+    const db = await initFirebase();
+    if (!db) return false;
+    await db.ref('adminPassword').set(pw);
+    return true;
+  } catch(e) { return false; }
+}
+
+function showPasswordPrompt(onSuccess, onCancel) {
+  const existing = document.getElementById('pwOverlay');
+  if (existing) existing.remove();
   const overlay = document.createElement('div');
   overlay.id = 'pwOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
   overlay.innerHTML = `
-    <div style="background:var(--card);border-radius:20px;padding:28px 24px;width:300px;box-shadow:0 8px 40px rgba(0,0,0,0.3);text-align:center;">
-      <div style="font-size:32px;margin-bottom:8px;">🔐</div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:4px;">관리자 로그인</div>
+    <div style="background:var(--card);border-radius:20px;padding:28px 24px;width:300px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.3);text-align:center;">
+      <div style="font-size:32px;margin-bottom:8px;">🔑</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px;">입력 모드 전환</div>
       <div style="font-size:13px;color:var(--text-2);margin-bottom:16px;">비밀번호를 입력하세요</div>
       <input type="password" id="pwInput" placeholder="비밀번호"
-        style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:12px;font-size:16px;text-align:center;margin-bottom:12px;">
-      <div id="pwError" style="color:#e53e3e;font-size:12px;margin-bottom:8px;min-height:16px;"></div>
+        style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:12px;font-size:16px;text-align:center;margin-bottom:8px;box-sizing:border-box;">
+      <div id="pwError" style="color:#e53e3e;font-size:12px;margin-bottom:12px;min-height:16px;"></div>
       <div style="display:flex;gap:8px;">
-        <button id="pwCancel" style="flex:1;padding:12px;border-radius:12px;background:var(--surface-2);font-size:14px;font-weight:600;">취소</button>
-        <button id="pwConfirm" style="flex:1;padding:12px;border-radius:12px;background:var(--primary);color:#fff;font-size:14px;font-weight:700;">확인</button>
+        <button id="pwCancel" style="flex:1;padding:12px;border-radius:12px;background:var(--surface-2);font-size:14px;font-weight:600;border:none;">취소</button>
+        <button id="pwConfirm" style="flex:1;padding:12px;border-radius:12px;background:var(--primary);color:#fff;font-size:14px;font-weight:700;border:none;">확인</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -28,15 +51,17 @@ function showPasswordPrompt(onSuccess) {
   setTimeout(() => input.focus(), 100);
 
   const tryLogin = async () => {
-    const rec = await DB.get('settings', 'adminPassword');
-    const saved = rec ? rec.value : null;
-    if (!saved) { error.textContent = '비밀번호가 설정되지 않았어요'; return; }
-    if (input.value === saved) {
+    const pw = input.value;
+    if (!pw) { error.textContent = '비밀번호를 입력해주세요'; return; }
+    // Firebase에서 비밀번호 확인
+    const saved = await getAdminPasswordFromFirebase();
+    if (!saved) { error.textContent = '비밀번호가 설정되지 않았어요 (설정에서 등록)'; return; }
+    if (pw === saved) {
       setIsAdmin(true);
       overlay.remove();
+      applyLockState();
       onSuccess && onSuccess();
-      renderApp();
-      showToast('🔓 관리자로 로그인됐어요');
+      showToast('🔓 입력 모드로 전환됐어요');
     } else {
       error.textContent = '비밀번호가 틀렸어요';
       input.value = '';
@@ -45,33 +70,19 @@ function showPasswordPrompt(onSuccess) {
   };
 
   overlay.querySelector('#pwConfirm').addEventListener('click', tryLogin);
-  overlay.querySelector('#pwCancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#pwCancel').addEventListener('click', () => { overlay.remove(); onCancel && onCancel(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
 }
 
-function showLockBanner() {
-  const existing = document.getElementById('lockBanner');
-  if (existing) return;
-  const banner = document.createElement('div');
-  banner.id = 'lockBanner';
-  banner.style.cssText = 'position:fixed;bottom:70px;left:0;right:0;z-index:9990;background:#1d4ed8;color:#fff;text-align:center;padding:10px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:12px;';
-  banner.innerHTML = `<span>🔒 열람 전용 모드</span><button id="lockLoginBtn" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;">관리자 로그인</button>`;
-  document.body.appendChild(banner);
-  banner.querySelector('#lockLoginBtn').addEventListener('click', () => showPasswordPrompt());
-}
-
-function removeLockBanner() {
-  const b = document.getElementById('lockBanner');
-  if (b) b.remove();
-}
-
-// + 버튼 등 입력 요소 잠금
+// + 버튼 등 입력 요소 잠금 (배너 없이)
 function applyLockState() {
   const isAdmin = getIsAdmin();
   const fab = document.getElementById('fabAdd');
-  if (fab) fab.style.display = isAdmin ? 'flex' : 'none';
-  if (isAdmin) removeLockBanner();
-  else showLockBanner();
+  const tab = State.tab;
+  if (fab) {
+    const hiddenTabs = ['settings','members','accounts'];
+    fab.style.display = (!isAdmin || hiddenTabs.includes(tab)) ? 'none' : 'flex';
+  }
 }
 
 /* =========================================================
@@ -3802,21 +3813,21 @@ function renderSettings() {
     </div>
 
     <div class="settings-group">
-      <div class="settings-group-title">🔐 관리자 설정</div>
+      <div class="settings-group-title">🔐 입력 모드 설정</div>
+      <div class="settings-row" id="rowAdminToggle" style="cursor:pointer;">
+        <div>
+          <div class="settings-label">${getIsAdmin() ? '🔓 입력 모드 중' : '🔒 열람 전용 모드'}</div>
+          <div class="settings-sub">${getIsAdmin() ? '탭하면 열람 모드로 전환' : '탭하면 비밀번호 입력 후 입력 모드로 전환'}</div>
+        </div>
+        <span style="font-size:18px;">${getIsAdmin() ? '✏️' : '👁️'}</span>
+      </div>
       <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-        <div class="settings-label">관리자 비밀번호</div>
-        <div class="settings-sub">비밀번호를 설정하면 열람 전용 모드가 활성화됩니다</div>
+        <div class="settings-label">비밀번호 변경</div>
+        <div class="settings-sub">Firebase에 저장되어 모든 기기에서 동일하게 적용됩니다</div>
         <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
-          <input type="password" id="adminPwInput" class="textinput" placeholder="새 비밀번호 입력" style="flex:1;font-size:13px;padding:8px 12px;">
+          <input type="password" id="adminPwInput" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
           <button id="adminPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
         </div>
-      </div>
-      <div class="settings-row" id="rowAdminLogout" style="cursor:pointer;">
-        <div>
-          <div class="settings-label" id="adminStatusLabel">${getIsAdmin() ? '🔓 관리자 로그인됨' : '🔒 열람 전용 모드'}</div>
-          <div class="settings-sub">${getIsAdmin() ? '탭하면 로그아웃합니다' : '탭하면 관리자 로그인'}</div>
-        </div>
-        <span style="font-size:18px;">${getIsAdmin() ? '🔓' : '🔒'}</span>
       </div>
     </div>
 
@@ -3987,30 +3998,26 @@ function renderSettings() {
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
-  // 비밀번호 저장
-  (async () => {
-    const rec = await DB.get('settings', 'adminPassword');
-    const inp = page.querySelector('#adminPwInput');
-    if (rec && rec.value && inp) inp.placeholder = '비밀번호 변경';
-  })();
-  page.querySelector('#adminPwSave').addEventListener('click', async () => {
-    const val = page.querySelector('#adminPwInput').value.trim();
-    if (!val) { showToast('비밀번호를 입력해주세요'); return; }
-    if (val.length < 4) { showToast('4자 이상 입력해주세요'); return; }
-    await DB.put('settings', { key: 'adminPassword', value: val });
-    page.querySelector('#adminPwInput').value = '';
-    showToast('🔐 비밀번호가 저장됐어요');
-  });
-  // 로그인/로그아웃 토글
-  page.querySelector('#rowAdminLogout').addEventListener('click', () => {
+  // 입력 모드 토글
+  page.querySelector('#rowAdminToggle').addEventListener('click', () => {
     if (getIsAdmin()) {
       setIsAdmin(false);
       applyLockState();
       renderSettings();
-      showToast('🔒 로그아웃됐어요');
+      showToast('👁️ 열람 전용 모드로 전환됐어요');
     } else {
       showPasswordPrompt(() => renderSettings());
     }
+  });
+  // 비밀번호 Firebase 저장
+  page.querySelector('#adminPwSave').addEventListener('click', async () => {
+    const val = page.querySelector('#adminPwInput').value.trim();
+    if (!val) { showToast('비밀번호를 입력해주세요'); return; }
+    if (val.length < 4) { showToast('4자 이상 입력해주세요'); return; }
+    showToast('저장 중...');
+    const ok = await saveAdminPasswordToFirebase(val);
+    page.querySelector('#adminPwInput').value = '';
+    showToast(ok ? '🔐 비밀번호가 Firebase에 저장됐어요' : '저장 실패 — 네트워크 확인해주세요');
   });
 
   page.querySelector('#rowSyncUp').addEventListener('click', async () => {
