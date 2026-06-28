@@ -1,4 +1,4 @@
-// 2026-06-28 02:40 KST | 수정: CACHE_NAME v198 (월장부 페이지별 테이블 분리)
+// 2026-06-28 18:50 KST | 수정: CACHE_NAME v200 (커스텀 numpad, 항목 라벨 볼드)
 'use strict';
 
 const CACHE_NAME = 'gaegyebu-v200';
