@@ -5528,20 +5528,8 @@ async function renderTxStepItems(sheet) {
           </div>` : ''}
       </div>
 
-      <!-- 커스텀 숫자 패드 -->
-      <div id="txNumpad" style="display:block;margin-top:8px;">
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">
-          ${(()=>{
-            const keys=['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'];
-            return keys.map(k=>{
-              if(!k) return '<div></div>';
-              const bg=k==='✓'?'var(--primary)':k==='←'?'var(--surface-2)':'var(--card)';
-              const cl=k==='✓'?'#fff':'var(--text-1)';
-              return '<button class="numpad-key" data-key="'+k+'" style="padding:12px 0;font-size:16px;font-weight:700;border-radius:10px;background:'+bg+';color:'+cl+';border:1px solid var(--border);">'+k+'</button>';
-            }).join('');
-          })()}
-        </div>
-      </div>
+      <!-- 커스텀 숫자 패드 자리 -->
+      <div id="txNumpad" style="margin-top:8px;"></div>
 
       <div class="formrow" style="margin-top:10px;">
         <label>비고</label>
@@ -5633,6 +5621,22 @@ async function renderTxStepItems(sheet) {
   let activeAmtInput = null;
   const numpad = sheet.querySelector('#txNumpad');
 
+  // numpad DOM 생성
+  const numpadGrid = document.createElement('div');
+  numpadGrid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:4px;';
+  const KEYS = ['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'];
+  KEYS.forEach(k => {
+    if (!k) { numpadGrid.appendChild(document.createElement('div')); return; }
+    const btn = document.createElement('button');
+    btn.textContent = k;
+    btn.dataset.key = k;
+    btn.style.cssText = 'padding:12px 0;font-size:16px;font-weight:700;border-radius:10px;border:1px solid var(--border);' +
+      'background:' + (k==='✓' ? 'var(--primary)' : k==='←' ? 'var(--surface-2)' : 'var(--card)') + ';' +
+      'color:' + (k==='✓' ? '#fff' : 'var(--text-1)') + ';';
+    numpadGrid.appendChild(btn);
+  });
+  numpad.appendChild(numpadGrid);
+
   const selectAmtInput = (input) => {
     sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
     const wrap = input.closest('.amt-input-wrap');
@@ -5641,7 +5645,6 @@ async function renderTxStepItems(sheet) {
   };
 
   const inputs = sheet.querySelectorAll('.item-amt-input');
-  // 첫 번째 input을 기본 선택
   if (inputs.length > 0) selectAmtInput(inputs[0]);
 
   inputs.forEach(input => {
@@ -5650,10 +5653,9 @@ async function renderTxStepItems(sheet) {
   });
 
   // numpad 키 처리
-  if (numpad) {
-    numpad.querySelectorAll('.numpad-key').forEach(btn => {
-      btn.addEventListener('mousedown', (e) => e.preventDefault()); // blur 방지
-      btn.addEventListener('click', () => {
+  numpadGrid.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => {
         if (!activeAmtInput) return;
         const key = btn.dataset.key;
         const cur = rawDigits(activeAmtInput.value);
@@ -5682,8 +5684,6 @@ async function renderTxStepItems(sheet) {
         if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
       });
     });
-  }
-
   sheet.querySelector('#addSubItemBtn').addEventListener('click', () => addSubItemInline(sheet, cat.id));
   sheet.querySelector('#newSubItemName').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addSubItemInline(sheet, cat.id);

@@ -1,7 +1,7 @@
-// 2026-06-28 18:50 KST | 수정: CACHE_NAME v200 (커스텀 numpad, 항목 라벨 볼드)
+// 2026-06-28 19:10 KST | 수정: CACHE_NAME v201 (numpad DOM 방식 재구현)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v200';
+const CACHE_NAME = 'gaegyebu-v201';
 const ASSETS = [
   './',
   './index.html',
