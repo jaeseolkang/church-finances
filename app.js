@@ -3785,22 +3785,36 @@ function renderSettings() {
     </div>
 
     <div class="settings-group">
-      <div class="settings-group-title">🔐 입력 모드 설정</div>
-      <div class="settings-row" id="rowAdminToggle" style="cursor:pointer;">
-        <div>
-          <div class="settings-label">${getIsAdmin() ? '🔓 입력 모드 중' : '🔒 열람 전용 모드'}</div>
-          <div class="settings-sub">${getIsAdmin() ? '탭하면 열람 모드로 전환' : '탭하면 비밀번호 입력 후 입력 모드로 전환'}</div>
+      <div class="settings-group-title">🔐 입력 모드</div>
+      ${getIsAdmin() ? `
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+            <div>
+              <div class="settings-label">🔓 입력 모드 중</div>
+              <div class="settings-sub">데이터 입력/수정이 가능합니다</div>
+            </div>
+            <button id="btnLogout" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);">로그아웃</button>
+          </div>
         </div>
-        <span style="font-size:18px;">${getIsAdmin() ? '✏️' : '👁️'}</span>
-      </div>
-      <div id="pwChangeRow" class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;display:none;">
-        <div class="settings-label" id="pwChangeLabel">비밀번호 설정</div>
-        <div class="settings-sub" id="pwChangeSub">최초 설정 — Firebase에 저장됩니다</div>
-        <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
-          <input type="password" id="adminPwInput" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
-          <button id="adminPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <div class="settings-label">비밀번호 변경</div>
+          <div class="settings-sub">변경 후 Firebase에 저장됩니다</div>
+          <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
+            <input type="password" id="adminPwNew" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
+            <button id="adminPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
+          </div>
         </div>
-      </div>
+      ` : `
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <div class="settings-label">👁️ 열람 전용 모드</div>
+          <div class="settings-sub">입력 모드로 전환하려면 비밀번호를 입력하세요</div>
+          <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
+            <input type="password" id="adminPwInput" class="textinput" placeholder="비밀번호" style="flex:1;font-size:13px;padding:8px 12px;">
+            <button id="btnLogin" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">로그인</button>
+          </div>
+          <div id="loginError" style="color:#e53e3e;font-size:12px;min-height:16px;"></div>
+        </div>
+      `}
     </div>
 
     <div class="settings-group">
@@ -3970,56 +3984,58 @@ function renderSettings() {
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
-  // 입력 모드 토글
-  page.querySelector('#rowAdminToggle').addEventListener('click', () => {
-    if (getIsAdmin()) {
+  // 로그아웃
+  const btnLogout = page.querySelector('#btnLogout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
       setIsAdmin(false);
       applyLockState();
       renderSettings();
-      showToast('👁️ 열람 전용 모드로 전환됐어요');
-    } else {
-      showPasswordPrompt(() => renderSettings());
-    }
-  });
-  // 비밀번호 설정/변경: 최초(미설정)이거나 입력 모드일 때 표시
-  (async () => {
-    const pwRow = page.querySelector('#pwChangeRow');
-    const pwLabel = page.querySelector('#pwChangeLabel');
-    const pwSub = page.querySelector('#pwChangeSub');
-    if (!pwRow) return;
-    const existing = await getAdminPasswordFromFirebase();
-    if (!existing) {
-      // 최초 설정 — 누구나 접근 가능
-      pwLabel.textContent = '비밀번호 최초 설정';
-      pwSub.textContent = '설정 후에는 입력 모드에서만 변경 가능합니다';
-      pwRow.style.display = 'flex';
-    } else if (getIsAdmin()) {
-      // 이미 설정됨 + 입력 모드
-      pwLabel.textContent = '비밀번호 변경';
-      pwSub.textContent = '입력 모드에서만 변경 가능합니다';
-      pwRow.style.display = 'flex';
-    }
-    // 열람 모드 + 비밀번호 이미 있으면 숨김
-  })();
+      showToast('👁️ 열람 모드로 전환됐어요');
+    });
+  }
 
+  // 비밀번호 변경 (입력 모드에서만 표시)
   const adminPwSave = page.querySelector('#adminPwSave');
   if (adminPwSave) {
     adminPwSave.addEventListener('click', async () => {
-      const val = page.querySelector('#adminPwInput').value.trim();
-      if (!val) { showToast('비밀번호를 입력해주세요'); return; }
+      const val = page.querySelector('#adminPwNew').value.trim();
+      if (!val) { showToast('새 비밀번호를 입력해주세요'); return; }
       if (val.length < 4) { showToast('4자 이상 입력해주세요'); return; }
       showToast('저장 중...');
       const ok = await saveAdminPasswordToFirebase(val);
-      page.querySelector('#adminPwInput').value = '';
-      if (ok) {
-        showToast('🔐 비밀번호가 저장됐어요');
-        // 즉시 숨기기 (renderSettings 재호출 없이)
-        const pwRow = page.querySelector('#pwChangeRow');
-        if (pwRow && !getIsAdmin()) pwRow.style.display = 'none';
-      } else {
-        showToast('저장 실패 — 네트워크 확인해주세요');
-      }
+      page.querySelector('#adminPwNew').value = '';
+      showToast(ok ? '🔐 비밀번호가 변경됐어요' : '저장 실패 — 네트워크 확인해주세요');
     });
+  }
+
+  // 로그인 (열람 모드에서만 표시)
+  const btnLogin = page.querySelector('#btnLogin');
+  if (btnLogin) {
+    const doLogin = async () => {
+      const inp = page.querySelector('#adminPwInput');
+      const err = page.querySelector('#loginError');
+      const pw = inp.value;
+      if (!pw) { err.textContent = '비밀번호를 입력해주세요'; return; }
+      err.textContent = '확인 중...';
+      try {
+        const saved = await getAdminPasswordFromFirebase();
+        if (pw === saved) {
+          setIsAdmin(true);
+          applyLockState();
+          renderSettings();
+          showToast('🔓 입력 모드로 전환됐어요');
+        } else {
+          err.textContent = '비밀번호가 틀렸어요';
+          inp.value = '';
+          inp.focus();
+        }
+      } catch(e) {
+        err.textContent = '네트워크 오류 — 다시 시도해주세요';
+      }
+    };
+    btnLogin.addEventListener('click', doLogin);
+    page.querySelector('#adminPwInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   }
 
   page.querySelector('#rowSyncUp').addEventListener('click', async () => {
