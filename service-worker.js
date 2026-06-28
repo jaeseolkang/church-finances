@@ -1,6 +1,6 @@
 // 2026-06-28 20:00 KST | 수정: CACHE_NAME v207 (Firebase 동기화 + 비밀번호 잠금)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v214';
+const CACHE_NAME = 'gaegyebu-v215';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

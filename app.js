@@ -8,13 +8,13 @@
 
 // Firebase에서 비밀번호 가져오기
 async function getAdminPasswordFromFirebase() {
-  try { return await fbGet('adminPassword'); }
+  try { return await fbGet('churchData/adminPassword'); }
   catch(e) { return null; }
 }
 
 // Firebase에 비밀번호 저장
 async function saveAdminPasswordToFirebase(pw) {
-  try { await fbSet('adminPassword', pw); return true; }
+  try { await fbSet('churchData/adminPassword', pw); return true; }
   catch(e) { return false; }
 }
 
@@ -4009,17 +4009,51 @@ function renderSettings() {
     });
   }
 
-  // 로그인 (열람 모드에서만 표시)
+  // 열람 모드: Firebase 비밀번호 확인 후 최초설정 or 로그인 분기
   const btnLogin = page.querySelector('#btnLogin');
   if (btnLogin) {
+    // Firebase에 비밀번호 없으면 최초 설정 안내 표시
+    (async () => {
+      try {
+        const saved = await getAdminPasswordFromFirebase();
+        if (!saved) {
+          const loginArea = page.querySelector('#adminPwInput');
+          if (loginArea) loginArea.closest('.settings-row').innerHTML = `
+            <div class="settings-label">🔑 비밀번호 최초 설정</div>
+            <div class="settings-sub">Firebase에 비밀번호가 없습니다. 먼저 설정해주세요.</div>
+            <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
+              <input type="password" id="adminPwInput" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
+              <button id="firstPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
+            </div>
+            <div id="loginError" style="color:#e53e3e;font-size:12px;min-height:16px;"></div>`;
+          const firstPwSave = page.querySelector('#firstPwSave');
+          if (firstPwSave) {
+            firstPwSave.addEventListener('click', async () => {
+              const val = page.querySelector('#adminPwInput').value.trim();
+              if (!val || val.length < 4) { page.querySelector('#loginError').textContent = '4자 이상 입력해주세요'; return; }
+              const ok = await saveAdminPasswordToFirebase(val);
+              if (ok) {
+                showToast('🔐 비밀번호가 저장됐어요');
+                renderSettings();
+              } else {
+                page.querySelector('#loginError').textContent = '저장 실패 — 네트워크 확인';
+              }
+            });
+          }
+        }
+      } catch(e) {}
+    })();
+
     const doLogin = async () => {
       const inp = page.querySelector('#adminPwInput');
       const err = page.querySelector('#loginError');
+      if (!inp || !err) return;
       const pw = inp.value;
       if (!pw) { err.textContent = '비밀번호를 입력해주세요'; return; }
       err.textContent = '확인 중...';
       try {
         const saved = await getAdminPasswordFromFirebase();
+        if (!saved) { err.textContent = '비밀번호가 설정되지 않았어요'; return; }
         if (pw === saved) {
           setIsAdmin(true);
           applyLockState();
@@ -4035,7 +4069,8 @@ function renderSettings() {
       }
     };
     btnLogin.addEventListener('click', doLogin);
-    page.querySelector('#adminPwInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    const pwInp = page.querySelector('#adminPwInput');
+    if (pwInp) pwInp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   }
 
   page.querySelector('#rowSyncUp').addEventListener('click', async () => {
