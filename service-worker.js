@@ -1,6 +1,6 @@
-// 2026-06-29 01:30 KST | CACHE_NAME v223 (로그인 상태 localStorage 유지)
+// 2026-06-29 01:40 KST | CACHE_NAME v224 (IndexedDB로 로그인 상태 영구 저장)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v223';
+const CACHE_NAME = 'gaegyebu-v224';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

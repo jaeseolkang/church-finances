@@ -319,9 +319,22 @@ async function seedIfEmpty() {
 /* =========================================================
    APP STATE
    ========================================================= */
-// 관리자 권한 상태 (localStorage에 저장 - 명시적 로그아웃 전까지 유지)
+// 관리자 권한 상태 - IndexedDB settings에 저장 (앱 재실행 후에도 유지)
 function getIsAdmin() { return localStorage.getItem('churchAdmin') === '1'; }
-function setIsAdmin(v) { v ? localStorage.setItem('churchAdmin','1') : localStorage.removeItem('churchAdmin'); }
+function setIsAdmin(v) { 
+  v ? localStorage.setItem('churchAdmin','1') : localStorage.removeItem('churchAdmin');
+  // IndexedDB에도 동기화 (백업)
+  if (typeof DB !== 'undefined') DB.put('settings', { key: 'adminLoggedIn', value: v ? '1' : '0' }).catch(()=>{});
+}
+async function restoreAdminState() {
+  // localStorage 먼저 확인
+  if (localStorage.getItem('churchAdmin') === '1') return;
+  // IndexedDB에서 복원
+  try {
+    const rec = await DB.get('settings', 'adminLoggedIn');
+    if (rec && rec.value === '1') localStorage.setItem('churchAdmin', '1');
+  } catch(e) {}
+}
 
 const State = {
   tab: 'home',
@@ -7738,6 +7751,7 @@ async function initApp() {
   await migratePersonsToSubGroups();
   await migrateSubGroupsFromSubItems();
   await reloadData();
+  await restoreAdminState(); // 로그인 상태 복원
   renderShell();
   switchTab('home');
   // 앱 시작 시 자동 백업 체크 (일요일이면 실행)
