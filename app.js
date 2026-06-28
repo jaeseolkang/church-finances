@@ -896,7 +896,9 @@ function renderShell() {
 
 function renderTabbar() {
   const bar = document.getElementById('tabbar');
-  bar.innerHTML = TABS.map(t => `
+  const isAdmin = getIsAdmin();
+  const visibleTabs = TABS.filter(t => isAdmin || t.key !== 'members');
+  bar.innerHTML = visibleTabs.map(t => `
     <button class="tab-btn ${State.tab === t.key ? 'active' : ''}" data-tab="${t.key}">
       ${ICONS[t.key](State.tab === t.key)}
       <span>${t.label}</span>
@@ -3989,7 +3991,9 @@ function renderSettings() {
   if (btnLogout) {
     btnLogout.addEventListener('click', () => {
       setIsAdmin(false);
+      if (State.tab === 'members') switchTab('home');
       applyLockState();
+      renderTabbar();
       renderSettings();
       showToast('👁️ 열람 모드로 전환됐어요');
     });
