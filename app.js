@@ -8,22 +8,14 @@
 
 // Firebase에서 비밀번호 가져오기
 async function getAdminPasswordFromFirebase() {
-  try {
-    const db = await initFirebase();
-    if (!db) return null;
-    const snap = await db.ref('adminPassword').once('value');
-    return snap.val();
-  } catch(e) { return null; }
+  try { return await fbGet('adminPassword'); }
+  catch(e) { return null; }
 }
 
 // Firebase에 비밀번호 저장
 async function saveAdminPasswordToFirebase(pw) {
-  try {
-    const db = await initFirebase();
-    if (!db) return false;
-    await db.ref('adminPassword').set(pw);
-    return true;
-  } catch(e) { return false; }
+  try { await fbSet('adminPassword', pw); return true; }
+  catch(e) { return false; }
 }
 
 function showPasswordPrompt(onSuccess, onCancel) {
@@ -98,42 +90,27 @@ const FIREBASE_CONFIG = {
   appId: "1:410693392195:web:f62c07dfdfe4bdfd73c1f6"
 };
 
-let firebaseDB = null;
+// Firebase REST API 방식 (SDK 불필요 - fetch만 사용)
+const FB_URL = 'https://juwon-church-default-rtdb.asia-southeast1.firebasedatabase.app';
 
-async function initFirebase() {
-  if (firebaseDB) return firebaseDB;
-  try {
-    // Firebase SDK CDN 로드
-    if (!window.firebase) {
-      await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
-      await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js');
-    }
-    if (!window.firebase.apps.length) {
-      window.firebase.initializeApp(FIREBASE_CONFIG);
-    }
-    firebaseDB = window.firebase.database();
-    return firebaseDB;
-  } catch (e) {
-    console.error('Firebase init error:', e);
-    return null;
-  }
+async function fbGet(path) {
+  const res = await fetch(`${FB_URL}/${path}.json`);
+  if (!res.ok) throw new Error('FB GET failed: ' + res.status);
+  return res.json();
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
+async function fbSet(path, data) {
+  const res = await fetch(`${FB_URL}/${path}.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
   });
+  if (!res.ok) throw new Error('FB SET failed: ' + res.status);
+  return res.json();
 }
 
 // Firebase에 전체 데이터 저장
 async function syncToFirebase() {
-  const db = await initFirebase();
-  if (!db) return;
   try {
     const allTemplates = await DB.getAll('templates');
     const data = {
@@ -146,7 +123,7 @@ async function syncToFirebase() {
       transactions: State.transactions,
       templates: allTemplates || [],
     };
-    await db.ref('churchData').set(data);
+    await fbSet('churchData', data);
     console.log('Firebase sync OK');
     return true;
   } catch (e) {
@@ -157,14 +134,10 @@ async function syncToFirebase() {
 
 // Firebase에서 데이터 불러와서 로컬 DB 업데이트
 async function syncFromFirebase() {
-  const db = await initFirebase();
-  if (!db) return false;
   try {
-    const snap = await db.ref('churchData').once('value');
-    const data = snap.val();
+    const data = await fbGet('churchData');
     if (!data || !data.transactions) return false;
 
-    // 로컬 데이터와 비교: syncedAt이 더 최신이면 업데이트
     const localSyncRec = await DB.get('settings', 'firebaseSyncedAt');
     const localSyncedAt = localSyncRec ? localSyncRec.value : null;
     if (localSyncedAt && data.syncedAt <= localSyncedAt) {
@@ -172,7 +145,6 @@ async function syncFromFirebase() {
       return false;
     }
 
-    // Firebase 데이터가 더 최신 → 로컬 업데이트
     await restoreFromData(data);
     await DB.put('settings', { key: 'firebaseSyncedAt', value: data.syncedAt });
     showToast('☁️ 클라우드에서 최신 데이터를 불러왔어요');
