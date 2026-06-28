@@ -1,6 +1,6 @@
-// 2026-06-28 19:30 KST | 수정: CACHE_NAME v205 (numpad 하단 고정)
+// 2026-06-28 20:00 KST | 수정: CACHE_NAME v207 (Firebase 동기화 추가)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v205';
+const CACHE_NAME = 'gaegyebu-v207';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

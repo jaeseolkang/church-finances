@@ -2,6 +2,105 @@
 'use strict';
 
 /* =========================================================
+   Firebase Realtime Database 동기화
+   ========================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyB2zT9Wi_uecCfjSU90Up8geerZOskPCbs",
+  authDomain: "juwon-church.firebaseapp.com",
+  databaseURL: "https://juwon-church-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "juwon-church",
+  storageBucket: "juwon-church.firebasestorage.app",
+  messagingSenderId: "410693392195",
+  appId: "1:410693392195:web:f62c07dfdfe4bdfd73c1f6"
+};
+
+let firebaseDB = null;
+
+async function initFirebase() {
+  if (firebaseDB) return firebaseDB;
+  try {
+    // Firebase SDK CDN 로드
+    if (!window.firebase) {
+      await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+      await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js');
+    }
+    if (!window.firebase.apps.length) {
+      window.firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    firebaseDB = window.firebase.database();
+    return firebaseDB;
+  } catch (e) {
+    console.error('Firebase init error:', e);
+    return null;
+  }
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+// Firebase에 전체 데이터 저장
+async function syncToFirebase() {
+  const db = await initFirebase();
+  if (!db) return;
+  try {
+    const allTemplates = await DB.getAll('templates');
+    const data = {
+      syncedAt: new Date().toISOString(),
+      categories: State.categories,
+      persons: State.persons,
+      subItems: State.subItems,
+      subGroups: State.subGroups || [],
+      linkedAccounts: State.linkedAccounts || [],
+      transactions: State.transactions,
+      templates: allTemplates || [],
+    };
+    await db.ref('churchData').set(data);
+    console.log('Firebase sync OK');
+    return true;
+  } catch (e) {
+    console.error('Firebase sync error:', e);
+    return false;
+  }
+}
+
+// Firebase에서 데이터 불러와서 로컬 DB 업데이트
+async function syncFromFirebase() {
+  const db = await initFirebase();
+  if (!db) return false;
+  try {
+    const snap = await db.ref('churchData').once('value');
+    const data = snap.val();
+    if (!data || !data.transactions) return false;
+
+    // 로컬 데이터와 비교: syncedAt이 더 최신이면 업데이트
+    const localSyncRec = await DB.get('settings', 'firebaseSyncedAt');
+    const localSyncedAt = localSyncRec ? localSyncRec.value : null;
+    if (localSyncedAt && data.syncedAt <= localSyncedAt) {
+      console.log('Firebase: 로컬이 최신');
+      return false;
+    }
+
+    // Firebase 데이터가 더 최신 → 로컬 업데이트
+    await restoreFromData(data);
+    await DB.put('settings', { key: 'firebaseSyncedAt', value: data.syncedAt });
+    showToast('☁️ 클라우드에서 최신 데이터를 불러왔어요');
+    return true;
+  } catch (e) {
+    console.error('Firebase load error:', e);
+    return false;
+  }
+}
+
+
+/* =========================================================
    DB LAYER
    3단계 구조:
    - categories: 대분류 (헌금/이자/기타, 인건비/시설비 등). usePersonLevel 플래그 보유
@@ -3625,6 +3724,24 @@ function renderSettings() {
     </div>
 
     <div class="settings-group">
+      <div class="settings-group-title">☁️ 클라우드 동기화</div>
+      <div class="settings-row" id="rowSyncUp">
+        <div>
+          <div class="settings-label">지금 업로드</div>
+          <div class="settings-sub">현재 데이터를 클라우드에 저장</div>
+        </div>
+        <span style="font-size:18px;">⬆️</span>
+      </div>
+      <div class="settings-row" id="rowSyncDown">
+        <div>
+          <div class="settings-label">지금 다운로드</div>
+          <div class="settings-sub">클라우드에서 최신 데이터 가져오기</div>
+        </div>
+        <span style="font-size:18px;">⬇️</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
       <div class="settings-group-title">정기예금 만기 알림</div>
       <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
         <div class="settings-label">알림 수신 이메일</div>
@@ -3773,6 +3890,16 @@ function renderSettings() {
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowEmailBackup').addEventListener('click', sendBackupByEmail);
+  page.querySelector('#rowSyncUp').addEventListener('click', async () => {
+    showToast('⬆️ 업로드 중...');
+    const ok = await syncToFirebase();
+    showToast(ok ? '☁️ 업로드 완료!' : '업로드 실패 — 네트워크 확인해주세요');
+  });
+  page.querySelector('#rowSyncDown').addEventListener('click', async () => {
+    showToast('⬇️ 다운로드 중...');
+    const ok = await syncFromFirebase();
+    if (!ok) showToast('이미 최신 데이터예요');
+  });
   page.querySelector('#rowImport').addEventListener('click', () => page.querySelector('#importFile').click());
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
@@ -5681,6 +5808,7 @@ async function saveTx() {
   closeTxSheet();
   renderCurrentPage();
   showToast(State.editingTx ? '수정되었습니다' : '저장되었습니다');
+  syncToFirebase().catch(e => console.error('sync error:', e));
 }
 
 async function deleteTx() {
@@ -5690,6 +5818,7 @@ async function deleteTx() {
   closeTxSheet();
   renderCurrentPage();
   showToast('삭제되었습니다');
+  syncToFirebase().catch(e => console.error('sync error:', e));
 }
 
 /* =========================================================
@@ -7426,6 +7555,10 @@ async function initApp() {
   // 앱 시작 시 자동 백업 체크 (일요일이면 실행)
   setTimeout(checkAndRunAutoBackup, 2000);
   setTimeout(() => checkMaturityAndNotify(false), 3000);
+  // Firebase에서 최신 데이터 자동 동기화 (앱 시작 시)
+  setTimeout(async () => {
+    await syncFromFirebase();
+  }, 1500);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
