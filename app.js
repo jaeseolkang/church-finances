@@ -48,7 +48,7 @@ function showPasswordPrompt(onSuccess, onCancel) {
     // Firebase에서 비밀번호 확인
     const saved = await getAdminPasswordFromFirebase();
     if (!saved) { error.textContent = '비밀번호가 설정되지 않았어요 (설정에서 등록)'; return; }
-    if (pw === saved) {
+    if (pw.trim() === String(saved).trim()) {
       setIsAdmin(true);
       overlay.remove();
       applyLockState();
@@ -4053,10 +4053,8 @@ function renderSettings() {
       err.textContent = '확인 중...';
       try {
         const saved = await getAdminPasswordFromFirebase();
-        console.log('Firebase pw:', JSON.stringify(saved), typeof saved, '/ input:', JSON.stringify(pw), typeof pw);
-        alert('Firebase값: [' + saved + '] 타입:' + typeof saved + '\n입력값: [' + pw + '] 타입:' + typeof pw);
         if (!saved) { err.textContent = '비밀번호가 설정되지 않았어요'; return; }
-        if (pw === String(saved)) {
+        if (pw.trim() === String(saved).trim()) {
           setIsAdmin(true);
           applyLockState();
           renderSettings();
