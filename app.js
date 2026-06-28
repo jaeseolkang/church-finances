@@ -5504,7 +5504,7 @@ async function renderTxStepItems(sheet) {
             <div class="formrow" style="margin-bottom:4px; min-width:0;">
               <label style="font-weight:700; color:var(--text-1); margin-bottom:3px; display:block; font-size:14px;">${escapeHTML(it.name)}</label>
               <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
-                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
+                <input type="text" readonly class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;caret-color:transparent;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
                 <span class="won" style="font-size:11px;">원</span>
               </div>
             </div>
@@ -5646,6 +5646,13 @@ async function renderTxStepItems(sheet) {
       activeAmtInput = input;
       if (numpad) numpad.style.display = 'block';
     });
+    input.addEventListener('click', () => {
+      // iOS에서 readonly input은 focus가 안 되므로 click으로도 처리
+      sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
+      wrap.classList.add('focus');
+      activeAmtInput = input;
+      if (numpad) numpad.style.display = 'block';
+    });
     input.addEventListener('blur', () => {
       wrap.classList.remove('focus');
     });
@@ -5664,14 +5671,24 @@ async function renderTxStepItems(sheet) {
           next = cur.slice(0, -1);
         } else if (key === '✓') {
           numpad.style.display = 'none';
+          sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
           activeAmtInput = null;
           return;
         } else {
-          next = (cur + key).replace(/^0+(?=\d)/, '');
+          const appended = cur + key;
+          next = appended.replace(/^0+(\d)/, '$1');
           if (next.length > 9) return;
         }
+        // readonly input 직접 업데이트 + State 동기화
         activeAmtInput.value = next ? Number(next).toLocaleString('ko-KR') : '';
-        activeAmtInput.dispatchEvent(new Event('input', { bubbles: true }));
+        const numVal = next ? Number(next) : null;
+        const itemKey = activeAmtInput.dataset.item;
+        if (numVal === null) delete State.formAmounts[itemKey];
+        else State.formAmounts[itemKey] = numVal;
+        // 합계 갱신
+        const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
+        const totalEl = sheet.querySelector('.card .tabular');
+        if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
       });
     });
   }
