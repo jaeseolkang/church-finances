@@ -5529,7 +5529,7 @@ async function renderTxStepItems(sheet) {
       </div>
 
       <!-- 커스텀 숫자 패드 -->
-      <div id="txNumpad" style="display:none;margin-top:8px;">
+      <div id="txNumpad" style="display:block;margin-top:8px;">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">
           ${['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'].map((k,i) => k===''
             ? `<div></div>`
@@ -5632,30 +5632,20 @@ async function renderTxStepItems(sheet) {
   let activeAmtInput = null;
   const numpad = sheet.querySelector('#txNumpad');
 
-  sheet.querySelectorAll('.item-amt-input').forEach(input => {
-    attachMoneyInputFormatter(input, (numVal) => {
-      if (numVal === null) delete State.formAmounts[input.dataset.item];
-      else State.formAmounts[input.dataset.item] = numVal;
-      const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
-      const totalEl = sheet.querySelector('.card .tabular');
-      if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
-    }, 9);
+  const selectAmtInput = (input) => {
+    sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
     const wrap = input.closest('.amt-input-wrap');
-    input.addEventListener('focus', () => {
-      wrap.classList.add('focus');
-      activeAmtInput = input;
-      if (numpad) numpad.style.display = 'block';
-    });
-    input.addEventListener('click', () => {
-      // iOS에서 readonly input은 focus가 안 되므로 click으로도 처리
-      sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
-      wrap.classList.add('focus');
-      activeAmtInput = input;
-      if (numpad) numpad.style.display = 'block';
-    });
-    input.addEventListener('blur', () => {
-      wrap.classList.remove('focus');
-    });
+    if (wrap) wrap.classList.add('focus');
+    activeAmtInput = input;
+  };
+
+  const inputs = sheet.querySelectorAll('.item-amt-input');
+  // 첫 번째 input을 기본 선택
+  if (inputs.length > 0) selectAmtInput(inputs[0]);
+
+  inputs.forEach(input => {
+    input.addEventListener('click', () => selectAmtInput(input));
+    input.addEventListener('touchstart', () => selectAmtInput(input), { passive: true });
   });
 
   // numpad 키 처리
