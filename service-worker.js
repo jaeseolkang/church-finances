@@ -1,7 +1,7 @@
-// 2026-06-28 19:10 KST | 수정: CACHE_NAME v201 (numpad DOM 방식 재구현)
+// 2026-06-28 19:20 KST | 수정: CACHE_NAME v202 (시스템 numpad 복원)
 'use strict';
 
-const CACHE_NAME = 'gaegyebu-v201';
+const CACHE_NAME = 'gaegyebu-v202';
 const ASSETS = [
   './',
   './index.html',

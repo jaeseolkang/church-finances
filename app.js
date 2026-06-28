@@ -5504,7 +5504,7 @@ async function renderTxStepItems(sheet) {
             <div class="formrow" style="margin-bottom:4px; min-width:0;">
               <label style="font-weight:700; color:var(--text-1); margin-bottom:3px; display:block; font-size:14px;">${escapeHTML(it.name)}</label>
               <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
-                <input type="text" readonly class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;caret-color:transparent;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
+                <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
                 <span class="won" style="font-size:11px;">원</span>
               </div>
             </div>
@@ -5528,8 +5528,7 @@ async function renderTxStepItems(sheet) {
           </div>` : ''}
       </div>
 
-      <!-- 커스텀 숫자 패드 자리 -->
-      <div id="txNumpad" style="margin-top:8px;"></div>
+
 
       <div class="formrow" style="margin-top:10px;">
         <label>비고</label>
@@ -5618,72 +5617,18 @@ async function renderTxStepItems(sheet) {
     });
   }
 
-  let activeAmtInput = null;
-  const numpad = sheet.querySelector('#txNumpad');
-
-  // numpad DOM 생성
-  const numpadGrid = document.createElement('div');
-  numpadGrid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:4px;';
-  const KEYS = ['7','8','9','←','4','5','6','000','1','2','3','00','','0','','✓'];
-  KEYS.forEach(k => {
-    if (!k) { numpadGrid.appendChild(document.createElement('div')); return; }
-    const btn = document.createElement('button');
-    btn.textContent = k;
-    btn.dataset.key = k;
-    btn.style.cssText = 'padding:12px 0;font-size:16px;font-weight:700;border-radius:10px;border:1px solid var(--border);' +
-      'background:' + (k==='✓' ? 'var(--primary)' : k==='←' ? 'var(--surface-2)' : 'var(--card)') + ';' +
-      'color:' + (k==='✓' ? '#fff' : 'var(--text-1)') + ';';
-    numpadGrid.appendChild(btn);
-  });
-  numpad.appendChild(numpadGrid);
-
-  const selectAmtInput = (input) => {
-    sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
+  sheet.querySelectorAll('.item-amt-input').forEach(input => {
+    attachMoneyInputFormatter(input, (numVal) => {
+      if (numVal === null) delete State.formAmounts[input.dataset.item];
+      else State.formAmounts[input.dataset.item] = numVal;
+      const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
+      const totalEl = sheet.querySelector('.card .tabular');
+      if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
+    }, 9);
     const wrap = input.closest('.amt-input-wrap');
-    if (wrap) wrap.classList.add('focus');
-    activeAmtInput = input;
-  };
-
-  const inputs = sheet.querySelectorAll('.item-amt-input');
-  if (inputs.length > 0) selectAmtInput(inputs[0]);
-
-  inputs.forEach(input => {
-    input.addEventListener('click', () => selectAmtInput(input));
-    input.addEventListener('touchstart', () => selectAmtInput(input), { passive: true });
+    input.addEventListener('focus', () => wrap.classList.add('focus'));
+    input.addEventListener('blur', () => wrap.classList.remove('focus'));
   });
-
-  // numpad 키 처리
-  numpadGrid.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('mousedown', (e) => e.preventDefault());
-    btn.addEventListener('click', () => {
-        if (!activeAmtInput) return;
-        const key = btn.dataset.key;
-        const cur = rawDigits(activeAmtInput.value);
-        let next;
-        if (key === '←') {
-          next = cur.slice(0, -1);
-        } else if (key === '✓') {
-          numpad.style.display = 'none';
-          sheet.querySelectorAll('.amt-input-wrap').forEach(w => w.classList.remove('focus'));
-          activeAmtInput = null;
-          return;
-        } else {
-          const appended = cur + key;
-          next = appended.replace(/^0+(\d)/, '$1');
-          if (next.length > 9) return;
-        }
-        // readonly input 직접 업데이트 + State 동기화
-        activeAmtInput.value = next ? Number(next).toLocaleString('ko-KR') : '';
-        const numVal = next ? Number(next) : null;
-        const itemKey = activeAmtInput.dataset.item;
-        if (numVal === null) delete State.formAmounts[itemKey];
-        else State.formAmounts[itemKey] = numVal;
-        // 합계 갱신
-        const totalNow = Object.values(State.formAmounts).reduce((s, vv) => s + (Number(vv) || 0), 0);
-        const totalEl = sheet.querySelector('.card .tabular');
-        if (totalEl) totalEl.textContent = fmtMoney(totalNow) + '원';
-      });
-    });
   sheet.querySelector('#addSubItemBtn').addEventListener('click', () => addSubItemInline(sheet, cat.id));
   sheet.querySelector('#newSubItemName').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addSubItemInline(sheet, cat.id);
