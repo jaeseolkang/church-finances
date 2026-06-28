@@ -4053,8 +4053,10 @@ function renderSettings() {
       err.textContent = '확인 중...';
       try {
         const saved = await getAdminPasswordFromFirebase();
+        console.log('Firebase pw:', JSON.stringify(saved), typeof saved, '/ input:', JSON.stringify(pw), typeof pw);
+        alert('Firebase값: [' + saved + '] 타입:' + typeof saved + '\n입력값: [' + pw + '] 타입:' + typeof pw);
         if (!saved) { err.textContent = '비밀번호가 설정되지 않았어요'; return; }
-        if (pw === saved) {
+        if (pw === String(saved)) {
           setIsAdmin(true);
           applyLockState();
           renderSettings();
