@@ -1,4 +1,4 @@
-// v3.02 | 2026-06-29 KST | 수정: 계정 자산합계 카드의 '재정' 라벨을 대표계정 이름으로 동적 표시(화면+인쇄 모두) | cache:v206
+// v3.04 | 2026-06-29 KST | 수정: 설정의 앱이름 입력란에 안내 placeholder('이름을 입력하세요. 예:oo교회') 추가, 미설정 시 빈 값+기본표시로 변경 | cache:v208
 'use strict';
 
 // ============================================================
@@ -692,7 +692,7 @@ function openAppTitleSheet(current, onSave) {
       <div class="formrow">
         <label>앱 이름</label>
         <input type="text" id="atInput" class="dateinput"
-          value="${escapeHTML(current)}" maxlength="30"
+          value="${escapeHTML(current)}" maxlength="30" placeholder="이름을 입력하세요. 예:oo교회"
           style="font-size:16px; padding:12px 14px;">
       </div>
       <button class="btn-primary" id="atSave">저장</button>
@@ -703,7 +703,7 @@ function openAppTitleSheet(current, onSave) {
 
   sheet.querySelector('#atClose').addEventListener('click', closeAllSheets);
   sheet.querySelector('#atSave').addEventListener('click', async () => {
-    const val = sheet.querySelector('#atInput').value.trim() || '주원교회';
+    const val = sheet.querySelector('#atInput').value.trim() || '교회 회계부';
     await setAppTitle(val);
     closeAllSheets();
     onSave(val);
@@ -712,7 +712,7 @@ function openAppTitleSheet(current, onSave) {
 
 async function getAppTitle() {
   const rec = await DB.get('settings', 'appTitle');
-  return rec ? rec.value : '주원교회';
+  return rec ? rec.value : '';
 }
 async function setAppTitle(value) {
   await DB.put('settings', { key: 'appTitle', value });
@@ -1069,7 +1069,7 @@ async function renderHome() {
 
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
-      <h1 id="appTitleEl">${await getAppTitle()}</h1>
+      <h1 id="appTitleEl">${(await getAppTitle()) || '교회 회계부'}</h1>
       <button class="icon-btn" id="goSettings">${ICONS.gear}</button>
     </div>
 
@@ -4029,7 +4029,7 @@ function renderSettings() {
   // 앱 이름 미리보기 로드
   getAppTitle().then(t => {
     const el = page.querySelector('#appTitlePreview');
-    if (el) el.textContent = t;
+    if (el) el.textContent = t || '교회 회계부';
   });
 
   page.querySelector('#rowAppTitle').addEventListener('click', async () => {
@@ -4477,7 +4477,7 @@ function openMemberEditSheet(member, heongCat) {
       <div style="font-size:12px; color:var(--text-3); font-weight:700; margin:12px 0 4px;">가족 정보</div>
       <div class="formrow">
         <label>가족 그룹</label>
-        <input type="text" id="mFamily" class="dateinput" list="familyList" value="${escapeHTML(m.family||'')}" placeholder="예: 강재설 가족">
+        <input type="text" id="mFamily" class="dateinput" list="familyList" value="${escapeHTML(m.family||'')}" placeholder="예: 홍길동 가족">
         <datalist id="familyList">${familyOptions}</datalist>
       </div>
       <div class="formrow">
