@@ -6065,7 +6065,7 @@ function renderDayDetail(dateStr) {
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <button id="ddClose" class="sheet-close-btn">${ICONS.close}닫기</button>
-      <h3 id="ddDateLabel" style="cursor:pointer;border-bottom:1.5px dashed var(--primary);padding-bottom:2px;">${dayLabel(dateStr)}</h3>
+      <button id="ddDateLabel" style="font-size:17px;font-weight:700;background:none;border:none;border-bottom:1.5px dashed var(--primary);color:var(--text-1);padding:2px 4px;cursor:pointer;">${dayLabel(dateStr)}</button>
       <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">

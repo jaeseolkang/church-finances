@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v1003 (일별 상세 날짜 변경 기능)
+// 2026-06-29 KST | CACHE_NAME v1004 (날짜 버튼 탭 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v1003';
+const CACHE_NAME = 'gaegyebu-v1004';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
