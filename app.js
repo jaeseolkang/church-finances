@@ -6089,31 +6089,22 @@ function renderDayDetail(dateStr) {
 
   sheet.querySelector('#ddClose').addEventListener('click', closeAllSheets);
 
-  // 날짜 탭 → 날짜 변경
+  // 날짜 버튼 탭 → 바로 달력 팝업, 선택 즉시 이동
   sheet.querySelector('#ddDateLabel').addEventListener('click', () => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;';
-    overlay.innerHTML = `
-      <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <span style="font-size:15px;font-weight:700;">날짜 이동</span>
-          <button id="ddDateClose" style="font-size:20px;background:none;border:none;color:var(--text-2);">✕</button>
-        </div>
-        <input type="date" id="ddDateInput" value="${dateStr}"
-          style="width:100%;padding:12px;font-size:17px;border:1.5px solid var(--border);border-radius:12px;box-sizing:border-box;background:var(--surface-1);color:var(--text-1);">
-        <button id="ddDateConfirm" style="width:100%;margin-top:14px;padding:14px;background:var(--primary);color:#fff;font-size:16px;font-weight:700;border:none;border-radius:14px;">이동</button>
-      </div>`;
-    document.body.appendChild(overlay);
-    const inp = overlay.querySelector('#ddDateInput');
-    setTimeout(() => inp.focus(), 100);
-    overlay.querySelector('#ddDateClose').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelector('#ddDateConfirm').addEventListener('click', () => {
-      if (inp.value) {
-        overlay.remove();
-        openDayDetail(inp.value);
-      }
+    const inp = document.createElement('input');
+    inp.type = 'date';
+    inp.value = dateStr;
+    inp.style.cssText = 'position:fixed;opacity:0;pointer-events:none;top:50%;left:50%;';
+    document.body.appendChild(inp);
+    inp.addEventListener('change', () => {
+      const v = inp.value;
+      inp.remove();
+      if (v) openDayDetail(v);
     });
+    inp.addEventListener('blur', () => setTimeout(() => inp.remove(), 300));
+    inp.focus();
+    inp.click();
+    try { inp.showPicker(); } catch(e) {}
   });
 
   // 계정선택 토글 — 변경 시 목록 즉시 갱신
