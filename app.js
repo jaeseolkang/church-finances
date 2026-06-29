@@ -1076,17 +1076,17 @@ async function renderHome() {
     <div class="total-assets-banner" style="display:flex;justify-content:space-between;align-items:stretch;">
       <div style="display:flex;flex-direction:column;justify-content:center;gap:10px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">전년이월</span>
-          <span class="total-assets-value tabular" style="font-size:16px;color:#fff;">${fmtMoney(carryover)}원</span>
+          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">년이월</span>
+          <span class="total-assets-value tabular" style="color:#fff;">${fmtMoney(carryover)}원</span>
         </div>
         <div>
           <span class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</span>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;">
-        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>총수입액</span><span class="tabular">${fmtMoney(totalIncome)}원</span></div>
-        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>총예금액</span><span class="tabular">${fmtMoney(depositExp)}원</span></div>
-        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>순지출액</span><span class="tabular">${fmtMoney(netExpense)}원</span></div>
+        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>총수입</span><span class="tabular">${fmtMoney(totalIncome)}원</span></div>
+        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>총예금</span><span class="tabular">${fmtMoney(depositExp)}원</span></div>
+        <div class="total-assets-sub" style="display:flex;gap:8px;justify-content:space-between;min-width:150px;"><span>순지출</span><span class="tabular">${fmtMoney(netExpense)}원</span></div>
       </div>
     </div>
 
