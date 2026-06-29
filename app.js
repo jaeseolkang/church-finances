@@ -4002,6 +4002,13 @@ function renderSettings() {
         </div>
         ${ICONS.upload}
       </div>
+      <div class="settings-row" id="rowImport2025">
+        <div>
+          <div class="settings-label">2025년도 자료 가져오기${getIsAdmin()?'':' 🔒'}</div>
+          <div class="settings-sub">2025년도 거래 2,620건을 현재 데이터에 추가</div>
+        </div>
+        <span style="font-size:18px;">📅</span>
+      </div>
 
       <input type="file" id="importFile" accept="application/json" style="display:none;">
     </div>
@@ -4230,6 +4237,7 @@ function renderSettings() {
     });
   }
   page.querySelector('#rowImport').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } page.querySelector('#importFile').click(); });
+  page.querySelector('#rowImport2025').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } import2025Data(); });
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
     if ('serviceWorker' in navigator) {
@@ -5486,6 +5494,73 @@ async function restoreFromData(data) {
   await reloadData();
   renderCurrentPage();
   showToast(`✅ 복원 완료 — 거래 ${(data.transactions||[]).length}건`);
+}
+
+async function import2025Data() {
+  if (!confirm('2025년도 거래 2,620건을 현재 데이터에 추가합니다.\n기존 26년도 데이터는 유지됩니다.\n계속할까요?')) return;
+  showToast('📥 2025년도 자료 불러오는 중...');
+  try {
+    // 같은 저장소의 tx_2025.json 파일 로드
+    const base = location.href.replace(/\/[^/]*$/, '');
+    const res = await fetch(base + '/tx_2025.json');
+    if (!res.ok) throw new Error('파일을 찾을 수 없어요');
+    const txs = await res.json();
+
+    // 현재 앱 카테고리/소분류 이름 → ID 매핑 테이블 구성
+    const catMap = {};
+    for (const c of State.categories) catMap[c.name] = c.id;
+
+    const sgMap = {};
+    for (const g of (State.subGroups||[])) {
+      const key = (catMap[g.categoryName] || g.categoryId) + '|' + g.name;
+      sgMap[key] = g.id;
+    }
+
+    const siMap = {};
+    for (const s of (State.subItems||[])) {
+      siMap[s.name] = s.id;
+    }
+
+    let added = 0, skipped = 0;
+    for (const tx of txs) {
+      const catId = catMap[tx.categoryName];
+      if (!catId) { skipped++; continue; }
+
+      // subGroup 찾기
+      let sgId = null;
+      if (tx.subGroupName) {
+        sgId = sgMap[catId + '|' + tx.subGroupName] || null;
+      }
+
+      // subItem 찾기
+      let siId = null;
+      if (tx.subItemName) {
+        siId = siMap[tx.subItemName] || null;
+      }
+
+      const record = {
+        id: uid(),
+        date: tx.date,
+        type: tx.type,
+        categoryId: catId,
+        subGroupId: sgId,
+        subItemId: siId,
+        lines: [{ subItemId: siId, amount: tx.amount }],
+        memo: tx.memo || '',
+        amount: tx.amount,
+      };
+      await DB.put('transactions', record);
+      added++;
+    }
+
+    await reloadData();
+    renderCurrentPage();
+    if (USE_FIREBASE) syncToFirebase().catch(()=>{});
+    showToast(\`✅ 2025년도 \${added}건 추가 완료!\${skipped ? ' ('+skipped+'건 스킵)' : ''}\`);
+  } catch(e) {
+    console.error(e);
+    showToast('오류: ' + e.message);
+  }
 }
 
 function importData(e) {
