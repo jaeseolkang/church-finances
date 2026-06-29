@@ -1,4 +1,4 @@
-// v3.01 | 2026-06-29 KST | 수정: 비밀번호 미설정 시 로그인 화면 안내문구를 '최초 설정' 모드로 동적 전환 | cache:v205
+// v3.02 | 2026-06-29 KST | 수정: 계정 자산합계 카드의 '재정' 라벨을 대표계정 이름으로 동적 표시(화면+인쇄 모두) | cache:v206
 'use strict';
 
 // ============================================================
@@ -2728,7 +2728,7 @@ function renderExpenseTableA4(list, range) {
     </div>`;
 }
 
-function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet,
+function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet, mainLabel,
   totalCarry, totalIncome, totalExpense, totalNet, summaryTitle,
   normalCarry, normalIncome, normalExpense,
   depositCarry, depositIncome, depositExpense, nonDefaultAccts}) {
@@ -2814,7 +2814,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
             <div style="font-size:13pt;font-weight:900;color:${grandNetColor};white-space:nowrap;">${grandNet.toLocaleString('ko-KR')}원</div>
           </div>
           <div style="flex:1;min-width:0;border-left:0.5pt solid #b0c4de;padding-left:6pt;">
-            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">재정</div>
+            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">${mainLabel || '대표계정'}</div>
             <div style="font-size:8.5pt;font-weight:700;white-space:nowrap;">${mainNet.toLocaleString('ko-KR')}원</div>
           </div>
           <div style="flex:1;min-width:0;border-left:0.5pt solid #b0c4de;padding-left:6pt;">
@@ -3378,6 +3378,8 @@ async function renderAccounts() {
 
   // ── 재정(대표계정) 합계 ──
   const { totalIncome: mainIncome, totalExpense: mainExpense, carryover: mainCarry, net: mainNet } = await totalAssets();
+  const defaultAcct = (State.linkedAccounts || []).find(a => a.isDefault);
+  const mainLabel = defaultAcct ? defaultAcct.name : '대표계정';
 
   // ── 연결계좌 합계 ──
   const totals = calcAcctTotals();
@@ -3490,7 +3492,7 @@ async function renderAccounts() {
       <div class="acct-grand-amount" style="color:${grandNetColor};">${grandNet.toLocaleString('ko-KR')}원</div>
       <div class="acct-grand-rows">
         <div class="acct-grand-row">
-          <span class="acct-grand-label">재정</span>
+          <span class="acct-grand-label">${mainLabel}</span>
           <span class="acct-grand-val">${mainNet.toLocaleString('ko-KR')}원</span>
         </div>
         <div class="acct-grand-row">
@@ -3547,7 +3549,7 @@ async function renderAccounts() {
   });
 
   page.querySelector('#acctPrint').addEventListener('click', () => printAccounts({
-    sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet,
+    sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet, mainLabel,
     totalCarry, totalIncome, totalExpense, totalNet, summaryTitle,
     normalCarry, normalIncome, normalExpense,
     depositCarry, depositIncome, depositExpense,
