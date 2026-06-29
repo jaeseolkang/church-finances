@@ -5869,7 +5869,6 @@ async function renderTxStepItems(sheet) {
   const updateDate = (e) => {
     if (e.target.value && e.target.value !== State.formDate) {
       State.formDate = e.target.value;
-      // 전체 리렌더 없이 날짜 텍스트만 갱신
       const label = sheet.querySelector('#txDateLabel');
       if (label) label.textContent = dayLabel(State.formDate);
       dateInput.value = State.formDate;
@@ -5877,9 +5876,37 @@ async function renderTxStepItems(sheet) {
   };
   dateInput.addEventListener('change', updateDate);
   dateInput.addEventListener('input', updateDate);
-  sheet.querySelector('#txDateLabel')?.addEventListener('click', () => dateInput.showPicker?.() || dateInput.click());
-  // 날짜 레이블 클릭 시 input 열기
-  sheet.querySelector('#txDateLabel')?.addEventListener('click', () => dateInput.showPicker?.() || dateInput.click());
+
+  // 날짜 레이블 클릭 → 날짜 선택 팝업
+  sheet.querySelector('#txDateLabel')?.addEventListener('click', () => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;';
+    const cur = State.formDate || todayStr();
+    overlay.innerHTML = `
+      <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <span style="font-size:15px;font-weight:700;">날짜 선택</span>
+          <button id="datePickClose" style="font-size:20px;background:none;border:none;color:var(--text-2);">✕</button>
+        </div>
+        <input type="date" id="datePickInput" value="${cur}"
+          style="width:100%;padding:12px;font-size:17px;border:1.5px solid var(--border);border-radius:12px;box-sizing:border-box;background:var(--surface-1);color:var(--text-1);">
+        <button id="datePickConfirm" style="width:100%;margin-top:14px;padding:14px;background:var(--primary);color:#fff;font-size:16px;font-weight:700;border:none;border-radius:14px;">확인</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    const inp = overlay.querySelector('#datePickInput');
+    setTimeout(() => inp.focus(), 100);
+    overlay.querySelector('#datePickClose').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#datePickConfirm').addEventListener('click', () => {
+      if (inp.value) {
+        State.formDate = inp.value;
+        const label = sheet.querySelector('#txDateLabel');
+        if (label) label.textContent = dayLabel(State.formDate);
+        if (dateInput) dateInput.value = State.formDate;
+      }
+      overlay.remove();
+    });
+  });
   const backBtn = sheet.querySelector('#txBack');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
