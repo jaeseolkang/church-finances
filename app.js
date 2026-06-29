@@ -1,4 +1,4 @@
-// v2.94 | 2026-06-28 02:40 KST | 수정: 월장부 인쇄 페이지별 테이블 분리 - 헤더 완전 반복 | cache:v198
+// v2.95 | 2026-06-29 KST | 수정: 홈 수입/지출/합계 요약 - 구버전 cal-summary-row 스타일로 복원, 예금/순지출/순수입계 2번째 줄 추가 | cache:v199
 'use strict';
 
 
@@ -1053,33 +1053,34 @@ async function renderHome() {
       </div>
     </div>
 
-    <div style="margin:8px 0;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;background:rgba(255,255,255,0.08);">
-        <thead>
-          <tr style="background:rgba(255,255,255,0.12);">
-            <th style="padding:6px 8px;text-align:center;color:rgba(255,255,255,0.85);font-weight:700;border-right:1px solid rgba(255,255,255,0.12);">수입</th>
-            <th style="padding:6px 8px;text-align:center;color:rgba(255,255,255,0.85);font-weight:700;border-right:1px solid rgba(255,255,255,0.12);">지출</th>
-            <th style="padding:6px 8px;text-align:center;color:rgba(255,255,255,0.85);font-weight:700;">합계</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style="border-top:1px solid rgba(255,255,255,0.12);">
-            <td style="padding:5px 8px;text-align:right;color:#7dd3fc;font-weight:700;font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(income)}</td>
-            <td style="padding:5px 8px;text-align:right;color:#fca5a5;font-weight:700;font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(expense)}</td>
-            <td style="padding:5px 8px;text-align:right;color:${balance>=0?'#86efac':'#fca5a5'};font-weight:700;font-family:monospace;">${balance>=0?'':'-'}${fmtMoney(Math.abs(balance))}</td>
-          </tr>
-          <tr style="border-top:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);">
-            <td style="padding:5px 8px;text-align:center;color:rgba(255,255,255,0.7);font-size:11px;border-right:1px solid rgba(255,255,255,0.12);">예금</td>
-            <td style="padding:5px 8px;text-align:center;color:rgba(255,255,255,0.7);font-size:11px;border-right:1px solid rgba(255,255,255,0.12);">순지출</td>
-            <td style="padding:5px 8px;text-align:center;color:rgba(255,255,255,0.7);font-size:11px;">순수입계</td>
-          </tr>
-          <tr style="border-top:1px solid rgba(255,255,255,0.12);">
-            <td style="padding:5px 8px;text-align:right;color:rgba(255,255,255,0.85);font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(depositExp)}</td>
-            <td style="padding:5px 8px;text-align:right;color:rgba(255,255,255,0.85);font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(netExpense)}</td>
-            <td style="padding:5px 8px;text-align:right;color:${net>=0?'#86efac':'#fca5a5'};font-weight:700;font-family:monospace;">${net>=0?'':'-'}${fmtMoney(Math.abs(net))}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="cal-summary-row" style="margin-bottom:8px;">
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">수입</div>
+        <div class="cal-summary-value income tabular">${fmtMoney(income)}</div>
+      </div>
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">지출</div>
+        <div class="cal-summary-value expense tabular">${fmtMoney(expense)}</div>
+      </div>
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">합계</div>
+        <div class="cal-summary-value tabular">${fmtMoney(balance)}</div>
+      </div>
+    </div>
+
+    <div class="cal-summary-row">
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">예금</div>
+        <div class="cal-summary-value tabular">${fmtMoney(depositExp)}</div>
+      </div>
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">순지출</div>
+        <div class="cal-summary-value tabular">${fmtMoney(netExpense)}</div>
+      </div>
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">순수입계</div>
+        <div class="cal-summary-value tabular" style="color:${net>=0?'#86efac':'#fca5a5'};">${net>=0?'':'-'}${fmtMoney(Math.abs(net))}</div>
+      </div>
     </div>
 
     ${viewTabsHTML}
