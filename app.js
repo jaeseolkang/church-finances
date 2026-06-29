@@ -4368,10 +4368,6 @@ async function setAutoBackupDirHandle(handle) {
 function isSunday() {
   return new Date().getDay() === 0;
 }
-// 오늘 날짜 문자열 YYYY-MM-DD
-function todayStr() {
-  return todayStr();
-}
 
 /* =========================================================
    정기예금 만기 알림 — Gmail MCP via Anthropic API
