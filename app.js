@@ -3917,7 +3917,7 @@ function renderSettings() {
       <div class="settings-group-title">정보</div>
       <div class="settings-row">
         <div class="settings-label">버전</div>
-        <div class="settings-value">v2.91 (cache v195)</div>
+        <div class="settings-value">v2.94 (cache v1007)</div>
       </div>
       <div class="settings-row" id="rowUpdate" style="cursor:pointer;">
         <div class="settings-label">앱 업데이트</div>
