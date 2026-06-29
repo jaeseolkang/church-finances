@@ -3839,12 +3839,21 @@ function renderSettings() {
             <button id="btnLogout" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);">로그아웃</button>
           </div>
         </div>
-        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-          <div class="settings-label">비밀번호 변경</div>
-          <div class="settings-sub">변경 후 Firebase에 저장됩니다</div>
-          <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
-            <input type="password" id="adminPwNew" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
-            <button id="adminPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
+        <div class="settings-row" style="justify-content:space-between;align-items:center;">
+          <div>
+            <div class="settings-label">비밀번호 변경</div>
+            <div class="settings-sub">현재 비밀번호 확인 후 변경 가능</div>
+          </div>
+          <button id="btnChangePw" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);">변경</button>
+        </div>
+        <div id="pwChangeForm" style="display:none;flex-direction:column;gap:8px;padding:8px 0;">
+          <input type="password" id="adminPwCurrent" class="textinput" placeholder="현재 비밀번호" style="font-size:13px;padding:8px 12px;">
+          <input type="password" id="adminPwNew" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="font-size:13px;padding:8px 12px;">
+          <input type="password" id="adminPwNewConfirm" class="textinput" placeholder="새 비밀번호 확인" style="font-size:13px;padding:8px 12px;">
+          <div id="pwChangeError" style="color:var(--expense);font-size:12px;min-height:14px;"></div>
+          <div style="display:flex;gap:8px;">
+            <button id="btnChangePwCancel" style="flex:1;padding:10px;border-radius:10px;background:var(--surface-2);border:none;font-size:13px;font-weight:600;">취소</button>
+            <button id="adminPwSave" class="btn-primary" style="flex:1;padding:10px;margin-top:0;font-size:13px;">변경 저장</button>
           </div>
         </div>
       ` : `
@@ -3991,17 +4000,50 @@ function renderSettings() {
     });
   }
 
-  // 비밀번호 변경 (입력 모드에서만 표시)
+  // 비밀번호 변경 폼 토글
+  const btnChangePw = page.querySelector('#btnChangePw');
+  if (btnChangePw) {
+    btnChangePw.addEventListener('click', () => {
+      const form = page.querySelector('#pwChangeForm');
+      const open = form.style.display !== 'flex';
+      form.style.display = open ? 'flex' : 'none';
+      btnChangePw.textContent = open ? '닫기' : '변경';
+      if (open) page.querySelector('#adminPwCurrent').focus();
+    });
+    page.querySelector('#btnChangePwCancel').addEventListener('click', () => {
+      page.querySelector('#pwChangeForm').style.display = 'none';
+      btnChangePw.textContent = '변경';
+      page.querySelector('#adminPwCurrent').value = '';
+      page.querySelector('#adminPwNew').value = '';
+      page.querySelector('#adminPwNewConfirm').value = '';
+      page.querySelector('#pwChangeError').textContent = '';
+    });
+  }
   const adminPwSave = page.querySelector('#adminPwSave');
   if (adminPwSave) {
     adminPwSave.addEventListener('click', async () => {
+      const cur = page.querySelector('#adminPwCurrent').value;
       const val = page.querySelector('#adminPwNew').value.trim();
-      if (!val) { showToast('새 비밀번호를 입력해주세요'); return; }
-      if (val.length < 4) { showToast('4자 이상 입력해주세요'); return; }
-      showToast('저장 중...');
+      const val2 = page.querySelector('#adminPwNewConfirm').value.trim();
+      const err = page.querySelector('#pwChangeError');
+      if (!cur) { err.textContent = '현재 비밀번호를 입력해주세요'; return; }
+      if (!val || val.length < 4) { err.textContent = '새 비밀번호는 4자 이상이어야 해요'; return; }
+      if (val !== val2) { err.textContent = '새 비밀번호가 일치하지 않아요'; return; }
+      err.textContent = '확인 중...';
+      const saved = await getAdminPasswordFromFirebase();
+      if (cur !== String(saved).trim()) { err.textContent = '현재 비밀번호가 틀렸어요'; return; }
       const ok = await saveAdminPasswordToFirebase(val);
-      page.querySelector('#adminPwNew').value = '';
-      showToast(ok ? '🔐 비밀번호가 변경됐어요' : '저장 실패 — 네트워크 확인해주세요');
+      if (ok) {
+        page.querySelector('#pwChangeForm').style.display = 'none';
+        page.querySelector('#btnChangePw').textContent = '변경';
+        page.querySelector('#adminPwCurrent').value = '';
+        page.querySelector('#adminPwNew').value = '';
+        page.querySelector('#adminPwNewConfirm').value = '';
+        err.textContent = '';
+        showToast('🔐 비밀번호가 변경됐어요');
+      } else {
+        err.textContent = '저장 실패 — 네트워크를 확인해주세요';
+      }
     });
   }
 
