@@ -1129,7 +1129,7 @@ async function renderHome() {
     ${State.homeView !== 'monthly' ? `
     <div class="cal-month-nav">
       <button id="prevMonth">${ICONS.chevLeft}</button>
-      <span class="lbl">${monthLabel(State.cursorDate)}</span>
+      <button id="monthLabel" style="background:none;border:none;font-size:15px;font-weight:700;color:var(--text-1);cursor:pointer;padding:4px 8px;border-radius:8px;">${monthLabel(State.cursorDate)}</button>
       <button id="nextMonth">${ICONS.chevRight}</button>
     </div>` : ''}
 
@@ -1139,6 +1139,88 @@ async function renderHome() {
   page.querySelector('#goSettings').addEventListener('click', () => switchTab('settings'));
   page.querySelector('#prevMonth')?.addEventListener('click', () => changeMonth(-1));
   page.querySelector('#nextMonth')?.addEventListener('click', () => changeMonth(1));
+
+  // 날짜 레이블 클릭 → 년/월 빠른 선택 팝업
+  page.querySelector('#monthLabel')?.addEventListener('click', () => {
+    const existing = document.getElementById('monthPickerPop');
+    if (existing) { existing.remove(); return; }
+
+    const cur = State.cursorDate;
+    const curY = cur.getFullYear();
+    const curM = cur.getMonth() + 1;
+
+    // 현재 연도 기준 ±5년
+    const years = [];
+    for (let y = curY - 5; y <= curY + 1; y++) years.push(y);
+    const months = Array.from({length: 12}, (_, i) => i + 1);
+
+    const pop = document.createElement('div');
+    pop.id = 'monthPickerPop';
+    pop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+    pop.innerHTML = `
+      <div style="background:var(--card);border-radius:20px;padding:20px;width:300px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:14px;text-align:center;">날짜 이동</div>
+
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;color:var(--text-2);margin-bottom:6px;font-weight:600;">연도</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">
+            ${years.map(y => `
+              <button data-year="${y}" style="padding:8px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${y===curY?'700':'400'};background:${y===curY?'var(--primary)':'var(--card)'};color:${y===curY?'#fff':'var(--text-1)'};cursor:pointer;">${y}</button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;color:var(--text-2);margin-bottom:6px;font-weight:600;">월</div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;">
+            ${months.map(m => `
+              <button data-month="${m}" style="padding:8px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${m===curM?'700':'400'};background:${m===curM?'var(--primary)':'var(--card)'};color:${m===curM?'#fff':'var(--text-1)'};cursor:pointer;">${m}월</button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button id="monthPickerCancel" style="flex:1;padding:11px;border-radius:12px;background:var(--surface-2);border:none;font-size:14px;font-weight:600;color:var(--text-1);">취소</button>
+          <button id="monthPickerOk" style="flex:1;padding:11px;border-radius:12px;background:var(--primary);border:none;font-size:14px;font-weight:700;color:#fff;">이동</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(pop);
+
+    let selYear = curY, selMonth = curM;
+
+    // 연도 선택
+    pop.querySelectorAll('[data-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selYear = Number(btn.dataset.year);
+        pop.querySelectorAll('[data-year]').forEach(b => {
+          b.style.background = b.dataset.year == selYear ? 'var(--primary)' : 'var(--card)';
+          b.style.color = b.dataset.year == selYear ? '#fff' : 'var(--text-1)';
+          b.style.fontWeight = b.dataset.year == selYear ? '700' : '400';
+        });
+      });
+    });
+
+    // 월 선택
+    pop.querySelectorAll('[data-month]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selMonth = Number(btn.dataset.month);
+        pop.querySelectorAll('[data-month]').forEach(b => {
+          b.style.background = b.dataset.month == selMonth ? 'var(--primary)' : 'var(--card)';
+          b.style.color = b.dataset.month == selMonth ? '#fff' : 'var(--text-1)';
+          b.style.fontWeight = b.dataset.month == selMonth ? '700' : '400';
+        });
+      });
+    });
+
+    pop.querySelector('#monthPickerCancel').addEventListener('click', () => pop.remove());
+    pop.querySelector('#monthPickerOk').addEventListener('click', () => {
+      State.cursorDate = new Date(selYear, selMonth - 1, 1);
+      pop.remove();
+      renderHome();
+    });
+    pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
+  });
   page.querySelectorAll('.home-view-tab').forEach(btn => {
     btn.addEventListener('click', () => { State.homeView = btn.dataset.view; renderHome(); });
   });
