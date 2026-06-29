@@ -1,4 +1,4 @@
-// v2.96 | 2026-06-29 KST | 수정: 홈 예금/순지출/순수입계 - 당월 기준 재계산(예금=당월 예금카테고리 지출합, 순지출=당월지출-예금, 순수입계=수입-순지출), 두 줄 사이 구분선만 표시 | cache:v200
+// v2.97 | 2026-06-29 KST | 수정: 홈 수입지출 요약 박스 하나로 병합(내부 구분선만 표시), 순수입계 색상 +파란/-빨강으로 변경 | cache:v201
 'use strict';
 
 
@@ -1057,33 +1057,37 @@ async function renderHome() {
       </div>
     </div>
 
-    <div class="cal-summary-row">
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">수입</div>
-        <div class="cal-summary-value income tabular">${fmtMoney(income)}</div>
+    <div class="cal-summary-row" style="flex-direction:column;">
+      <div style="display:flex;width:100%;">
+        <div class="cal-summary-col">
+          <div class="cal-summary-label">수입</div>
+          <div class="cal-summary-value income tabular">${fmtMoney(income)}</div>
+        </div>
+        <div class="cal-summary-col">
+          <div class="cal-summary-label">지출</div>
+          <div class="cal-summary-value expense tabular">${fmtMoney(expense)}</div>
+        </div>
+        <div class="cal-summary-col">
+          <div class="cal-summary-label">합계</div>
+          <div class="cal-summary-value tabular">${fmtMoney(balance)}</div>
+        </div>
       </div>
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">지출</div>
-        <div class="cal-summary-value expense tabular">${fmtMoney(expense)}</div>
-      </div>
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">합계</div>
-        <div class="cal-summary-value tabular">${fmtMoney(balance)}</div>
-      </div>
-    </div>
 
-    <div class="cal-summary-row" style="border-top:1px solid rgba(255,255,255,0.12);padding-top:8px;margin-top:8px;">
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">예금</div>
-        <div class="cal-summary-value tabular">${fmtMoney(deposit)}</div>
-      </div>
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">순지출</div>
-        <div class="cal-summary-value tabular">${fmtMoney(monthNetExpense)}</div>
-      </div>
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">순수입계</div>
-        <div class="cal-summary-value tabular" style="color:${netTotal>=0?'#86efac':'#fca5a5'};">${netTotal>=0?'':'-'}${fmtMoney(Math.abs(netTotal))}</div>
+      <div style="width:100%;border-top:1px solid rgba(0,0,0,0.08);margin:8px 0;"></div>
+
+      <div style="display:flex;width:100%;">
+        <div class="cal-summary-col">
+          <div class="cal-summary-label">예금</div>
+          <div class="cal-summary-value tabular">${fmtMoney(deposit)}</div>
+        </div>
+        <div class="cal-summary-col">
+          <div class="cal-summary-label">순지출</div>
+          <div class="cal-summary-value tabular">${fmtMoney(monthNetExpense)}</div>
+        </div>
+        <div class="cal-summary-col">
+          <div class="cal-summary-label">순수입계</div>
+          <div class="cal-summary-value tabular" style="color:${netTotal>=0?'#2563eb':'#dc2626'};">${netTotal>=0?'':'-'}${fmtMoney(Math.abs(netTotal))}</div>
+        </div>
       </div>
     </div>
 
