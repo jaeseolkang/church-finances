@@ -5519,6 +5519,14 @@ async function resetAllData() {
 
   // 기본 항목 재생성
   await seedIfEmpty();
+  // 대표계정 강제 생성 (seedIfEmpty 이후에도 없으면)
+  const accts = await DB.getAll('linkedAccounts');
+  if (accts.length === 0) {
+    await DB.put('linkedAccounts', {
+      id: uid(), name: '대표계정', isDefault: true,
+      accountKind: 'normal', carryover: 0, order: 0,
+    });
+  }
   await reloadData();
   renderCurrentPage();
   showToast('✅ 초기화 완료 — 모든 데이터가 삭제됐어요');
@@ -6791,7 +6799,7 @@ function renderLinkedAccountsSheet() {
   const sheet = document.getElementById('linkedAccountsSheet');
   const accounts = State.linkedAccounts || [];
 
-  const normalAccts  = accounts.filter(a => !a.isDefault && (!a.accountKind || a.accountKind === 'normal'));
+  const normalAccts  = accounts.filter(a => a.isDefault || (!a.isDefault && (!a.accountKind || a.accountKind === 'normal')));
   const depositAccts = accounts.filter(a => !a.isDefault && a.accountKind === 'deposit');
 
   const normalListHTML = normalAccts.length === 0
