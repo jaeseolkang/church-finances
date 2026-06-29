@@ -3830,44 +3830,64 @@ function renderSettings() {
     <div class="settings-group">
       <div class="settings-group-title">🔐 입력 모드</div>
       ${getIsAdmin() ? `
-        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-          <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-            <div>
-              <div class="settings-label">🔓 입력 모드 중</div>
-              <div class="settings-sub">데이터 입력/수정이 가능합니다</div>
-            </div>
-            <button id="btnLogout" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);">로그아웃</button>
+        <div class="settings-row" style="justify-content:space-between;align-items:center;">
+          <div>
+            <div class="settings-label">🔓 입력 모드 중</div>
+            <div class="settings-sub">데이터 입력/수정이 가능합니다</div>
           </div>
+          <button id="btnLogout" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);">로그아웃</button>
         </div>
         <div class="settings-row" style="justify-content:space-between;align-items:center;">
           <div>
             <div class="settings-label">비밀번호 변경</div>
-            <div class="settings-sub">현재 비밀번호 확인 후 변경 가능</div>
+            <div class="settings-sub">버튼을 눌러 변경하세요</div>
           </div>
           <button id="btnChangePw" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);">변경</button>
         </div>
-        <div id="pwChangeForm" style="display:none;flex-direction:column;gap:8px;padding:8px 0;">
-          <input type="password" id="adminPwCurrent" class="textinput" placeholder="현재 비밀번호" style="font-size:13px;padding:8px 12px;">
-          <input type="password" id="adminPwNew" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="font-size:13px;padding:8px 12px;">
-          <input type="password" id="adminPwNewConfirm" class="textinput" placeholder="새 비밀번호 확인" style="font-size:13px;padding:8px 12px;">
-          <div id="pwChangeError" style="color:var(--expense);font-size:12px;min-height:14px;"></div>
-          <div style="display:flex;gap:8px;">
-            <button id="btnChangePwCancel" style="flex:1;padding:10px;border-radius:10px;background:var(--surface-2);border:none;font-size:13px;font-weight:600;">취소</button>
-            <button id="adminPwSave" class="btn-primary" style="flex:1;padding:10px;margin-top:0;font-size:13px;">변경 저장</button>
+        <div id="pwChangeForm" style="display:none;flex-direction:column;gap:10px;padding:12px 16px;background:var(--surface-1);border-radius:12px;margin:0 0 8px;">
+          <div id="pwStep1" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text-1);">현재 비밀번호 확인</div>
+            <div style="position:relative;">
+              <input type="password" id="adminPwCurrent" class="textinput" placeholder="현재 비밀번호" style="font-size:14px;padding:10px 44px 10px 12px;width:100%;box-sizing:border-box;">
+              <button id="toggleCur" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;color:var(--text-2);">👁</button>
+            </div>
+            <div id="pwCurError" style="color:var(--expense);font-size:12px;min-height:14px;"></div>
+            <div style="display:flex;gap:8px;">
+              <button id="btnPwStep1Cancel" style="flex:1;padding:10px;border-radius:10px;background:var(--surface-2);border:none;font-size:13px;font-weight:600;">취소</button>
+              <button id="btnPwStep1Next" class="btn-primary" style="flex:1;padding:10px;margin-top:0;font-size:13px;">확인</button>
+            </div>
+          </div>
+          <div id="pwStep2" style="display:none;flex-direction:column;gap:8px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text-1);">새 비밀번호 입력</div>
+            <div style="position:relative;">
+              <input type="password" id="adminPwNew" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="font-size:14px;padding:10px 44px 10px 12px;width:100%;box-sizing:border-box;">
+              <button id="toggleNew" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;color:var(--text-2);">👁</button>
+            </div>
+            <div style="position:relative;">
+              <input type="password" id="adminPwNewConfirm" class="textinput" placeholder="새 비밀번호 재입력" style="font-size:14px;padding:10px 44px 10px 12px;width:100%;box-sizing:border-box;">
+              <button id="toggleNewConfirm" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;color:var(--text-2);">👁</button>
+            </div>
+            <div id="pwNewError" style="color:var(--expense);font-size:12px;min-height:14px;"></div>
+            <div style="display:flex;gap:8px;">
+              <button id="btnPwStep2Cancel" style="flex:1;padding:10px;border-radius:10px;background:var(--surface-2);border:none;font-size:13px;font-weight:600;">취소</button>
+              <button id="adminPwSave" class="btn-primary" style="flex:1;padding:10px;margin-top:0;font-size:13px;">변경 저장</button>
+            </div>
           </div>
         </div>
       ` : `
-        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-          <div class="settings-label">👁️ 열람 전용 모드</div>
-          <div class="settings-sub">입력 모드로 전환하려면 비밀번호를 입력하세요</div>
-          <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
-            <input type="password" id="adminPwInput" class="textinput" placeholder="비밀번호" style="flex:1;font-size:13px;padding:8px 12px;">
-            <button id="btnLogin" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">로그인</button>
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+          <div class="settings-label">🔒 열람 전용 모드</div>
+          <div class="settings-sub">비밀번호를 입력해 입력 모드로 전환하세요</div>
+          <div style="position:relative;width:100%;">
+            <input type="password" id="adminPwInput" class="textinput" placeholder="비밀번호" style="font-size:14px;padding:10px 44px 10px 12px;width:100%;box-sizing:border-box;">
+            <button id="toggleLogin" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;color:var(--text-2);">👁</button>
           </div>
           <div id="loginError" style="color:#e53e3e;font-size:12px;min-height:16px;"></div>
+          <button id="btnLogin" class="btn-primary" style="width:100%;padding:12px;margin-top:0;font-size:14px;border-radius:12px;">로그인</button>
         </div>
       `}
     </div>
+
 
     <div class="settings-group">
       <div class="settings-group-title">☁️ 클라우드 동기화</div>
@@ -4000,46 +4020,88 @@ function renderSettings() {
     });
   }
 
-  // 비밀번호 변경 폼 토글
+  // 비밀번호 변경 버튼
   const btnChangePw = page.querySelector('#btnChangePw');
   if (btnChangePw) {
-    btnChangePw.addEventListener('click', () => {
-      const form = page.querySelector('#pwChangeForm');
-      const open = form.style.display !== 'flex';
-      form.style.display = open ? 'flex' : 'none';
-      btnChangePw.textContent = open ? '닫기' : '변경';
-      if (open) page.querySelector('#adminPwCurrent').focus();
-    });
-    page.querySelector('#btnChangePwCancel').addEventListener('click', () => {
-      page.querySelector('#pwChangeForm').style.display = 'none';
-      btnChangePw.textContent = '변경';
+    const form = page.querySelector('#pwChangeForm');
+    const step1 = page.querySelector('#pwStep1');
+    const step2 = page.querySelector('#pwStep2');
+
+    const closeForm = () => {
+      form.style.display = 'none';
+      step1.style.display = 'flex';
+      step2.style.display = 'none';
       page.querySelector('#adminPwCurrent').value = '';
       page.querySelector('#adminPwNew').value = '';
       page.querySelector('#adminPwNewConfirm').value = '';
-      page.querySelector('#pwChangeError').textContent = '';
+      page.querySelector('#pwCurError').textContent = '';
+      page.querySelector('#pwNewError').textContent = '';
+      btnChangePw.textContent = '변경';
+    };
+
+    btnChangePw.addEventListener('click', () => {
+      const open = form.style.display !== 'flex';
+      if (open) {
+        form.style.display = 'flex';
+        btnChangePw.textContent = '닫기';
+        page.querySelector('#adminPwCurrent').focus();
+      } else {
+        closeForm();
+      }
     });
-  }
-  const adminPwSave = page.querySelector('#adminPwSave');
-  if (adminPwSave) {
-    adminPwSave.addEventListener('click', async () => {
+
+    // 눈 아이콘 토글
+    const toggleVis = (btnId, inputId) => {
+      const btn = page.querySelector('#' + btnId);
+      const inp = page.querySelector('#' + inputId);
+      if (btn && inp) btn.addEventListener('click', () => {
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+        btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+      });
+    };
+    toggleVis('toggleCur', 'adminPwCurrent');
+    toggleVis('toggleNew', 'adminPwNew');
+    toggleVis('toggleNewConfirm', 'adminPwNewConfirm');
+
+    // 1단계 취소
+    page.querySelector('#btnPwStep1Cancel').addEventListener('click', closeForm);
+
+    // 1단계 확인 - 현재 비밀번호 검증
+    page.querySelector('#btnPwStep1Next').addEventListener('click', async () => {
       const cur = page.querySelector('#adminPwCurrent').value;
+      const err = page.querySelector('#pwCurError');
+      if (!cur) { err.textContent = '현재 비밀번호를 입력해주세요'; return; }
+      err.textContent = '확인 중...';
+      try {
+        const saved = await getAdminPasswordFromFirebase();
+        if (cur.trim() === String(saved).trim()) {
+          err.textContent = '';
+          step1.style.display = 'none';
+          step2.style.display = 'flex';
+          page.querySelector('#adminPwNew').focus();
+        } else {
+          err.textContent = '비밀번호가 틀렸어요';
+          page.querySelector('#adminPwCurrent').value = '';
+        }
+      } catch(e) {
+        err.textContent = '네트워크 오류';
+      }
+    });
+
+    // 2단계 취소
+    page.querySelector('#btnPwStep2Cancel').addEventListener('click', closeForm);
+
+    // 2단계 저장
+    page.querySelector('#adminPwSave').addEventListener('click', async () => {
       const val = page.querySelector('#adminPwNew').value.trim();
       const val2 = page.querySelector('#adminPwNewConfirm').value.trim();
-      const err = page.querySelector('#pwChangeError');
-      if (!cur) { err.textContent = '현재 비밀번호를 입력해주세요'; return; }
+      const err = page.querySelector('#pwNewError');
       if (!val || val.length < 4) { err.textContent = '새 비밀번호는 4자 이상이어야 해요'; return; }
       if (val !== val2) { err.textContent = '새 비밀번호가 일치하지 않아요'; return; }
-      err.textContent = '확인 중...';
-      const saved = await getAdminPasswordFromFirebase();
-      if (cur !== String(saved).trim()) { err.textContent = '현재 비밀번호가 틀렸어요'; return; }
+      err.textContent = '저장 중...';
       const ok = await saveAdminPasswordToFirebase(val);
       if (ok) {
-        page.querySelector('#pwChangeForm').style.display = 'none';
-        page.querySelector('#btnChangePw').textContent = '변경';
-        page.querySelector('#adminPwCurrent').value = '';
-        page.querySelector('#adminPwNew').value = '';
-        page.querySelector('#adminPwNewConfirm').value = '';
-        err.textContent = '';
+        closeForm();
         showToast('🔐 비밀번호가 변경됐어요');
       } else {
         err.textContent = '저장 실패 — 네트워크를 확인해주세요';
@@ -4047,40 +4109,18 @@ function renderSettings() {
     });
   }
 
-  // 열람 모드: Firebase 비밀번호 확인 후 최초설정 or 로그인 분기
+  // 열람 모드: 로그인
   const btnLogin = page.querySelector('#btnLogin');
   if (btnLogin) {
-    // Firebase에 비밀번호 없으면 최초 설정 안내 표시
-    (async () => {
-      try {
-        const saved = await getAdminPasswordFromFirebase();
-        if (!saved) {
-          const loginArea = page.querySelector('#adminPwInput');
-          if (loginArea) loginArea.closest('.settings-row').innerHTML = `
-            <div class="settings-label">🔑 비밀번호 최초 설정</div>
-            <div class="settings-sub">Firebase에 비밀번호가 없습니다. 먼저 설정해주세요.</div>
-            <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
-              <input type="password" id="adminPwInput" class="textinput" placeholder="새 비밀번호 (4자 이상)" style="flex:1;font-size:13px;padding:8px 12px;">
-              <button id="firstPwSave" class="btn-primary" style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
-            </div>
-            <div id="loginError" style="color:#e53e3e;font-size:12px;min-height:16px;"></div>`;
-          const firstPwSave = page.querySelector('#firstPwSave');
-          if (firstPwSave) {
-            firstPwSave.addEventListener('click', async () => {
-              const val = page.querySelector('#adminPwInput').value.trim();
-              if (!val || val.length < 4) { page.querySelector('#loginError').textContent = '4자 이상 입력해주세요'; return; }
-              const ok = await saveAdminPasswordToFirebase(val);
-              if (ok) {
-                showToast('🔐 비밀번호가 저장됐어요');
-                renderSettings();
-              } else {
-                page.querySelector('#loginError').textContent = '저장 실패 — 네트워크 확인';
-              }
-            });
-          }
-        }
-      } catch(e) {}
-    })();
+    // 눈 아이콘
+    const tglLogin = page.querySelector('#toggleLogin');
+    const loginInp = page.querySelector('#adminPwInput');
+    if (tglLogin && loginInp) {
+      tglLogin.addEventListener('click', () => {
+        loginInp.type = loginInp.type === 'password' ? 'text' : 'password';
+        tglLogin.textContent = loginInp.type === 'password' ? '👁' : '🙈';
+      });
+    }
 
     const doLogin = async () => {
       const inp = page.querySelector('#adminPwInput');
@@ -4107,9 +4147,9 @@ function renderSettings() {
       }
     };
     btnLogin.addEventListener('click', doLogin);
-    const pwInp = page.querySelector('#adminPwInput');
-    if (pwInp) pwInp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    if (loginInp) loginInp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   }
+
 
   page.querySelector('#rowSyncUp').addEventListener('click', async () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; }
     showToast('⬆️ 업로드 중...');
