@@ -1,19 +1,38 @@
 // v2.99 | 2026-06-29 KST | 수정: 데이터백업(JSON)에 전체백업 모드 추가(기본 선택), 범위설정을 연-월-일 단위 date input으로 세분화 | cache:v203
 'use strict';
 
+// ============================================================
+// 🔧 배포 설정 스위치
+// church-finances 저장소: true / finances 저장소: false
+// ============================================================
+const USE_FIREBASE = true;
+
+
 
 /* =========================================================
    비밀번호 / 입력 모드 제어
    ========================================================= */
 
-// Firebase에서 비밀번호 가져오기
+// 비밀번호 가져오기 (Firebase or IndexedDB)
 async function getAdminPasswordFromFirebase() {
+  if (!USE_FIREBASE) {
+    try {
+      const rec = await DB.get('settings', 'adminPw');
+      return rec ? rec.value : null;
+    } catch(e) { return null; }
+  }
   try { return await fbGet('churchData/adminPassword'); }
   catch(e) { return null; }
 }
 
-// Firebase에 비밀번호 저장
+// 비밀번호 저장 (Firebase or IndexedDB)
 async function saveAdminPasswordToFirebase(pw) {
+  if (!USE_FIREBASE) {
+    try {
+      await DB.put('settings', { key: 'adminPw', value: pw });
+      return true;
+    } catch(e) { return false; }
+  }
   try { await fbSet('churchData/adminPassword', pw); return true; }
   catch(e) { return false; }
 }
@@ -111,6 +130,7 @@ async function fbSet(path, data) {
 
 // Firebase에 전체 데이터 저장
 async function syncToFirebase() {
+  if (!USE_FIREBASE) return false;
   try {
     const allTemplates = await DB.getAll('templates');
     const data = {
@@ -134,6 +154,7 @@ async function syncToFirebase() {
 
 // Firebase에서 데이터 불러와서 로컬 DB 업데이트
 async function syncFromFirebase() {
+  if (!USE_FIREBASE) return false;
   try {
     // 먼저 syncedAt만 가져와서 비교 (전체 데이터 안 받음)
     const remoteSyncedAt = await fbGet('churchData/syncedAt');
@@ -318,6 +339,18 @@ async function seedIfEmpty() {
   const settings = await DB.get('settings', 'general');
   if (!settings) {
     await DB.put('settings', { key: 'general', monthStartDay: 1, currency: 'KRW' });
+  }
+  // 대표계정이 없으면 자동 생성
+  const accounts = await DB.getAll('linkedAccounts');
+  if (accounts.length === 0) {
+    await DB.put('linkedAccounts', {
+      id: uid(),
+      name: '대표계정',
+      isDefault: true,
+      accountKind: 'normal',
+      carryover: 0,
+      order: 0,
+    });
   }
 }
 
@@ -3889,6 +3922,7 @@ function renderSettings() {
     </div>
 
 
+    ${USE_FIREBASE ? `
     <div class="settings-group">
       <div class="settings-group-title">☁️ 클라우드 동기화</div>
       <div class="settings-row" id="rowSyncUp">
@@ -3905,7 +3939,7 @@ function renderSettings() {
         </div>
         <span style="font-size:18px;">⬇️</span>
       </div>
-    </div>
+    </div>` : ''}
 
     <div class="settings-group">
       <div class="settings-group-title">정기예금 만기 알림</div>
@@ -4156,16 +4190,18 @@ function renderSettings() {
   }
 
 
-  page.querySelector('#rowSyncUp').addEventListener('click', async () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; }
-    showToast('⬆️ 업로드 중...');
-    const ok = await syncToFirebase();
-    showToast(ok ? '☁️ 업로드 완료!' : '업로드 실패 — 네트워크 확인해주세요');
-  });
-  page.querySelector('#rowSyncDown').addEventListener('click', async () => {
-    showToast('⬇️ 다운로드 중...');
-    const ok = await syncFromFirebase();
-    if (!ok) showToast('이미 최신 데이터예요');
-  });
+  if (USE_FIREBASE) {
+    page.querySelector('#rowSyncUp').addEventListener('click', async () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; }
+      showToast('⬆️ 업로드 중...');
+      const ok = await syncToFirebase();
+      showToast(ok ? '☁️ 업로드 완료!' : '업로드 실패 — 네트워크 확인해주세요');
+    });
+    page.querySelector('#rowSyncDown').addEventListener('click', async () => {
+      showToast('⬇️ 다운로드 중...');
+      const ok = await syncFromFirebase();
+      if (!ok) showToast('이미 최신 데이터예요');
+    });
+  }
   page.querySelector('#rowImport').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } page.querySelector('#importFile').click(); });
   page.querySelector('#importFile').addEventListener('change', importData);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
@@ -6188,7 +6224,7 @@ async function saveTx() {
   closeTxSheet();
   renderCurrentPage();
   showToast(State.editingTx ? '수정되었습니다' : '저장되었습니다');
-  syncToFirebase().catch(e => console.error('sync error:', e));
+  if (USE_FIREBASE) syncToFirebase().catch(e => console.error('sync error:', e));
 }
 
 async function deleteTx() {
@@ -6198,7 +6234,7 @@ async function deleteTx() {
   closeTxSheet();
   renderCurrentPage();
   showToast('삭제되었습니다');
-  syncToFirebase().catch(e => console.error('sync error:', e));
+  if (USE_FIREBASE) syncToFirebase().catch(e => console.error('sync error:', e));
 }
 
 /* =========================================================
@@ -6833,7 +6869,12 @@ function openLinkedAccountEditSheet(acct, kind) {
   const isNew = !acct;
   const accountKind = isNew ? (kind || 'normal') : (acct.accountKind || 'normal');
   const sheet = document.getElementById('linkedAccountsSheet');
-  const isDefault = !isNew && !!acct.isDefault;
+  // 신규 일반계좌 기본값: 대표계정 이름 + isDefault on
+  // (단, 이미 대표계정이 있으면 isDefault off)
+  const existingDefault = (State.linkedAccounts||[]).find(a => a.isDefault);
+  const newIsDefault = isNew && accountKind === 'normal' && !existingDefault;
+  const isDefault = isNew ? newIsDefault : !!acct.isDefault;
+  const defaultName = isNew && accountKind === 'normal' && !existingDefault ? '대표계정' : '';
 
   // 정기예금 프리셋 이름
   const depositPresets = ['정기선교', '정기건축', '정기후대', '정기퇴직'];
@@ -6860,7 +6901,7 @@ function openLinkedAccountEditSheet(acct, kind) {
       <div class="form-field" style="margin-top:${isNew && accountKind==='deposit'?'12px':'0'};">
         <label class="form-label">계좌 이름</label>
         <input id="laeNameInput" class="form-input" type="text" placeholder="${accountKind==='deposit'?'예: 정기선교, 정기건축':'예: 재정계정, 선교계정'}" maxlength="20"
-          value="${isNew ? '' : escapeHTML(acct.name)}">
+          value="${isNew ? defaultName : escapeHTML(acct.name)}">
       </div>
       <div class="form-field" style="margin-top:16px;">
         <label class="form-label">이월금액 (원)</label>
@@ -8013,7 +8054,7 @@ async function initApp() {
   // Firebase 관련은 렌더링 후 백그라운드 실행 (초기 로딩 속도 영향 없도록)
   setTimeout(async () => { await restoreAdminState(); applyLockState(); renderTabbar(); }, 500);
   setTimeout(() => checkMaturityAndNotify(false), 5000);
-  setTimeout(async () => { await syncFromFirebase(); }, 3000);
+  if (USE_FIREBASE) setTimeout(async () => { await syncFromFirebase(); }, 3000);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
