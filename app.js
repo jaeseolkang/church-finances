@@ -135,15 +135,20 @@ async function syncToFirebase() {
 // Firebase에서 데이터 불러와서 로컬 DB 업데이트
 async function syncFromFirebase() {
   try {
-    const data = await fbGet('churchData');
-    if (!data || !data.transactions) return false;
+    // 먼저 syncedAt만 가져와서 비교 (전체 데이터 안 받음)
+    const remoteSyncedAt = await fbGet('churchData/syncedAt');
+    if (!remoteSyncedAt) return false;
 
     const localSyncRec = await DB.get('settings', 'firebaseSyncedAt');
     const localSyncedAt = localSyncRec ? localSyncRec.value : null;
-    if (localSyncedAt && data.syncedAt <= localSyncedAt) {
+    if (localSyncedAt && remoteSyncedAt <= localSyncedAt) {
       console.log('Firebase: 로컬이 최신');
       return false;
     }
+
+    // 실제로 새 데이터가 있을 때만 전체 다운로드
+    const data = await fbGet('churchData');
+    if (!data || !data.transactions) return false;
 
     await restoreFromData(data);
     await DB.put('settings', { key: 'firebaseSyncedAt', value: data.syncedAt });
