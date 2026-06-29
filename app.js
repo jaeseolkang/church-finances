@@ -1077,7 +1077,7 @@ async function renderHome() {
       <div style="display:flex;flex-direction:column;justify-content:center;gap:10px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">년이월</span>
-          <span class="tabular" style="font-size:12px;color:rgba(255,255,255,0.85);font-weight:600;">${fmtMoney(carryover)}원</span>
+          <span class="tabular" style="font-size:12.5px;color:#fff;font-weight:700;">${fmtMoney(carryover)}원</span>
         </div>
         <div>
           <span class="total-assets-value tabular" style="color:${netColor};">${net < 0 ? '-' : ''}${fmtMoney(Math.abs(net))}원</span>

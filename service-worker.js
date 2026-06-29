@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v1024 (년이월 금액 사이즈 통일)
+// 2026-06-29 KST | CACHE_NAME v1025 (년이월 금액 12.5px 통일)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v1024';
+const CACHE_NAME = 'gaegyebu-v1025';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
