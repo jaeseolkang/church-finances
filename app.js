@@ -5781,7 +5781,7 @@ async function renderTxStepItems(sheet) {
       <div class="formrow">
         <label>세부항목별 금액 입력</label>
         <div id="itemsList" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:2px 8px;">
-          ${items.map(it => `
+          ${items.filter(it => it.isPrimary !== false).map(it => `
             <div class="formrow" style="margin-bottom:4px; min-width:0;">
               <label style="font-weight:700; color:var(--text-1); margin-bottom:3px; display:block; font-size:14px;">${escapeHTML(it.name)}</label>
               <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
@@ -5791,6 +5791,21 @@ async function renderTxStepItems(sheet) {
             </div>
           `).join('')}
         </div>
+        ${items.filter(it => it.isPrimary === false).length > 0 ? `
+        <div style="margin-top:6px;">
+          <button id="toggleSecondary" style="font-size:12px;color:var(--text-2);background:none;border:none;padding:4px 0;cursor:pointer;">▶ 추가 항목 더보기 (${items.filter(it=>it.isPrimary===false).length}개)</button>
+          <div id="secondaryItems" style="display:none;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 8px;margin-top:4px;">
+            ${items.filter(it => it.isPrimary === false).map(it => `
+              <div class="formrow" style="margin-bottom:4px; min-width:0;">
+                <label style="font-weight:700; color:var(--text-2); margin-bottom:3px; display:block; font-size:13px;">${escapeHTML(it.name)}</label>
+                <div class="amt-input-wrap item-amt-wrap" style="border-bottom-width:1px; padding-bottom:5px; gap:3px;">
+                  <input type="text" inputmode="numeric" class="item-amt-input" data-item="${it.id}" placeholder="0" style="font-size:14px; font-weight:400;" value="${State.formAmounts[it.id] != null ? fmtMoney(State.formAmounts[it.id]) : ''}">
+                  <span class="won" style="font-size:11px;">원</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
         <div style="display:flex; gap:8px; margin-top:4px;">
           <input type="text" class="textinput" id="newSubItemName" placeholder="새 세부항목 추가" style="flex:1;">
           <button class="btn-secondary" id="addSubItemBtn" style="width:auto; padding:0 16px; margin-top:0; color:var(--primary); font-weight:700;">추가</button>
@@ -5919,6 +5934,26 @@ async function renderTxStepItems(sheet) {
       State.formStep = State.formSubGroupId ? 'pickGroup' : 'pick';
       renderTxSheet();
     });
+  }
+
+  // 추가 항목 더보기 토글
+  const toggleBtn = sheet.querySelector('#toggleSecondary');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const sec = sheet.querySelector('#secondaryItems');
+      const open = sec.style.display !== 'grid';
+      sec.style.display = open ? 'grid' : 'none';
+      toggleBtn.textContent = open
+        ? `▼ 추가 항목 접기`
+        : `▶ 추가 항목 더보기 (${sec.querySelectorAll('.item-amt-input').length}개)`;
+      // 금액 입력된 항목이 있으면 자동 펼침
+    });
+    // 이미 값 입력된 secondary 항목 있으면 자동 펼침
+    const hasFilled = items.filter(it => it.isPrimary === false).some(it => State.formAmounts[it.id]);
+    if (hasFilled) {
+      sheet.querySelector('#secondaryItems').style.display = 'grid';
+      toggleBtn.textContent = '▼ 추가 항목 접기';
+    }
   }
 
   sheet.querySelectorAll('.item-amt-input').forEach(input => {
@@ -7669,8 +7704,12 @@ function renderCatSubSheet(categoryId, mode) {
           <div class="catrow" data-id="${item.id}" style="flex-wrap:wrap;gap:4px;">
             ${!isItems ? `<div class="ic" style="background:${hexToLight(cat.color)};font-size:16px;">👤</div>` : ''}
             <div class="nm" style="${isItems?'margin-left:2px;':''}flex:1;">${escapeHTML(item.name)}</div>
-            ${isItems ? `<div style="display:flex;align-items:center;gap:4px;font-size:12px;">
-              <input type="text" inputmode="numeric" data-budget-id="${item.id}" value="${item.budget ? fmtMoney(item.budget) : ''}" placeholder="연간예산" style="width:90px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;">
+            ${isItems ? `<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-2);cursor:pointer;">
+                <input type="checkbox" data-primary-id="${item.id}" ${item.isPrimary!==false?'checked':''} style="width:15px;height:15px;cursor:pointer;">
+                기본
+              </label>
+              <input type="text" inputmode="numeric" data-budget-id="${item.id}" value="${item.budget ? fmtMoney(item.budget) : ''}" placeholder="연간예산" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;">
               <span style="color:var(--text-3);">원</span>
             </div>` : ''}
             <button class="grip" data-rename="${item.id}">${ICONS.edit}</button>
@@ -7715,6 +7754,20 @@ function renderCatSubSheet(categoryId, mode) {
       input.addEventListener('keydown', e => { if (e.key === 'Enter') { input.blur(); } });
     });
   }
+  // isPrimary 체크박스 이벤트
+  if (isItems) {
+    sheet.querySelectorAll('[data-primary-id]').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        const item = list.find(x => x.id === chk.dataset.primaryId);
+        if (!item) return;
+        item.isPrimary = chk.checked;
+        await DB.put('subItems', item);
+        await reloadData();
+        showToast(chk.checked ? '기본 항목으로 설정됐어요' : '일반 항목으로 설정됐어요');
+      });
+    });
+  }
+
   sheet.querySelector('#subBack').addEventListener('click', () => { closeAllSheets(); openCatEditSheet(categoryId); });
 
   sheet.querySelectorAll('[data-rename]').forEach(b => {
