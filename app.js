@@ -1,4 +1,4 @@
-// v2.95 | 2026-06-29 KST | 수정: 홈 수입/지출/합계 요약 - 구버전 cal-summary-row 스타일로 복원, 예금/순지출/순수입계 2번째 줄 추가 | cache:v199
+// v2.96 | 2026-06-29 KST | 수정: 홈 예금/순지출/순수입계 - 당월 기준 재계산(예금=당월 예금카테고리 지출합, 순지출=당월지출-예금, 순수입계=수입-순지출), 두 줄 사이 구분선만 표시 | cache:v200
 'use strict';
 
 
@@ -708,16 +708,20 @@ function txInCursorMonth() {
 function monthSummary() {
   const list = txInCursorMonth();
   const carryoverCat = State.categories.find(c => c.name === '전년이월');
-  let income = 0, expense = 0;
+  const depositCat = State.categories.find(c => c.type === 'expense' && c.name === '예금');
+  let income = 0, expense = 0, deposit = 0;
   for (const t of list) {
     if (t.type === 'income') {
       if (carryoverCat && t.categoryId === carryoverCat.id) continue;
       income += t.amount;
     } else {
       expense += t.amount;
+      if (depositCat && t.categoryId === depositCat.id) deposit += t.amount;
     }
   }
-  return { income, expense, balance: income - expense };
+  const netExpense = expense - deposit;
+  const netTotal = income - netExpense;
+  return { income, expense, balance: income - expense, deposit, netExpense, netTotal };
 }
 
 async function totalAssets() {
@@ -1009,7 +1013,7 @@ function dateToStr(d) {
 
 async function renderHome() {
   const page = document.getElementById('page-home');
-  const { income, expense, balance } = monthSummary();
+  const { income, expense, balance, deposit, netExpense: monthNetExpense, netTotal } = monthSummary();
   const { totalIncome, totalExpense, depositExp, netExpense, carryover, net } = await totalAssets();
   const netColor = net < 0 ? 'var(--expense-light)' : '#fff';
 
@@ -1053,7 +1057,7 @@ async function renderHome() {
       </div>
     </div>
 
-    <div class="cal-summary-row" style="margin-bottom:8px;">
+    <div class="cal-summary-row">
       <div class="cal-summary-col">
         <div class="cal-summary-label">수입</div>
         <div class="cal-summary-value income tabular">${fmtMoney(income)}</div>
@@ -1068,18 +1072,18 @@ async function renderHome() {
       </div>
     </div>
 
-    <div class="cal-summary-row">
+    <div class="cal-summary-row" style="border-top:1px solid rgba(255,255,255,0.12);padding-top:8px;margin-top:8px;">
       <div class="cal-summary-col">
         <div class="cal-summary-label">예금</div>
-        <div class="cal-summary-value tabular">${fmtMoney(depositExp)}</div>
+        <div class="cal-summary-value tabular">${fmtMoney(deposit)}</div>
       </div>
       <div class="cal-summary-col">
         <div class="cal-summary-label">순지출</div>
-        <div class="cal-summary-value tabular">${fmtMoney(netExpense)}</div>
+        <div class="cal-summary-value tabular">${fmtMoney(monthNetExpense)}</div>
       </div>
       <div class="cal-summary-col">
         <div class="cal-summary-label">순수입계</div>
-        <div class="cal-summary-value tabular" style="color:${net>=0?'#86efac':'#fca5a5'};">${net>=0?'':'-'}${fmtMoney(Math.abs(net))}</div>
+        <div class="cal-summary-value tabular" style="color:${netTotal>=0?'#86efac':'#fca5a5'};">${netTotal>=0?'':'-'}${fmtMoney(Math.abs(netTotal))}</div>
       </div>
     </div>
 
