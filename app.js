@@ -1,4 +1,4 @@
-// v2.97 | 2026-06-29 KST | 수정: 홈 수입지출 요약 박스 하나로 병합(내부 구분선만 표시), 순수입계 색상 +파란/-빨강으로 변경 | cache:v201
+// v2.98 | 2026-06-29 KST | 수정: 설정-알림 수신 이메일 저장 시/기존 값 있을 때 버튼 텍스트 '저장'→'수정'으로 전환 | cache:v202
 'use strict';
 
 
@@ -4096,14 +4096,19 @@ function renderSettings() {
   (async () => {
     const rec = await DB.get('settings', 'maturityEmail');
     const inp = page.querySelector('#maturityEmailInput');
-    if (rec && rec.email && inp) inp.value = rec.email;
+    const btn = page.querySelector('#maturityEmailSave');
+    if (rec && rec.email && inp) {
+      inp.value = rec.email;
+      if (btn) btn.textContent = '수정';
+    }
   })();
-  page.querySelector('#maturityEmailSave').addEventListener('click', async () => {
+  page.querySelector('#maturityEmailSave').addEventListener('click', async (e) => {
     const inp = page.querySelector('#maturityEmailInput');
     const email = inp.value.trim();
     if (!email || !email.includes('@')) { showToast('올바른 이메일을 입력해주세요'); return; }
     await DB.put('settings', { key: 'maturityEmail', email });
     showToast('✅ 이메일이 저장됐어요');
+    e.target.textContent = '수정';
   });
   page.querySelector('#rowMaturityCheck').addEventListener('click', async () => {
     showToast('만기 체크 중...');
