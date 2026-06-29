@@ -3872,30 +3872,7 @@ function renderSettings() {
       </div>
     </div>
 
-    <div class="settings-group">
-      <div class="settings-group-title">자동 백업</div>
-      <div class="settings-row" style="justify-content:space-between;">
-        <div>
-          <div class="settings-label">매주 일요일 자동 백업</div>
-          <div class="settings-sub">앱 실행 시 일요일이면 자동으로 백업해요</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="autoBackupToggle">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="settings-row" id="rowAutoBackupFolder" style="display:none;">
-        <div>
-          <div class="settings-label">백업 폴더 지정</div>
-          <div class="settings-sub" id="autoBackupFolderSub">지정 안 됨 (자동 다운로드)</div>
-        </div>
-        ${ICONS.chevR}
-      </div>
-      <div class="settings-row" id="rowAutoBackupNow" style="display:none;">
-        <div><div class="settings-label">지금 바로 백업</div></div>
-        ${ICONS.download}
-      </div>
-    </div>
+
 
     <div class="settings-group">
       <div class="settings-group-title">데이터</div>
@@ -3956,32 +3933,6 @@ function renderSettings() {
     const el = page.querySelector('#appTitlePreview');
     if (el) el.textContent = t;
   });
-
-  // 자동 백업 토글 초기 상태 (에러가 나도 이벤트 등록에 영향 없도록 독립 실행)
-  (async () => {
-    try {
-      const enabled = await getAutoBackupEnabled();
-      const toggle = page.querySelector('#autoBackupToggle');
-      if (!toggle) return;
-      toggle.checked = enabled;
-      const folderRow = page.querySelector('#rowAutoBackupFolder');
-      const nowRow = page.querySelector('#rowAutoBackupNow');
-      if (enabled) { folderRow.style.display = ''; nowRow.style.display = ''; }
-      try {
-        const dirHandle = await getAutoBackupDirHandle();
-        if (dirHandle) page.querySelector('#autoBackupFolderSub').textContent = `📁 ${dirHandle.name}`;
-      } catch (_) {}
-      toggle.addEventListener('change', async () => {
-        await setAutoBackupEnabled(toggle.checked);
-        folderRow.style.display = toggle.checked ? '' : 'none';
-        nowRow.style.display = toggle.checked ? '' : 'none';
-        showToast(toggle.checked ? '자동 백업 켰어요' : '자동 백업 껐어요');
-      });
-    } catch (_) {}
-  })();
-
-  page.querySelector('#rowAutoBackupFolder').addEventListener('click', pickAutoBackupFolder);
-  page.querySelector('#rowAutoBackupNow').addEventListener('click', () => runAutoBackup(true));
 
   page.querySelector('#rowAppTitle').addEventListener('click', async () => {
     const current = await getAppTitle();
@@ -4438,13 +4389,13 @@ async function checkMaturityAndNotify(force = false) {
     if (lastRec && lastRec.date === today) return 0;
   }
 
-  // 만기 7일 후 날짜 계산
-  const d7 = new Date(); d7.setDate(d7.getDate() + 7);
-  const date7 = `${d7.getFullYear()}-${String(d7.getMonth()+1).padStart(2,'0')}-${String(d7.getDate()).padStart(2,'0')}`;
+  // 만기 30일 이내 날짜 계산
+  const d30 = new Date(); d30.setDate(d30.getDate() + 30);
+  const date30 = `${d30.getFullYear()}-${String(d30.getMonth()+1).padStart(2,'0')}-${String(d30.getDate()).padStart(2,'0')}`;
 
-  // 정기예금 계좌 중 만기일이 오늘 또는 7일 이내인 것 찾기
+  // 정기예금 계좌 중 만기일이 오늘 ~ 30일 이내인 것 찾기
   const deposits = (State.linkedAccounts || []).filter(a => a.isDeposit && a.maturityDate);
-  const targets = deposits.filter(a => a.maturityDate === today || a.maturityDate === date7);
+  const targets = deposits.filter(a => a.maturityDate >= today && a.maturityDate <= date30);
 
   if (targets.length === 0) {
     await DB.put('settings', { key: 'maturityLastCheck', date: today });
@@ -4454,7 +4405,8 @@ async function checkMaturityAndNotify(force = false) {
   // 메일 본문 생성
   const appName = State.appName || '교회 회계부';
   const rows = targets.map(a => {
-    const tag = a.maturityDate === today ? '🔴 오늘 만기' : '🟡 7일 후 만기';
+    const daysLeft = Math.round((new Date(a.maturityDate) - new Date(today)) / (1000*60*60*24));
+    const tag = daysLeft === 0 ? '🔴 오늘 만기' : daysLeft <= 7 ? `🟡 ${daysLeft}일 후 만기` : `🟢 ${daysLeft}일 후 만기`;
     const amt = (a.carryover || 0).toLocaleString('ko-KR');
     return `• ${tag} | ${a.name} | ${a.maturityDate} | ${amt}원`;
   }).join('\n');
@@ -7754,8 +7706,6 @@ async function initApp() {
   await restoreAdminState(); // 로그인 상태 복원
   renderShell();
   switchTab('home');
-  // 앱 시작 시 자동 백업 체크 (일요일이면 실행)
-  setTimeout(checkAndRunAutoBackup, 2000);
   setTimeout(() => checkMaturityAndNotify(false), 3000);
   // Firebase에서 최신 데이터 자동 동기화 (앱 시작 시)
   setTimeout(async () => {

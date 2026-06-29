@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v225 (날짜 KST 기준 통일)
+// 2026-06-29 KST | CACHE_NAME v226 (자동백업 제거, 만기체크 30일)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v225';
+const CACHE_NAME = 'gaegyebu-v226';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
