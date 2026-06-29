@@ -1053,19 +1053,33 @@ async function renderHome() {
       </div>
     </div>
 
-    <div class="cal-summary-row">
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">수입</div>
-        <div class="cal-summary-value income tabular">${fmtMoney(income)}</div>
-      </div>
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">지출</div>
-        <div class="cal-summary-value expense tabular">${fmtMoney(expense)}</div>
-      </div>
-      <div class="cal-summary-col">
-        <div class="cal-summary-label">합계</div>
-        <div class="cal-summary-value tabular">${fmtMoney(balance)}</div>
-      </div>
+    <div style="margin:8px 0;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;background:rgba(255,255,255,0.08);">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.12);">
+            <th style="padding:6px 8px;text-align:center;color:rgba(255,255,255,0.85);font-weight:700;border-right:1px solid rgba(255,255,255,0.12);">수입</th>
+            <th style="padding:6px 8px;text-align:center;color:rgba(255,255,255,0.85);font-weight:700;border-right:1px solid rgba(255,255,255,0.12);">지출</th>
+            <th style="padding:6px 8px;text-align:center;color:rgba(255,255,255,0.85);font-weight:700;">합계</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-top:1px solid rgba(255,255,255,0.12);">
+            <td style="padding:5px 8px;text-align:right;color:#7dd3fc;font-weight:700;font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(income)}</td>
+            <td style="padding:5px 8px;text-align:right;color:#fca5a5;font-weight:700;font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(expense)}</td>
+            <td style="padding:5px 8px;text-align:right;color:${balance>=0?'#86efac':'#fca5a5'};font-weight:700;font-family:monospace;">${balance>=0?'':'-'}${fmtMoney(Math.abs(balance))}</td>
+          </tr>
+          <tr style="border-top:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);">
+            <td style="padding:5px 8px;text-align:center;color:rgba(255,255,255,0.7);font-size:11px;border-right:1px solid rgba(255,255,255,0.12);">예금</td>
+            <td style="padding:5px 8px;text-align:center;color:rgba(255,255,255,0.7);font-size:11px;border-right:1px solid rgba(255,255,255,0.12);">순지출</td>
+            <td style="padding:5px 8px;text-align:center;color:rgba(255,255,255,0.7);font-size:11px;">순수입계</td>
+          </tr>
+          <tr style="border-top:1px solid rgba(255,255,255,0.12);">
+            <td style="padding:5px 8px;text-align:right;color:rgba(255,255,255,0.85);font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(depositExp)}</td>
+            <td style="padding:5px 8px;text-align:right;color:rgba(255,255,255,0.85);font-family:monospace;border-right:1px solid rgba(255,255,255,0.12);">${fmtMoney(netExpense)}</td>
+            <td style="padding:5px 8px;text-align:right;color:${net>=0?'#86efac':'#fca5a5'};font-weight:700;font-family:monospace;">${net>=0?'':'-'}${fmtMoney(Math.abs(net))}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     ${viewTabsHTML}
