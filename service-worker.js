@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v1000 (날짜 선택 팝업 개선)
+// 2026-06-29 KST | CACHE_NAME v1001 (초기 로딩 속도 개선)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v1000';
+const CACHE_NAME = 'gaegyebu-v1001';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

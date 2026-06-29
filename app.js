@@ -329,7 +329,7 @@ function setIsAdmin(v) {
 async function restoreAdminState() {
   // localStorage 먼저 확인
   if (localStorage.getItem('churchAdmin') === '1') return;
-  // IndexedDB에서 복원
+  // IndexedDB에서 복원 (Firebase 호출 없음 - 빠름)
   try {
     const rec = await DB.get('settings', 'adminLoggedIn');
     if (rec && rec.value === '1') localStorage.setItem('churchAdmin', '1');
@@ -7726,14 +7726,12 @@ async function initApp() {
   await migratePersonsToSubGroups();
   await migrateSubGroupsFromSubItems();
   await reloadData();
-  await restoreAdminState(); // 로그인 상태 복원
   renderShell();
   switchTab('home');
-  setTimeout(() => checkMaturityAndNotify(false), 3000);
-  // Firebase에서 최신 데이터 자동 동기화 (앱 시작 시)
-  setTimeout(async () => {
-    await syncFromFirebase();
-  }, 1500);
+  // Firebase 관련은 렌더링 후 백그라운드 실행 (초기 로딩 속도 영향 없도록)
+  setTimeout(async () => { await restoreAdminState(); applyLockState(); renderTabbar(); }, 500);
+  setTimeout(() => checkMaturityAndNotify(false), 5000);
+  setTimeout(async () => { await syncFromFirebase(); }, 3000);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
