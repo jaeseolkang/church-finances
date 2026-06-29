@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v227 (todayStr 무한재귀 버그 수정)
+// 2026-06-29 KST | CACHE_NAME v999 (강제 캐시 초기화)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v227';
+const CACHE_NAME = 'gaegyebu-v999';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
