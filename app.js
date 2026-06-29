@@ -3909,15 +3909,20 @@ function renderSettings() {
 
     <div class="settings-group">
       <div class="settings-group-title">정기예금 만기 알림</div>
-      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-        <div class="settings-label">알림 수신 이메일</div>
-        <div class="settings-sub">앱 실행 시 만기 7일 전 · 당일에 메일을 보내요</div>
-        <div style="display:flex;gap:8px;width:100%;margin-top:4px;">
-          <input type="email" id="maturityEmailInput" class="textinput"
-            placeholder="example@gmail.com"
-            style="flex:1;font-size:13px;padding:8px 12px;">
-          <button id="maturityEmailSave" class="btn-primary"
-            style="width:auto;padding:0 16px;margin-top:0;font-size:13px;">저장</button>
+      <div class="settings-row" style="justify-content:space-between;align-items:center;" id="emailDisplayRow">
+        <div>
+          <div class="settings-label">알림 수신 이메일</div>
+          <div class="settings-sub" id="emailDisplaySub">설정된 이메일 없음</div>
+        </div>
+        <button id="btnEmailChange" style="padding:6px 14px;border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:700;border:1px solid var(--border);white-space:nowrap;">설정</button>
+      </div>
+      <div id="emailChangeForm" style="display:none;flex-direction:column;gap:8px;padding:12px 16px;background:var(--surface-1);border-radius:12px;margin:0 0 8px;">
+        <div style="font-size:13px;color:var(--text-2);">앱 실행 시 만기 30일 이내 계좌를 이 주소로 알려드려요</div>
+        <input type="email" id="maturityEmailInput" class="textinput" placeholder="example@gmail.com" style="font-size:14px;padding:10px 12px;">
+        <div id="emailError" style="color:var(--expense);font-size:12px;min-height:14px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button id="btnEmailCancel" style="flex:1;padding:10px;border-radius:10px;background:var(--surface-2);border:none;font-size:13px;font-weight:600;">취소</button>
+          <button id="maturityEmailSave" class="btn-primary" style="flex:1;padding:10px;margin-top:0;font-size:13px;">저장</button>
         </div>
       </div>
       <div class="settings-row" id="rowMaturityCheck" style="cursor:pointer;">
@@ -4177,21 +4182,53 @@ function renderSettings() {
   // 만기 알림 이메일
   (async () => {
     const rec = await DB.get('settings', 'maturityEmail');
-    const inp = page.querySelector('#maturityEmailInput');
-    const btn = page.querySelector('#maturityEmailSave');
-    if (rec && rec.email && inp) {
-      inp.value = rec.email;
-      if (btn) btn.textContent = '수정';
+    const sub = page.querySelector('#emailDisplaySub');
+    const btn = page.querySelector('#btnEmailChange');
+    if (rec && rec.email) {
+      if (sub) sub.textContent = rec.email;
+      if (btn) btn.textContent = '변경';
+      // 이미 설정됨 → 입력창 닫힌 상태 유지
+    } else {
+      if (sub) sub.textContent = '설정된 이메일 없음';
+      if (btn) btn.textContent = '설정';
     }
   })();
-  page.querySelector('#maturityEmailSave').addEventListener('click', async (e) => {
-    const inp = page.querySelector('#maturityEmailInput');
-    const email = inp.value.trim();
-    if (!email || !email.includes('@')) { showToast('올바른 이메일을 입력해주세요'); return; }
-    await DB.put('settings', { key: 'maturityEmail', email });
-    showToast('✅ 이메일이 저장됐어요');
-    e.target.textContent = '수정';
-  });
+
+  // 이메일 설정/변경 버튼 토글
+  const btnEmailChange = page.querySelector('#btnEmailChange');
+  if (btnEmailChange) {
+    const form = page.querySelector('#emailChangeForm');
+    const closeEmailForm = () => {
+      form.style.display = 'none';
+      btnEmailChange.textContent = page.querySelector('#emailDisplaySub').textContent !== '설정된 이메일 없음' ? '변경' : '설정';
+    };
+    btnEmailChange.addEventListener('click', () => {
+      const open = form.style.display !== 'flex';
+      form.style.display = open ? 'flex' : 'none';
+      if (open) {
+        // 기존 이메일 채우기
+        DB.get('settings', 'maturityEmail').then(rec => {
+          if (rec && rec.email) page.querySelector('#maturityEmailInput').value = rec.email;
+        });
+        page.querySelector('#maturityEmailInput').focus();
+        btnEmailChange.textContent = '닫기';
+      } else {
+        closeEmailForm();
+      }
+    });
+    page.querySelector('#btnEmailCancel').addEventListener('click', closeEmailForm);
+    page.querySelector('#maturityEmailSave').addEventListener('click', async () => {
+      const inp = page.querySelector('#maturityEmailInput');
+      const err = page.querySelector('#emailError');
+      const email = inp.value.trim();
+      if (!email || !email.includes('@')) { err.textContent = '올바른 이메일 주소를 입력해주세요'; return; }
+      await DB.put('settings', { key: 'maturityEmail', email });
+      page.querySelector('#emailDisplaySub').textContent = email;
+      closeEmailForm();
+      showToast('✅ 이메일이 저장됐어요');
+    });
+  }
+
   page.querySelector('#rowMaturityCheck').addEventListener('click', async () => {
     showToast('만기 체크 중...');
     const count = await checkMaturityAndNotify(true);
