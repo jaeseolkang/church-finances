@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v1020 (25년도 자료 가져오기)
+// 2026-06-29 KST | CACHE_NAME v1021 (문법 오류 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v1020';
+const CACHE_NAME = 'gaegyebu-v1021';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json', './tx_2025.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

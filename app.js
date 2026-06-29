@@ -5556,7 +5556,7 @@ async function import2025Data() {
     await reloadData();
     renderCurrentPage();
     if (USE_FIREBASE) syncToFirebase().catch(()=>{});
-    showToast(\`✅ 2025년도 \${added}건 추가 완료!\${skipped ? ' ('+skipped+'건 스킵)' : ''}\`);
+    showToast('✅ 2025년도 ' + added + '건 추가 완료!' + (skipped ? ' (' + skipped + '건 스킵)' : ''));
   } catch(e) {
     console.error(e);
     showToast('오류: ' + e.message);
