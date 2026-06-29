@@ -2674,7 +2674,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
 
   const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
   const shortName = name => name.replace(/계정$/, '');
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayStr();
 
   // 테이블 행 생성 함수
   const makeRows = (acctList, isDeposit) => {
@@ -3400,7 +3400,7 @@ async function renderAccounts() {
           // 만기 경과 여부
           let matColor = 'var(--text-3)';
           if (md) {
-            const today = new Date().toISOString().slice(0,10);
+            const today = todayStr();
             matColor = md < today ? 'var(--expense)' : 'var(--primary)';
           }
           maturityTd = `<td class="acct-tbl-num" style="color:${matColor};font-size:12px;">${matLabel}</td>`;
@@ -4419,7 +4419,7 @@ function isSunday() {
 }
 // 오늘 날짜 문자열 YYYY-MM-DD
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return todayStr();
 }
 
 /* =========================================================
@@ -4430,7 +4430,7 @@ async function checkMaturityAndNotify(force = false) {
   if (!emailRec || !emailRec.email) return 0;
   const email = emailRec.email;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
 
   // 오늘 이미 체크했으면 스킵 (force=true면 무조건 실행)
   if (!force) {
@@ -4440,7 +4440,7 @@ async function checkMaturityAndNotify(force = false) {
 
   // 만기 7일 후 날짜 계산
   const d7 = new Date(); d7.setDate(d7.getDate() + 7);
-  const date7 = d7.toISOString().slice(0, 10);
+  const date7 = `${d7.getFullYear()}-${String(d7.getMonth()+1).padStart(2,'0')}-${String(d7.getDate()).padStart(2,'0')}`;
 
   // 정기예금 계좌 중 만기일이 오늘 또는 7일 이내인 것 찾기
   const deposits = (State.linkedAccounts || []).filter(a => a.isDeposit && a.maturityDate);
