@@ -6089,22 +6089,49 @@ function renderDayDetail(dateStr) {
 
   sheet.querySelector('#ddClose').addEventListener('click', closeAllSheets);
 
-  // 날짜 버튼 탭 → 바로 달력 팝업, 선택 즉시 이동
+  // 날짜 버튼 탭 → 인라인 미니 달력
   sheet.querySelector('#ddDateLabel').addEventListener('click', () => {
-    const inp = document.createElement('input');
-    inp.type = 'date';
-    inp.value = dateStr;
-    inp.style.cssText = 'position:fixed;opacity:0;pointer-events:none;top:50%;left:50%;';
-    document.body.appendChild(inp);
-    inp.addEventListener('change', () => {
-      const v = inp.value;
-      inp.remove();
-      if (v) openDayDetail(v);
-    });
-    inp.addEventListener('blur', () => setTimeout(() => inp.remove(), 300));
-    inp.focus();
-    inp.click();
-    try { inp.showPicker(); } catch(e) {}
+    const existing = document.getElementById('ddCalPop');
+    if (existing) { existing.remove(); return; }
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const pop = document.createElement('div');
+    pop.id = 'ddCalPop';
+    pop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+
+    const renderCal = (cy, cm) => {
+      const first = new Date(cy, cm - 1, 1).getDay();
+      const days = new Date(cy, cm, 0).getDate();
+      let cells = '';
+      for (let i = 0; i < first; i++) cells += `<div></div>`;
+      for (let i = 1; i <= days; i++) {
+        const ds = `${cy}-${String(cm).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+        const isToday = ds === todayStr();
+        const isSel = ds === dateStr;
+        cells += `<button data-date="${ds}" style="padding:6px 0;border:none;border-radius:50%;width:34px;height:34px;font-size:14px;font-weight:${isSel?'800':'400'};background:${isSel?'var(--primary)':isToday?'var(--surface-2)':'none'};color:${isSel?'#fff':'var(--text-1)'};cursor:pointer;">${i}</button>`;
+      }
+      pop.innerHTML = `
+        <div style="background:var(--card);border-radius:20px;padding:16px;width:320px;max-width:90vw;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <button id="calPrev" style="font-size:20px;background:none;border:none;padding:4px 10px;color:var(--text-1);">‹</button>
+            <span style="font-weight:700;font-size:15px;">${cy}년 ${cm}월</span>
+            <button id="calNext" style="font-size:20px;background:none;border:none;padding:4px 10px;color:var(--text-1);">›</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;margin-bottom:6px;">
+            ${['일','월','화','수','목','금','토'].map(x=>`<div style="font-size:11px;color:var(--text-2);padding:4px 0;">${x}</div>`).join('')}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;">
+            ${cells}
+          </div>
+        </div>`;
+      pop.querySelector('#calPrev').addEventListener('click', () => { cm--; if(cm<1){cm=12;cy--;} renderCal(cy,cm); });
+      pop.querySelector('#calNext').addEventListener('click', () => { cm++; if(cm>12){cm=1;cy++;} renderCal(cy,cm); });
+      pop.querySelectorAll('[data-date]').forEach(btn => {
+        btn.addEventListener('click', () => { pop.remove(); openDayDetail(btn.dataset.date); });
+      });
+      pop.onclick = e => { if (e.target === pop) pop.remove(); };
+    };
+    renderCal(y, m);
+    document.body.appendChild(pop);
   });
 
   // 계정선택 토글 — 변경 시 목록 즉시 갱신
