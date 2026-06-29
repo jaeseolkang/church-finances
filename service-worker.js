@@ -1,6 +1,6 @@
-// 2026-06-29 KST | CACHE_NAME v1008 (버전 표시 업데이트)
+// 2026-06-29 KST | CACHE_NAME v1009 (항목관리 체크박스 추가)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v1008';
+const CACHE_NAME = 'gaegyebu-v1009';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
