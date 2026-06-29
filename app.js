@@ -6812,8 +6812,8 @@ function renderCatTree(sheet) {
   function subRowHTML(s, catId) {
     return `<div class="cattree-leaf" style="${s.hidden?'opacity:0.45;':''}display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:5px 0 5px 40px;border-bottom:1px solid var(--border);">
       <span style="flex:1;font-size:13px;">${s.hidden?'🚫 ':''}${escapeHTML(s.name)}</span>
-      <label style="display:flex;align-items:center;gap:2px;font-size:11px;color:var(--text-2);cursor:pointer;white-space:nowrap;">
-        <input type="checkbox" data-primary-id="${s.id}" ${s.isPrimary!==false?'checked':''} style="width:14px;height:14px;">기본
+      <label style="display:flex;align-items:center;gap:3px;font-size:12px;color:var(--primary);cursor:pointer;white-space:nowrap;font-weight:600;">
+        <input type="checkbox" data-primary-id="${s.id}" ${s.isPrimary!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--primary);">기본
       </label>
       <div style="display:flex;align-items:center;gap:3px;">
         <input type="text" inputmode="numeric" data-budget-id="${s.id}" data-cat-id="${catId}" value="${s.budget?fmtMoney(s.budget):''}" placeholder="연간예산" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
