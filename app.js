@@ -1,4 +1,4 @@
-// v2.98 | 2026-06-29 KST | 수정: 설정-알림 수신 이메일 저장 시/기존 값 있을 때 버튼 텍스트 '저장'→'수정'으로 전환 | cache:v202
+// v2.99 | 2026-06-29 KST | 수정: 데이터백업(JSON)에 전체백업 모드 추가(기본 선택), 범위설정을 연-월-일 단위 date input으로 세분화 | cache:v203
 'use strict';
 
 
@@ -5041,11 +5041,11 @@ function generateChurchLedgerWorkbook(months, carryoverByYear) {
   return wb;
 }
 
-let backupMode = 'single'; // 'single' | 'range'
+let backupMode = 'all'; // 'all' | 'single' | 'range'
 
 function openBackupRangeSheet() {
   if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
-  backupMode = 'single';
+  backupMode = 'all';
   renderBackupRangeSheet();
   openSheet('backupRangeSheet');
 }
@@ -5053,6 +5053,7 @@ function openBackupRangeSheet() {
 function renderBackupRangeSheet() {
   const sheet = document.getElementById('backupRangeSheet');
   const months = availableMonthsFromTx();
+  const dateRange = availableDateRangeFromTx();
   const optionHTML = months.map(ym => {
     const [y, m] = ym.split('-');
     return `<option value="${ym}">${y}년 ${Number(m)}월</option>`;
@@ -5066,11 +5067,14 @@ function renderBackupRangeSheet() {
     </div>
     <div class="sheet-body">
       <div class="segctrl">
+        <button data-mode="all"    class="${backupMode==='all'   ?'active':''}">전체 백업</button>
         <button data-mode="single" class="${backupMode==='single'?'active':''}">개별 달</button>
         <button data-mode="range"  class="${backupMode==='range' ?'active':''}">범위 설정</button>
       </div>
 
-      ${backupMode === 'single' ? `
+      ${backupMode === 'all' ? `
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">전체 기간의 모든 거래 데이터와 카테고리/이름 정보가 저장됩니다.</div>
+      ` : backupMode === 'single' ? `
       <div class="formrow">
         <label>백업할 달</label>
         <select class="dateinput" id="bkSingle">${optionHTML}</select>
@@ -5078,14 +5082,16 @@ function renderBackupRangeSheet() {
       <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 달의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
       ` : `
       <div class="formrow">
-        <label>시작 월</label>
-        <select class="dateinput" id="bkStart">${optionHTML}</select>
+        <label>시작일</label>
+        <input type="date" class="dateinput" id="bkStart"
+          ${dateRange ? `min="${dateRange.min}" max="${dateRange.max}"` : ''}>
       </div>
       <div class="formrow">
-        <label>종료 월</label>
-        <select class="dateinput" id="bkEnd">${optionHTML}</select>
+        <label>종료일</label>
+        <input type="date" class="dateinput" id="bkEnd"
+          ${dateRange ? `min="${dateRange.min}" max="${dateRange.max}"` : ''}>
       </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 기간의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 기간(연-월-일)의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
       `}
 
       <button class="btn-primary" id="bkGo">JSON 백업 파일 만들기</button>
@@ -5095,9 +5101,9 @@ function renderBackupRangeSheet() {
   // 초기값 설정
   if (backupMode === 'single') {
     sheet.querySelector('#bkSingle').value = months[months.length - 1];
-  } else {
-    sheet.querySelector('#bkStart').value = months[0];
-    sheet.querySelector('#bkEnd').value   = months[months.length - 1];
+  } else if (backupMode === 'range' && dateRange) {
+    sheet.querySelector('#bkStart').value = dateRange.min;
+    sheet.querySelector('#bkEnd').value   = dateRange.max;
   }
 
   // 탭 전환
@@ -5110,15 +5116,24 @@ function renderBackupRangeSheet() {
 
   sheet.querySelector('#bkClose').addEventListener('click', closeAllSheets);
   sheet.querySelector('#bkGo').addEventListener('click', () => {
-    let sYm, eYm;
-    if (backupMode === 'single') {
-      sYm = eYm = sheet.querySelector('#bkSingle').value;
-    } else {
-      sYm = sheet.querySelector('#bkStart').value;
-      eYm = sheet.querySelector('#bkEnd').value;
-      if (sYm > eYm) { showToast('시작 월이 종료 월보다 늦어요'); return; }
+    if (backupMode === 'all') {
+      exportData(null, null);
+      closeAllSheets();
+      return;
     }
-    exportData(sYm, eYm);
+    let sDate, eDate;
+    if (backupMode === 'single') {
+      const ym = sheet.querySelector('#bkSingle').value;
+      sDate = `${ym}-01`;
+      const [y, m] = ym.split('-').map(Number);
+      eDate = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`;
+    } else {
+      sDate = sheet.querySelector('#bkStart').value;
+      eDate = sheet.querySelector('#bkEnd').value;
+      if (!sDate || !eDate) { showToast('시작일과 종료일을 선택해주세요'); return; }
+      if (sDate > eDate) { showToast('시작일이 종료일보다 늦어요'); return; }
+    }
+    exportData(sDate, eDate);
     closeAllSheets();
   });
 }
@@ -5181,22 +5196,24 @@ async function sendBackupByEmail() {
   showToast('📥 JSON 다운로드 완료 — 메일에 첨부해 발송해주세요');
 }
 
-async function exportData(startYm, endYm) {
+async function exportData(startDate, endDate) {
   // 범위 내 거래만 필터 (인수 없으면 전체)
-  const txs = (startYm && endYm)
-    ? State.transactions.filter(t => t.date.slice(0, 7) >= startYm && t.date.slice(0, 7) <= endYm)
+  const txs = (startDate && endDate)
+    ? State.transactions.filter(t => t.date >= startDate && t.date <= endDate)
     : State.transactions;
 
-  const [sy, sm] = startYm ? startYm.split('-') : ['', ''];
-  const [ey, em] = endYm   ? endYm.split('-')   : ['', ''];
-  const rangeLabel = (startYm && endYm && startYm !== endYm)
-    ? `${sy}년${Number(sm)}월-${ey}년${Number(em)}월`
-    : startYm ? `${sy}년${Number(sm)}월` : todayStr();
+  let rangeLabel;
+  if (startDate && endDate) {
+    const fmt = (d) => { const [y, m, dd] = d.split('-'); return `${y}년${Number(m)}월${Number(dd)}일`; };
+    rangeLabel = (startDate === endDate) ? fmt(startDate) : `${fmt(startDate)}-${fmt(endDate)}`;
+  } else {
+    rangeLabel = `전체_${todayStr()}`;
+  }
 
   const data = {
     exportedAt: new Date().toISOString(),
-    rangeStart: startYm || null,
-    rangeEnd:   endYm   || null,
+    rangeStart: startDate || null,
+    rangeEnd:   endDate   || null,
     categories: State.categories,
     persons:    State.persons,
     subItems:   State.subItems,
