@@ -3272,7 +3272,7 @@ function openLedgerSheet() {
 }
 
 function exportItemStructureToExcel() {
-  const cats = [...State.categories].sort((a,b)=>(a.order||0)-(b.order||0));
+  const cats = [...State.categories].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   const aoa = [['구분','대분류','중분류','소분류']];
 
   function buildRows(typeKey, typeLabel) {
@@ -3280,7 +3280,7 @@ function exportItemStructureToExcel() {
     for (const cat of typeCats) {
       const allSubs = (State.subItems||[])
         .filter(s => s.categoryId === cat.id)
-        .sort((a,b) => (a.order||0)-(b.order||0));
+        .sort((a,b) => a.name.localeCompare(b.name,'ko'));
       const sgMap = new Map();
       const direct = [];
       for (const s of allSubs) {
@@ -3293,12 +3293,15 @@ function exportItemStructureToExcel() {
           direct.push(s);
         }
       }
-      if (sgMap.size === 0 && direct.length === 0) continue;
-      for (const [,grp] of sgMap) {
+      // 중분류 이름순 정렬
+      const sortedGroups = [...sgMap.entries()].sort((a,b) => a[1].name.localeCompare(b[1].name,'ko'));
+      for (const [,grp] of sortedGroups) {
+        grp.items.sort((a,b) => a.name.localeCompare(b.name,'ko'));
         for (const item of grp.items) {
           aoa.push([typeLabel, `${cat.icon} ${cat.name}`, grp.name, item.name]);
         }
       }
+      direct.sort((a,b) => a.name.localeCompare(b.name,'ko'));
       for (const item of direct) {
         aoa.push([typeLabel, `${cat.icon} ${cat.name}`, '(그룹없음)', item.name]);
       }
@@ -3322,7 +3325,7 @@ function exportItemStructureToExcel() {
 
 function openItemStructureSheet() {
   const sheet = document.getElementById('itemStructureSheet');
-  const cats = [...State.categories].sort((a,b)=>(a.order||0)-(b.order||0));
+  const cats = [...State.categories].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
 
   function buildSection(typeKey, typeLabel, titleBg, catBg, catFg, grpBg, itemBg) {
     let rows = '';
@@ -3330,7 +3333,7 @@ function openItemStructureSheet() {
     for (const cat of typeCats) {
       const allSubs = (State.subItems||[])
         .filter(s => s.categoryId === cat.id)
-        .sort((a,b) => (a.order||0)-(b.order||0));
+        .sort((a,b) => a.name.localeCompare(b.name,'ko'));
       // subGroup별 그룹핑
       const sgMap = new Map();
       const direct = [];
@@ -3347,8 +3350,11 @@ function openItemStructureSheet() {
       if (sgMap.size === 0 && direct.length === 0) continue;
 
       const totalRows = [...sgMap.values()].reduce((s,g)=>s+g.items.length,0) + direct.length;
+      // 중분류 이름순 정렬
+      const sortedSgMap = [...sgMap.entries()].sort((a,b) => a[1].name.localeCompare(b[1].name,'ko'));
       let first = true;
-      for (const [,grp] of sgMap) {
+      for (const [,grp] of sortedSgMap) {
+        grp.items.sort((a,b) => a.name.localeCompare(b.name,'ko'));
         let gFirst = true;
         for (const item of grp.items) {
           rows += `<tr>
@@ -3359,6 +3365,7 @@ function openItemStructureSheet() {
           first = false; gFirst = false;
         }
       }
+      direct.sort((a,b) => a.name.localeCompare(b.name,'ko'));
       for (const item of direct) {
         rows += `<tr>
           ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
