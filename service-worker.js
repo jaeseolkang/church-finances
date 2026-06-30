@@ -1,6 +1,6 @@
-// 2026-06-30 KST | CACHE_NAME v1026 (날짜 빠른 이동 팝업)
+// 2026-06-30 KST | CACHE_NAME v1027 (항목구조표 엑셀 출력)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v1026';
+const CACHE_NAME = 'gaegyebu-v1027';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

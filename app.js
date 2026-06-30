@@ -3271,6 +3271,55 @@ function openLedgerSheet() {
   openSheet('ledgerSheet');
 }
 
+function exportItemStructureToExcel() {
+  const cats = [...State.categories].sort((a,b)=>(a.order||0)-(b.order||0));
+  const aoa = [['구분','대분류','중분류','소분류']];
+
+  function buildRows(typeKey, typeLabel) {
+    const typeCats = cats.filter(c => c.type === typeKey);
+    for (const cat of typeCats) {
+      const allSubs = (State.subItems||[])
+        .filter(s => s.categoryId === cat.id)
+        .sort((a,b) => (a.order||0)-(b.order||0));
+      const sgMap = new Map();
+      const direct = [];
+      for (const s of allSubs) {
+        if (s.subGroupId) {
+          const sg = (State.subGroups||[]).find(g => g.id === s.subGroupId);
+          const sgName = sg ? sg.name : s.name;
+          if (!sgMap.has(s.subGroupId)) sgMap.set(s.subGroupId, {name:sgName, items:[]});
+          sgMap.get(s.subGroupId).items.push(s);
+        } else {
+          direct.push(s);
+        }
+      }
+      if (sgMap.size === 0 && direct.length === 0) continue;
+      for (const [,grp] of sgMap) {
+        for (const item of grp.items) {
+          aoa.push([typeLabel, `${cat.icon} ${cat.name}`, grp.name, item.name]);
+        }
+      }
+      for (const item of direct) {
+        aoa.push([typeLabel, `${cat.icon} ${cat.name}`, '(그룹없음)', item.name]);
+      }
+    }
+  }
+
+  buildRows('income', '수입');
+  buildRows('expense', '지출');
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:8},{wch:18},{wch:18},{wch:20}];
+  // 헤더 스타일
+  ['A1','B1','C1','D1'].forEach(addr => {
+    if (ws[addr]) ws[addr].s = { font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'1E3A5F'}}, alignment:{horizontal:'center'} };
+  });
+  XLSX.utils.book_append_sheet(wb, ws, '항목구조표');
+  const appTitle = document.title || '교회회계부';
+  XLSX.writeFile(wb, `항목구조표_${appTitle}.xlsx`);
+}
+
 function openItemStructureSheet() {
   const sheet = document.getElementById('itemStructureSheet');
   const cats = [...State.categories].sort((a,b)=>(a.order||0)-(b.order||0));
@@ -3345,7 +3394,10 @@ function openItemStructureSheet() {
     <div class="sheet-head">
       <button id="isClose" class="sheet-close-btn">${ICONS.close}닫기</button>
       <h3>항목구조표</h3>
-      <button id="isPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      <div style="display:flex;gap:6px;">
+        <button id="isExcel" style="font-size:13px;color:#1D7A4C;font-weight:700;padding:6px 10px;border-radius:8px;background:#E6F4EA;">📊 엑셀</button>
+        <button id="isPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      </div>
     </div>
     <div class="sheet-body" style="padding:12px 16px 80px;">
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
@@ -3357,6 +3409,7 @@ function openItemStructureSheet() {
   `;
 
   sheet.querySelector('#isClose').addEventListener('click', () => closeSheet('itemStructureSheet'));
+  sheet.querySelector('#isExcel').addEventListener('click', () => exportItemStructureToExcel());
   sheet.querySelector('#isPrint').addEventListener('click', () => {
     const appTitle = document.title || '교회 회계부';
     doPrint(`<div class="print-page"><div class="page-inner"><div class="print-title">📋 항목구조표</div><div class="print-period">${appTitle}</div><div style="margin-top:8pt;">${tableHTML}</div></div></div>`);
