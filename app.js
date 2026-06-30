@@ -2228,6 +2228,340 @@ function exportLedgerToExcel(ym) {
   XLSX.writeFile(wb, `월장부_${ym}.xlsx`);
 }
 
+/* =========================================================
+   STATS [리스트] 탭 — 기간(주간/월간/연간/기간설정)에 맞춰
+   월단위로 묶은 장부 리스트 (구 설정 > 월장부를 통계로 이동)
+   ========================================================= */
+// 선택된 기간(range.start~range.end) 내 거래를 월(YYYY-MM) 단위로 묶어
+// 각 월별 행(rows) + 결산(inc/exp/transfer/deposit)을 구성한다.
+function prepareLedgerSections(range) {
+  const { start, end } = range;
+
+  // 기간 시작 이전 누계 (전체 거래이력 기준, 기존 월장부와 동일한 누계 산식 유지)
+  let running = 0;
+  const allSorted = [...State.transactions].sort((a,b) => a.date.localeCompare(b.date) || (a.createdAt||0)-(b.createdAt||0));
+  for (const t of allSorted) {
+    if (t.date >= start) break;
+    running += t.type === 'income' ? t.amount : -t.amount;
+  }
+
+  // 기간 내 거래만, 날짜순
+  const txs = allSorted.filter(t => t.date >= start && t.date <= end);
+
+  // 월(YYYY-MM) 단위 그룹화 — 단위는 항상 월단위 고정
+  const monthMap = new Map();
+  for (const t of txs) {
+    const ym = t.date.slice(0,7);
+    if (!monthMap.has(ym)) monthMap.set(ym, []);
+    monthMap.get(ym).push(t);
+  }
+
+  const sections = [];
+  for (const ym of [...monthMap.keys()].sort()) {
+    const [yearStr, monthStr] = ym.split('-');
+    const year = parseInt(yearStr), month = parseInt(monthStr);
+    const monthTxs = monthMap.get(ym);
+
+    const rows = [];
+    for (const t of monthTxs) {
+      const cat = catById(t.categoryId) || {name:'?', type:t.type};
+      const sgId = t.subGroupId || t.personId;
+      const sg = sgId ? (State.subGroups||[]).find(g=>g.id===sgId)||(State.persons||[]).find(p=>p.id===sgId) : null;
+      const sgName = sg ? sg.name : '';
+      const lines = (t.lines && t.lines.length > 0) ? t.lines : [{subItemId:null, amount:t.amount}];
+      for (const l of lines) {
+        const si = l.subItemId ? subItemById(l.subItemId) : null;
+        const siName = si ? subItemDisplayName(cat.type, cat.name, si.name) : '';
+        const hasGroups = subGroupsOfCategory(cat.id).length > 0;
+        const major = hasGroups ? sgName : (si && si.subGroupId ? ((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'' : '');
+        running += t.type === 'income' ? l.amount : -l.amount;
+        rows.push({
+          date: t.date, cat: cat.name, major, minor: siName,
+          income: t.type === 'income' ? l.amount : null,
+          expense: t.type === 'expense' ? l.amount : null,
+          acc: running,
+        });
+      }
+    }
+
+    const inc = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const exp = monthTxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const tongCat = State.categories.find(c=>c.name==='통장이동');
+    const transfer = tongCat ? monthTxs.filter(t=>t.categoryId===tongCat.id&&t.type==='income').reduce((s,t)=>s+t.amount,0) : 0;
+    const depCat = State.categories.find(c=>c.name==='예금'&&c.type==='expense');
+    const deposit = depCat ? monthTxs.filter(t=>t.categoryId===depCat.id).reduce((s,t)=>s+t.amount,0) : 0;
+
+    sections.push({ ym, year, month, rows, inc, exp, transfer, deposit });
+  }
+  return sections;
+}
+
+// 화면용 HTML — 월별 장부 테이블을 기간 순서대로 이어붙임
+function buildLedgerSectionsHTML(range) {
+  const sections = prepareLedgerSections(range);
+  if (sections.length === 0) {
+    return `<div style="text-align:center;padding:50px 0;color:var(--text-3);font-size:13px;">해당 기간에 거래 내역이 없습니다.</div>`;
+  }
+
+  const TD = 'padding:5px 6px;border:1px solid var(--border);font-size:12px;';
+  const TH = 'padding:6px;border:1px solid var(--border);font-size:12px;font-weight:700;background:var(--primary-light);';
+  const SUM = 'padding:5px 6px;border:1px solid var(--border);font-size:12px;font-weight:700;background:var(--bg);';
+  const colgroup = `<colgroup>
+    <col style="width:13%"><col style="width:16%"><col style="width:16%">
+    <col style="width:19%"><col style="width:16%"><col style="width:16%"><col style="width:18%">
+  </colgroup>`;
+
+  return sections.map(sec => {
+    const dataRows = sec.rows.map(r => `<tr>
+      <td style="${TD}text-align:center;">${r.date.slice(5)}</td>
+      <td style="${TD}">${escapeHTML(r.cat)}</td>
+      <td style="${TD}">${escapeHTML(r.major)}</td>
+      <td style="${TD}">${escapeHTML(r.minor)}</td>
+      <td style="${TD}text-align:right;color:var(--income);">${r.income ? r.income.toLocaleString('ko-KR') : ''}</td>
+      <td style="${TD}text-align:right;color:var(--expense);">${r.expense ? '-'+r.expense.toLocaleString('ko-KR') : ''}</td>
+      <td style="${TD}text-align:right;">${r.acc.toLocaleString('ko-KR')}</td>
+    </tr>`).join('');
+
+    const summaryRows = [
+      [sec.month+'월 결산', '수입/지출', sec.inc, sec.exp],
+      [null, '통장이동(선교)', sec.transfer, null],
+      [null, '예금', null, sec.deposit],
+      [null, '순헌금/지출', sec.inc-sec.transfer, sec.exp-sec.deposit],
+    ].map(([c1,c2,iv,ev]) => `<tr>
+      <td colspan="2" style="${SUM}">${escapeHTML(c1||'')}</td>
+      <td colspan="2" style="${SUM}">${escapeHTML(c2)}</td>
+      <td style="${SUM}text-align:right;color:var(--income);">${iv ? iv.toLocaleString('ko-KR') : ''}</td>
+      <td style="${SUM}text-align:right;color:var(--expense);">${ev ? '-'+ev.toLocaleString('ko-KR') : ''}</td>
+      <td style="${SUM}"></td>
+    </tr>`).join('');
+
+    return `
+      <div style="margin-bottom:20px;">
+        <div style="font-weight:800;font-size:15px;color:var(--text-1);margin:0 0 8px 2px;">${sec.year}년 ${sec.month}월</div>
+        <div style="overflow-x:auto;border-radius:var(--radius-sm);box-shadow:var(--shadow);">
+          <table style="border-collapse:collapse;width:100%;min-width:520px;table-layout:fixed;background:var(--card);">
+            ${colgroup}
+            <thead><tr>
+              <th style="${TH}text-align:center;">일자</th>
+              <th style="${TH}">대분류</th>
+              <th style="${TH}">중분류</th>
+              <th style="${TH}">소분류</th>
+              <th style="${TH}text-align:right;">수입금액</th>
+              <th style="${TH}text-align:right;">지출금액</th>
+              <th style="${TH}text-align:right;">누계금액</th>
+            </tr></thead>
+            <tbody>${dataRows || `<tr><td colspan="7" style="${TD}text-align:center;color:var(--text-3);padding:14px;">내역 없음</td></tr>`}</tbody>
+            <tbody>${summaryRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// 엑셀용 — 월별 섹션 하나당 워크시트 한 장 (기존 월장부 엑셀 스타일 동일)
+function buildLedgerWorksheet(section) {
+  const { year, month, rows, inc, exp, transfer, deposit } = section;
+  const yy = String(year).slice(2);
+
+  const aoa = [];
+  aoa.push(['일자','대분류','중분류','소분류','수입금액','지출금액','누계금액']);
+  for (const r of rows) {
+    const dateFmt = `${yy}-${r.date.slice(5,7)}-${r.date.slice(8,10)}`;
+    aoa.push([dateFmt, r.cat, r.major, r.minor, r.income ?? '', r.expense ?? '', r.acc]);
+  }
+  const summaryStartRow = aoa.length;
+  aoa.push([`${month}월 결산`,'','수입/지출','',  inc,          exp,         '']);
+  aoa.push(['',               '','통장이동(선교)','',transfer,   '',          '']);
+  aoa.push(['',               '','예금',       '', '',           deposit,     '']);
+  aoa.push(['',               '','순헌금/지출', '', inc-transfer, exp-deposit, '']);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:8},{wch:11},{wch:11},{wch:14},{wch:11},{wch:11},{wch:13}];
+
+  const numFmt = '#,##0';
+  const gBdr = {style:'thin',color:{rgb:'CCCCCC'}};
+  const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
+  const HDR_FILL  = {patternType:'solid',fgColor:{rgb:'BDD7EE'}};
+  const SUM_FILLS = [
+    {patternType:'solid',fgColor:{rgb:'2E75B6'}},
+    {patternType:'solid',fgColor:{rgb:'E2EFDA'}},
+    {patternType:'solid',fgColor:{rgb:'FCE4D6'}},
+    {patternType:'solid',fgColor:{rgb:'FFF2CC'}},
+  ];
+  const whiteFont = {bold:true, color:{rgb:'FFFFFF'}};
+  const boldFont  = {bold:true};
+  const blueFont  = {color:{rgb:'1F497D'}};
+  const redFont   = {color:{rgb:'CC0000'}};
+  const normFont  = {};
+
+  if (!ws['!merges']) ws['!merges'] = [];
+
+  const hdrAligns = ['center','left','left','left','right','right','right'];
+  for (let c=0;c<7;c++) {
+    const addr = XLSX.utils.encode_cell({r:0,c});
+    if (!ws[addr]) ws[addr] = {t:'s',v:''};
+    ws[addr].s = {fill:HDR_FILL,font:boldFont,border:allGray,alignment:{horizontal:hdrAligns[c],vertical:'center'}};
+  }
+
+  for (let r=1;r<summaryStartRow;r++) {
+    for (let c=0;c<7;c++) {
+      const addr = XLSX.utils.encode_cell({r,c});
+      if (!ws[addr]) ws[addr] = {t:'s',v:''};
+      const v = ws[addr].v;
+      const isNum = typeof v === 'number';
+      let font = normFont, halign = 'left';
+      if (c===0) halign = 'center';
+      if (c===4) { font = blueFont; halign = 'right'; }
+      if (c===5) { font = redFont;  halign = 'right'; }
+      if (c===6) halign = 'right';
+      ws[addr].s = {font,border:allGray,alignment:{horizontal:halign,vertical:'center'},...(isNum&&c>=4?{numFmt}:{})};
+      if (isNum&&c>=4) ws[addr].z = numFmt;
+    }
+  }
+
+  const sumLabels = ['수입/지출','통장이동(선교)','예금','순헌금/지출'];
+  const sumMonths = [`${month}월 결산`,'','',''];
+  for (let si=0; si<4; si++) {
+    const r = summaryStartRow + si;
+    const fill = SUM_FILLS[si];
+    const isHdr = (si===0);
+    const fnt = isHdr ? whiteFont : boldFont;
+    ws['!merges'].push({s:{r,c:0},e:{r,c:1}});
+    const addrA = XLSX.utils.encode_cell({r,c:0});
+    if (!ws[addrA]) ws[addrA] = {t:'s',v:sumMonths[si]};
+    ws[addrA].s = {fill,font:fnt,border:allGray,alignment:{horizontal:'left',vertical:'center'}};
+    ws['!merges'].push({s:{r,c:2},e:{r,c:3}});
+    const addrC = XLSX.utils.encode_cell({r,c:2});
+    if (!ws[addrC]) ws[addrC] = {t:'s',v:sumLabels[si]};
+    ws[addrC].s = {fill,font:fnt,border:allGray,alignment:{horizontal:'left',vertical:'center'}};
+    const addrB = XLSX.utils.encode_cell({r,c:1});
+    if (!ws[addrB]) ws[addrB] = {t:'s',v:''};
+    ws[addrB].s = {fill,border:allGray};
+    const addrD = XLSX.utils.encode_cell({r,c:3});
+    if (!ws[addrD]) ws[addrD] = {t:'s',v:''};
+    ws[addrD].s = {fill,border:allGray};
+    for (const [ci,fntCol] of [[4,isHdr?'FFFFFF':'1F497D'],[5,isHdr?'FFFFFF':'CC0000'],[6,isHdr?'FFFFFF':'000000']]) {
+      const addr = XLSX.utils.encode_cell({r,c:ci});
+      if (!ws[addr]) ws[addr] = {t:'s',v:''};
+      const isNum = typeof ws[addr].v === 'number';
+      ws[addr].s = {fill,font:{bold:isHdr,color:{rgb:fntCol}},border:allGray,alignment:{horizontal:'right',vertical:'center'},...(isNum?{numFmt}:{})};
+      if (isNum) ws[addr].z = numFmt;
+    }
+  }
+
+  ws['!pageSetup'] = {paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
+
+  const sheetName = `${yy}.${month}월장부`;
+  return { ws, sheetName };
+}
+
+function exportLedgerRangeToExcel(range) {
+  const sections = prepareLedgerSections(range);
+  if (sections.length === 0) { showToast('해당 기간에 거래 내역이 없어요'); return; }
+
+  const wb = XLSX.utils.book_new();
+  if (!wb.Workbook) wb.Workbook = {};
+  if (!wb.Workbook.Names) wb.Workbook.Names = [];
+
+  sections.forEach(sec => {
+    const { ws, sheetName } = buildLedgerWorksheet(sec);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    wb.Workbook.Names.push({
+      Name: '_xlnm.Print_Titles',
+      Ref: `'${sheetName}'!$1:$1`,
+      Sheet: wb.SheetNames.length - 1,
+    });
+  });
+
+  const first = sections[0], last = sections[sections.length-1];
+  const fname = first.ym === last.ym ? `리스트_${first.ym}.xlsx` : `리스트_${first.ym}~${last.ym}.xlsx`;
+  XLSX.writeFile(wb, fname);
+}
+
+// 인쇄용 — 월별 섹션마다 페이지 분할(30행/페이지) + 결재란 (기존 월장부 인쇄와 동일 레이아웃)
+function printLedgerRange(range) {
+  const sections = prepareLedgerSections(range);
+  if (sections.length === 0) { showToast('해당 기간에 거래 내역이 없어요'); return; }
+
+  const TH2  = 'padding:2.5pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;background:#DCE6F1;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const TD2  = 'padding:2pt 3pt;border:0.5pt solid #ccc;font-size:7.5pt;';
+  const SUM2 = 'padding:2pt 3pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:700;background:#FFFFF0;-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+  const colgroup = `<colgroup>
+    <col style="width:9%"><col style="width:13%"><col style="width:13%">
+    <col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:17%">
+  </colgroup>`;
+  const makeHead = () => `<thead><tr>
+    <th style="${TH2}text-align:center;">일자</th>
+    <th style="${TH2}">대분류</th><th style="${TH2}">중분류</th><th style="${TH2}">소분류</th>
+    <th style="${TH2}text-align:right;">수입금액</th>
+    <th style="${TH2}text-align:right;">지출금액</th>
+    <th style="${TH2}text-align:right;">누계금액</th>
+  </tr></thead>`;
+
+  const approvalSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCAyNDAgODAiPgogIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIzMCIgaGVpZ2h0PSI4MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIzMCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjE3MCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjMwIiB5PSIxNiIgd2lkdGg9IjcwIiBoZWlnaHQ9IjY0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjEwMCIgeT0iMTYiIHdpZHRoPSI3MCIgaGVpZ2h0PSI2NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIxNzAiIHk9IjE2IiB3aWR0aD0iNzAiIGhlaWdodD0iNjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHRleHQgeD0iMTUiIHk9IjQ0IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgd3JpdGluZy1tb2RlPSJ0YiI+6rKw7J6sPC90ZXh0PgogIDx0ZXh0IHg9IjY1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7ri7Tri7k8L3RleHQ+CiAgPHRleHQgeD0iMTM1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7rtoDsnqU8L3RleHQ+CiAgPHRleHQgeD0iMjA1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7ri7TsnoTrqqnsgqw8L3RleHQ+Cjwvc3ZnPg==';
+  const approvalBox = `
+    <div style="page-break-inside:avoid;break-inside:avoid;margin-top:6pt;display:flex;justify-content:flex-end;">
+      <img src="${approvalSvg}" style="width:65%;height:auto;" alt="결재란">
+    </div>`;
+
+  const ROWS_PER_PAGE = 30;
+  const pages = [];
+
+  sections.forEach(sec => {
+    const dataRowsArr = sec.rows.map(r => `<tr>
+      <td style="${TD2}text-align:center;">${r.date.slice(5)}</td>
+      <td style="${TD2}">${escapeHTML(r.cat)}</td>
+      <td style="${TD2}">${escapeHTML(r.major)}</td>
+      <td style="${TD2}">${escapeHTML(r.minor)}</td>
+      <td style="${TD2}text-align:right;color:#1F497D;">${r.income ? r.income.toLocaleString('ko-KR') : ''}</td>
+      <td style="${TD2}text-align:right;color:#CC0000;">${r.expense ? '-'+r.expense.toLocaleString('ko-KR') : ''}</td>
+      <td style="${TD2}text-align:right;">${r.acc.toLocaleString('ko-KR')}</td>
+    </tr>`);
+
+    const summaryRowsHTML = [
+      [sec.month+'월 결산', '수입/지출', sec.inc, sec.exp],
+      [null, '통장이동(선교)', sec.transfer, null],
+      [null, '예금', null, sec.deposit],
+      [null, '순헌금/지출', sec.inc-sec.transfer, sec.exp-sec.deposit],
+    ].map(([c1,c2,iv,ev]) => `<tr>
+      <td colspan="2" style="${SUM2}font-weight:${c1?'700':'400'};">${escapeHTML(c1||'')}</td>
+      <td colspan="2" style="${SUM2}">${escapeHTML(c2)}</td>
+      <td style="${SUM2}text-align:right;color:#1F497D;">${iv ? iv.toLocaleString('ko-KR') : ''}</td>
+      <td style="${SUM2}text-align:right;color:#CC0000;">${ev ? '-'+ev.toLocaleString('ko-KR') : ''}</td>
+      <td style="${SUM2}"></td>
+    </tr>`).join('');
+
+    const monthTitle = `<div style="font-size:11pt;font-weight:800;margin-bottom:4pt;">${sec.year}년 ${sec.month}월</div>`;
+
+    if (dataRowsArr.length === 0) {
+      pages.push(`<div class="print-page"><div class="page-inner">
+        ${monthTitle}
+        <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+          ${colgroup}${makeHead()}
+          <tbody>${summaryRowsHTML}</tbody>
+        </table>
+        ${approvalBox}
+      </div></div>`);
+    } else {
+      for (let i = 0; i < dataRowsArr.length; i += ROWS_PER_PAGE) {
+        const chunk = dataRowsArr.slice(i, i + ROWS_PER_PAGE).join('');
+        const isLast = i + ROWS_PER_PAGE >= dataRowsArr.length;
+        pages.push(`<div class="print-page"><div class="page-inner">
+          ${i === 0 ? monthTitle : ''}
+          <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+            ${colgroup}${makeHead()}
+            <tbody>${chunk}</tbody>
+            ${isLast ? `<tbody>${summaryRowsHTML}</tbody>` : ''}
+          </table>
+          ${isLast ? approvalBox : ''}
+        </div></div>`);
+      }
+    }
+  });
+
+  doPrint(pages.join(''));
+}
+
 function printStats() {
   const range = statsPeriodRange();
   const allTx  = txInPeriod(range.start, range.end);
@@ -2544,6 +2878,7 @@ function renderStats() {
   const allTx  = txInPeriod(range.start, range.end);
   const list   = allTx.filter(t => t.type === State.statsType);
   const isIncome = State.statsType === 'income';
+  const isList   = State.statsType === 'list';
 
   // 기간별 내역 (날짜순)
   const detailTx = list.slice().sort((a,b) => a.date.localeCompare(b.date) || b.createdAt - a.createdAt);
@@ -2582,10 +2917,11 @@ function renderStats() {
     </div>
 
     <!-- 통계 | 내용 -->
-    <div class="segctrl" style="margin-bottom:12px;">
+    ${!isList ? `
+    <div class="segctrl" id="viewToggle" style="margin-bottom:12px;">
       <button data-view="stats"  class="${State.statsView==='stats' ?'active':''}">통계</button>
       <button data-view="detail" class="${State.statsView==='detail'?'active':''}">내용</button>
-    </div>
+    </div>` : ''}
 
     <!-- 기간 모드 선택 -->
     <div style="display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:2px;">
@@ -2612,10 +2948,11 @@ function renderStats() {
       </div>
     ` : ''}
 
-    <!-- 수입/지출 토글 -->
-    <div class="segctrl" style="margin-bottom:14px;">
+    <!-- 수입/지출/리스트 토글 -->
+    <div class="segctrl" id="typeToggle" style="margin-bottom:14px;">
       <button data-type="expense" class="${State.statsType==='expense'?'active':''}">지출</button>
       <button data-type="income"  class="${State.statsType==='income' ?'active':''}">수입</button>
+      <button data-type="list"    class="${State.statsType==='list'   ?'active':''}">리스트</button>
     </div>
 
     <!-- 요약 숫자 -->
@@ -2637,23 +2974,32 @@ function renderStats() {
       </div>
     </div>
 
-    ${State.statsView === 'stats'
-      ? `${renderStatsTabBars(statRows, statTotal, isIncome)}
-         ${!isIncome ? `<div style="margin-top:6px;">${renderExpenseTableA4(list, range)}</div>` : ''}`
-      : renderStatsTabDetail(detailTx, isIncome)
+    ${isList
+      ? buildLedgerSectionsHTML(range)
+      : (State.statsView === 'stats'
+          ? `${renderStatsTabBars(statRows, statTotal, isIncome)}
+             ${!isIncome ? `<div style="margin-top:6px;">${renderExpenseTableA4(list, range)}</div>` : ''}`
+          : renderStatsTabDetail(detailTx, isIncome))
     }
   `;
 
   // 이벤트
   page.querySelector('#statsExcel').addEventListener('click', () => {
-    if (State.statsType === 'income') exportPivotToExcel();
+    if (State.statsType === 'list') exportLedgerRangeToExcel(range);
+    else if (State.statsType === 'income') exportPivotToExcel();
     else exportExpenseToExcel();
   });
-  page.querySelector('#statsPrint').addEventListener('click', () => printStats());
-
-  page.querySelectorAll('.segctrl')[0].querySelectorAll('button').forEach(b => {
-    b.addEventListener('click', () => { State.statsView = b.dataset.view; renderStats(); });
+  page.querySelector('#statsPrint').addEventListener('click', () => {
+    if (State.statsType === 'list') printLedgerRange(range);
+    else printStats();
   });
+
+  const viewToggle = page.querySelector('#viewToggle');
+  if (viewToggle) {
+    viewToggle.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => { State.statsView = b.dataset.view; renderStats(); });
+    });
+  }
 
   page.querySelectorAll('.period-chip').forEach(b => {
     b.addEventListener('click', () => {
@@ -2692,7 +3038,7 @@ function renderStats() {
     });
   }
 
-  page.querySelectorAll('.segctrl')[1].querySelectorAll('button').forEach(b => {
+  page.querySelector('#typeToggle').querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => { State.statsType = b.dataset.type; renderStats(); });
   });
 
@@ -3995,13 +4341,6 @@ function renderSettings() {
         </div>
         ${ICONS.chevR}
       </div>
-      <div class="settings-row" id="rowLedger">
-        <div>
-          <div class="settings-label">월장부</div>
-          <div class="settings-sub">월별 거래 내역 및 결산 보기 및 인쇄</div>
-        </div>
-        ${ICONS.chevR}
-      </div>
     </div>
 
     <div class="settings-group">
@@ -4187,7 +4526,6 @@ function renderSettings() {
   page.querySelector('#rowLinkedAccounts').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openLinkedAccountsSheet(); });
   page.querySelector('#rowCats').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openCatManageSheet(); });
   page.querySelector('#rowItemStructure').addEventListener('click', () => openItemStructureSheet());
-  page.querySelector('#rowLedger').addEventListener('click', () => openLedgerSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
   page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
   page.querySelector('#rowEmailBackup').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } sendBackupByEmail(); });

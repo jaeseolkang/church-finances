@@ -1,6 +1,6 @@
-// 2026-06-30 KST | CACHE_NAME v2002 (항목구조표 오름차순 정렬)
+// 2026-07-01 KST | CACHE_NAME v2003 (통계 탭에 리스트 추가: 설정 월장부 이동)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2002';
+const CACHE_NAME = 'gaegyebu-v2003';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
