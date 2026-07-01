@@ -2561,12 +2561,13 @@ function exportLedgerToExcel(ym) {
    ========================================================= */
 // 선택된 기간(range.start~range.end) 내 거래를 월(YYYY-MM) 단위로 묶어
 // 각 월별 행(rows) + 결산(inc/exp/transfer/deposit)을 구성한다.
+// ※ 재정계정(대표계정) 거래만 대상으로 한다 — 다른 연동계좌 거래는 제외
 function prepareLedgerSections(range) {
   const { start, end } = range;
 
-  // 기간 시작 이전 누계 (전체 거래이력 기준, 기존 월장부와 동일한 누계 산식 유지)
+  // 기간 시작 이전 누계 (재정계정 전체 거래이력 기준, 기존 월장부와 동일한 누계 산식 유지)
   let running = 0;
-  const allSorted = [...State.transactions].sort((a,b) => a.date.localeCompare(b.date) || (a.createdAt||0)-(b.createdAt||0));
+  const allSorted = [...mainAcctTxs()].sort((a,b) => a.date.localeCompare(b.date) || (a.createdAt||0)-(b.createdAt||0));
   for (const t of allSorted) {
     if (t.date >= start) break;
     running += t.type === 'income' ? t.amount : -t.amount;
