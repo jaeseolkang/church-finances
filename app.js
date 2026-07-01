@@ -4276,26 +4276,29 @@ function calcAcctTotals() {
 
   for (const t of (State.transactions || [])) {
     // ── 방식 A: accountId 직접 태깅 (v2.25 이후 신규 거래) ──
+    let taggedName = null; // 방식 A로 이미 집계된 계좌 이름 (방식 B 중복 집계 방지용)
     if (t.accountId && idToName[t.accountId]) {
       const name = idToName[t.accountId];
       // 대표계정(재정계정) 거래는 제외
       const acct = (State.linkedAccounts||[]).find(a => a.id === t.accountId);
       if (acct && !acct.isDefault) {
+        taggedName = name;
         ensure(name);
         if (t.type === 'income')  result[name].income  += t.amount;
         if (t.type === 'expense') result[name].expense += t.amount;
-        continue; // subItem 방식 중복 집계 방지
       }
     }
-    // ── 방식 B: 예금/통장이동 subItem 기준 (기존 거래 하위호환) ──
+    // ── 방식 B: 예금/통장이동 subItem 기준 — 계좌간 이체의 상대 계좌를 반영 ──
+    // 방식 A로 이미 집계된 "자기 자신" 계좌만 제외하고, 이체 상대 계좌(다른 계좌)는 항상 반영한다.
+    // (예: 건축계정 → 정기건축2 이체 시, 건축계정은 방식 A로, 정기건축2는 방식 B로 각각 집계되어야 함)
     for (const line of (t.lines || [])) {
       const sid = line.subItemId;
       const amt = line.amount || 0;
       for (const [name, id] of Object.entries(incomeMap)) {
-        if (sid === id) { ensure(name); result[name].income += amt; }
+        if (sid === id && name !== taggedName) { ensure(name); result[name].income += amt; }
       }
       for (const [name, id] of Object.entries(expenseMap)) {
-        if (sid === id) { ensure(name); result[name].expense += amt; }
+        if (sid === id && name !== taggedName) { ensure(name); result[name].expense += amt; }
       }
     }
   }
@@ -4557,6 +4560,16 @@ function renderAcctDetail(acct) {
   let running = carry;
   const shortName = acct.name.replace(/계정$/, '');
 
+  // 이체 상대 계좌 이름 — 거래에 accountId가 다른(비대표) 계좌로 태깅돼 있으면 그 계좌 이름을,
+  // 없거나 대표계정이면 '재정'을 상대방으로 표시한다.
+  const otherPartyName = (tx) => {
+    if (tx.accountId) {
+      const other = (State.linkedAccounts || []).find(a => a.id === tx.accountId);
+      if (other && !other.isDefault) return other.name.replace(/계정$/, '');
+    }
+    return '재정';
+  };
+
   const typeLabel = { income: '수입', expense: '지출' };
   const rows = txList.map(item => {
     if (item.type === 'income') running += item.amount;
@@ -4565,8 +4578,8 @@ function renderAcctDetail(acct) {
     const sign     = item.type === 'income' ? '+' : '-';
     // 내용 표시
     let label = '';
-    if (item.source === 'transfer_in')  label = '재정→' + shortName;
-    else if (item.source === 'transfer_out') label = shortName + '→재정';
+    if (item.source === 'transfer_in')  label = otherPartyName(item.tx) + '→' + shortName;
+    else if (item.source === 'transfer_out') label = shortName + '→' + otherPartyName(item.tx);
     else {
       const cat = catById(item.tx.categoryId);
       label = cat ? cat.name : '기타';

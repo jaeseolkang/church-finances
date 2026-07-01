@@ -1,6 +1,6 @@
-// 2026-07-01 KST | CACHE_NAME v2015 (통계-리스트: 재정계정 외 다른 계좌 거래가 섞이던 버그 수정)
+// 2026-07-01 KST | CACHE_NAME v2016 (계좌간 이체 시 상대 정기계좌 수입 미반영 버그 수정 + 상대계좌 라벨 오표시 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2015';
+const CACHE_NAME = 'gaegyebu-v2016';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
