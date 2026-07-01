@@ -192,7 +192,7 @@ async function syncFromFirebase() {
    ========================================================= */
 const DB = (() => {
   const DB_NAME = 'budgetAppDB';
-  const DB_VERSION = 5;
+  const DB_VERSION = 6;
   let db = null;
 
   function open() {
@@ -235,6 +235,10 @@ const DB = (() => {
         }
         if (!_db.objectStoreNames.contains('linkedAccounts')) {
           _db.createObjectStore('linkedAccounts', { keyPath: 'id' });
+        }
+        // 방식 A: 연도별 항목(대분류/중분류/소분류) 스냅샷 — "예전엔 이런 항목이 있었어요" 조회용
+        if (!_db.objectStoreNames.contains('categorySnapshots')) {
+          _db.createObjectStore('categorySnapshots', { keyPath: 'year' });
         }
       };
       req.onsuccess = (e) => { db = e.target.result; resolve(db); };
@@ -311,6 +315,49 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+/* =========================================================
+   연도별 예산 헬퍼
+   - 예산 보유 객체(category / subGroup / subItem)는
+     budgets: { [year:number]: amount } 형태로 연도별 예산을 저장.
+   - 구버전 단일 budget 필드는 최초 로드시 budgets로 마이그레이션되어
+     이후 화면에서는 getBudget()/setBudget()만 사용한다.
+   ========================================================= */
+function getBudget(obj, year) {
+  if (!obj) return 0;
+  const y = year != null ? year : new Date().getFullYear();
+  if (obj.budgets && obj.budgets[y] != null) return obj.budgets[y];
+  return 0;
+}
+function setBudget(obj, year, amount) {
+  if (!obj) return;
+  const y = year != null ? year : new Date().getFullYear();
+  if (!obj.budgets) obj.budgets = {};
+  obj.budgets[y] = amount;
+  // 구버전 코드/디버깅 호환용으로 마지막 편집값을 budget 필드에도 동기화
+  obj.budget = amount;
+}
+function migrateBudgetObj(obj) {
+  if (!obj) return obj;
+  if (!obj.budgets) {
+    obj.budgets = {};
+    if (obj.budget > 0) {
+      // 마이그레이션: 연도 구분 없던 기존 예산값을 올해 예산으로 이전
+      obj.budgets[new Date().getFullYear()] = obj.budget;
+    }
+  }
+  return obj;
+}
+// 예산이 하나라도 설정된 모든 연도 + 올해 + 거래가 있는 연도 목록 (오름차순)
+function allBudgetYears() {
+  const years = new Set();
+  years.add(new Date().getFullYear());
+  [...State.categories, ...State.subGroups, ...State.subItems].forEach(o => {
+    if (o.budgets) Object.keys(o.budgets).forEach(y => years.add(Number(y)));
+  });
+  State.transactions.forEach(t => { if (t.date) years.add(Number(t.date.slice(0,4))); });
+  return [...years].sort((a,b) => a-b);
+}
+
 async function seedIfEmpty() {
   const cats = await DB.getAll('categories');
   if (cats.length === 0) {
@@ -379,6 +426,7 @@ const State = {
   homeView: 'calendar', // 'calendar' | 'daily' | 'monthly'
   cursorDate: new Date(), // 현재 보고 있는 월 기준
   categories: [],
+  categorySnapshots: [], // 방식 A: 연도별 항목 스냅샷 (예전 항목 보기용)
   persons: [],
   subItems: [],
   subGroups: [],
@@ -409,10 +457,13 @@ const State = {
   dayDetailDate: null, // 현재 열려있는 '일별 상세' 시트의 날짜 (null이면 닫힌 상태)
   catStatDetailId: null, // 현재 열려있는 '통계 항목 상세' 시트의 categoryId (null이면 닫힌 상태)
   subStatDetailKey: null, // 현재 열려있는 '내용 탭 집계 상세' 시트의 key (null이면 닫힌 상태)
+  interestDetailKey: null, // 현재 열려있는 '이자 탭 계정 상세' 시트의 key (null이면 닫힌 상태)
   statsSortKey: 'amount',   // '내용' 탭 정렬 기준: 'label' | 'count' | 'amount'
   statsSortDir: 'desc',     // 'asc' | 'desc'
   budgetExpanded: {},       // { [catId]: true/false, [catId+'__'+groupName]: true/false }
   accountsSubTab: 'normal', // 'normal' | 'deposit'
+  normalSortKey: 'name',    // 'name' | 'maturity'
+  normalSortDir: 'asc',     // 'asc' | 'desc'
   depositSortKey: 'name',   // 'name' | 'maturity'
   depositSortDir: 'asc',    // 'asc' | 'desc'
 };
@@ -475,6 +526,106 @@ function personById(id) {
 function subItemById(id) {
   return State.subItems.find(s => s.id === id);
 }
+
+/* =========================================================
+   방식 B (비정규화): 거래에 이름을 같이 저장해두고, 표시할 때는
+   "그 거래가 저장될 당시의 이름"을 최우선으로 보여준다.
+   → 나중에 카테고리 이름을 바꾸거나 삭제해도 과거 거래 기록은 그대로 유지됨.
+   방식 A (연도 스냅샷)는 categorySnapshots 스토어에 별도 보관되며
+   카테고리 관리 화면의 "예전 항목 보기"에서만 쓰인다 (아래 참고).
+   ========================================================= */
+
+// 거래 1건의 대분류 표시정보: 거래에 박혀있는 이름(방식 B) > 현재 카테고리 > 스냅샷(방식 A) > 기본값
+function txCatInfo(t) {
+  const cat = catById(t.categoryId);
+  const snap = !t.categoryName && !cat ? findCatInSnapshots(t.categoryId) : null;
+  return {
+    id: t.categoryId,
+    name: t.categoryName || cat?.name || snap?.name || '삭제된 항목',
+    icon: t.categoryIcon || cat?.icon || snap?.icon || '📦',
+    color: t.categoryColor || cat?.color || snap?.color || '#9CA3AF',
+    type: cat?.type || t.type,
+    usePersonLevel: cat ? !!cat.usePersonLevel : false,
+  };
+}
+
+// 거래 1건의 중분류(=하위항목/인물 이름) 표시명: 거래에 박혀있는 이름 우선
+function txSubGroupName(t) {
+  if (t.subGroupName) return t.subGroupName;
+  const sgId = t.subGroupId || t.personId;
+  if (!sgId) return null;
+  const sg = (State.subGroups || []).find(g => g.id === sgId);
+  if (sg) return sg.name;
+  const p = personById(sgId);
+  return p ? p.name : null;
+}
+
+// 거래의 세부항목(라인) 1건 표시명: 라인에 박혀있는 이름 우선
+function txLineName(l) {
+  return l.subItemName || (subItemById(l.subItemId) || {}).name || '항목';
+}
+
+// 카테고리가 삭제된 경우, 연도 스냅샷들에서 마지막으로 기록된 정보를 찾는다 (방식 A 활용)
+function findCatInSnapshots(catId) {
+  if (!catId) return null;
+  const snaps = State.categorySnapshots || []; // 최신 연도순 정렬되어 있음
+  for (const snap of snaps) {
+    const found = (snap.categories || []).find(c => c.id === catId);
+    if (found) return found;
+  }
+  return null;
+}
+
+// 카테고리 단위(개별 거래가 아닌) 표시가 필요한 곳에서 쓰는 폴백: 현재 카테고리 > 스냅샷 > 기본값
+function catFallbackInfo(catId, defaults) {
+  const cat = catById(catId);
+  if (cat) return cat;
+  const snap = findCatInSnapshots(catId);
+  return {
+    id: catId,
+    name: snap?.name || (defaults?.name ?? '삭제된 항목'),
+    icon: snap?.icon || (defaults?.icon ?? '📦'),
+    color: snap?.color || (defaults?.color ?? '#9CA3AF'),
+    usePersonLevel: false,
+    type: defaults?.type,
+  };
+}
+
+/* ── 방식 A: 연도 스냅샷 저장/누적 ──
+   그 해에 "존재했던 적이 있는" 모든 대분류/중분류/소분류를 계속 누적해서 보관한다.
+   (이미 삭제된 항목이라도 한 번 스냅샷에 들어가면 계속 남아있음 — 합집합 방식) */
+async function ensureYearSnapshot(year) {
+  try {
+    let existing = null;
+    try { existing = await DB.get('categorySnapshots', year); } catch (e) { existing = null; }
+
+    const mergeById = (prev, curr) => {
+      const map = new Map((prev || []).map(x => [x.id, x]));
+      (curr || []).forEach(x => map.set(x.id, {
+        id: x.id, name: x.name, icon: x.icon, color: x.color,
+        type: x.type, categoryId: x.categoryId, order: x.order
+      }));
+      return Array.from(map.values());
+    };
+
+    const snapshot = {
+      year,
+      categories: mergeById(existing?.categories, State.categories),
+      subGroups: mergeById(existing?.subGroups, State.subGroups || []),
+      subItems: mergeById(existing?.subItems, State.subItems || []),
+      updatedAt: Date.now(),
+    };
+    await DB.put('categorySnapshots', snapshot);
+    State.categorySnapshots = State.categorySnapshots || [];
+    const idx = State.categorySnapshots.findIndex(s => s.year === year);
+    if (idx >= 0) State.categorySnapshots[idx] = snapshot;
+    else State.categorySnapshots.unshift(snapshot);
+    State.categorySnapshots.sort((a,b) => b.year - a.year);
+  } catch (e) {
+    console.error('ensureYearSnapshot error:', e);
+  }
+}
+
 function subItemsOfCategory(catId) {
   return State.subItems.filter(s => s.categoryId === catId).sort((a,b)=>a.name.localeCompare(b.name,'ko') || (a.order??0)-(b.order??0));
 }
@@ -659,17 +810,22 @@ async function migrateSubGroupsFromSubItems() {
 }
 
 async function reloadData() {
-  const [cats, persons, subItems, subGroups, txs, linkedAccounts] = await Promise.all([
+  const [cats, persons, subItems, subGroups, txs, linkedAccounts, catSnapshots] = await Promise.all([
     DB.getAll('categories'), DB.getAll('persons'), DB.getAll('subItems'),
-    DB.getAll('subGroups'), DB.getAll('transactions'), DB.getAll('linkedAccounts')
+    DB.getAll('subGroups'), DB.getAll('transactions'), DB.getAll('linkedAccounts'),
+    DB.getAll('categorySnapshots')
   ]);
   cats.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  cats.forEach(migrateBudgetObj);
+  (subItems || []).forEach(migrateBudgetObj);
+  (subGroups || []).forEach(migrateBudgetObj);
   State.categories = cats;
   State.persons = persons;
   State.subItems = subItems;
   State.subGroups = subGroups || [];
   State.linkedAccounts = (linkedAccounts || []).sort((a,b) => a.createdAt - b.createdAt);
   State.transactions = txs.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  State.categorySnapshots = (catSnapshots || []).sort((a,b) => b.year - a.year);
 }
 
 /* ---- 연도별 전년이월 금액 ---- */
@@ -808,6 +964,7 @@ const ICONS = {
   chevR: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>`,
   download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>`,
   upload: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/></svg>`,
+  arrowUp: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>`,
 };
 
 const TABS = [
@@ -901,11 +1058,30 @@ function _doPrintBlob(html) {
       }
       /* 화면에서는 페이지 구분 없이 연속 표시 */
       .print-page{display:block;margin-bottom:24px;}
-      @media print{#print-btn{display:none!important;}}
+      #print-scrolltop{
+        display:none;position:fixed;right:18px;bottom:24px;
+        width:48px;height:48px;border-radius:50%;
+        background:#fff;color:#1d4ed8;border:1.5px solid #1d4ed8;
+        box-shadow:0 6px 16px rgba(0,0,0,0.2);
+        font-size:20px;font-weight:800;cursor:pointer;
+        align-items:center;justify-content:center;
+      }
+      #print-scrolltop.show{display:flex;}
+      @media print{#print-btn{display:none!important;}#print-scrolltop{display:none!important;}}
     </style>
   </head><body>
     <button id="print-btn" onclick="window.print()">🖨️ 인쇄</button>
     ${html}
+    <button id="print-scrolltop" title="맨 위로" onclick="window.scrollTo({top:0,behavior:'smooth'})">▲</button>
+    <script>
+      (function(){
+        var btn = document.getElementById('print-scrolltop');
+        window.addEventListener('scroll', function(){
+          if (window.scrollY > 300) btn.classList.add('show');
+          else btn.classList.remove('show');
+        });
+      })();
+    </script>
   </body></html>`;
 
   const blob = new Blob([fullHTML], {type:'text/html'});
@@ -929,12 +1105,14 @@ function renderShell() {
       <div class="page" id="page-settings"></div>
     </div>
     <button class="fab" id="fabAdd">${ICONS.plus}</button>
+    <button class="fab-top" id="fabScrollTop" title="맨 위로">${ICONS.arrowUp}</button>
     <div class="tabbar" id="tabbar"></div>
     <div class="sheet-backdrop" id="sheetBackdrop"></div>
     <div class="sheet" id="txSheet"></div>
     <div class="sheet" id="linkedAccountsSheet"></div>
     <div class="sheet" id="acctDetailSheet" style="max-height:100%;border-radius:0;"></div>
     <div class="sheet" id="catManageSheet"></div>
+    <div class="sheet" id="oldItemsSheet"></div>
     <div class="sheet" id="catEditSheet"></div>
     <div class="sheet" id="catSubSheet"></div>
     <div class="sheet" id="dayDetailSheet" style="max-height:100%; border-radius:0;"></div>
@@ -947,6 +1125,29 @@ function renderShell() {
   renderTabbar();
   document.getElementById('fabAdd').addEventListener('click', () => openDayDetail(todayStr()));
   document.getElementById('sheetBackdrop').addEventListener('click', closeAllSheets);
+  initScrollTopBtn();
+}
+
+// ── 통계 [리스트] 처럼 내용이 길어질 때 쓰는 '맨 위로' 버튼 ──
+// (+ 버튼 바로 위에 스택되어 표시됨. 탭바에 가려지지 않도록 위쪽에 배치)
+function initScrollTopBtn() {
+  const btn = document.getElementById('fabScrollTop');
+  if (!btn) return;
+  const check = () => {
+    const activePage = document.querySelector('.page.active');
+    const isStatsList = State.tab === 'stats' && State.statsType === 'list';
+    if (isStatsList && activePage && activePage.scrollTop > 200) {
+      btn.classList.add('show');
+    } else {
+      btn.classList.remove('show');
+    }
+  };
+  document.getElementById('pages').addEventListener('scroll', check, true);
+  btn.addEventListener('click', () => {
+    const activePage = document.querySelector('.page.active');
+    if (activePage) activePage.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  window._checkScrollTopBtn = check;
 }
 
 function renderTabbar() {
@@ -973,6 +1174,7 @@ function switchTab(key) {
   const isAdmin = getIsAdmin();
   document.getElementById('fabAdd').style.display = (key === 'settings' || key === 'members' || key === 'accounts' || !isAdmin) ? 'none' : 'flex';
   applyLockState();
+  window._checkScrollTopBtn?.();
 }
 
 function renderCurrentPage() {
@@ -1346,21 +1548,14 @@ function emptyStateHTML(msg, sub) {
 }
 
 function txDisplayTitle(t) {
-  const cat = catById(t.categoryId) || { name: '삭제된 항목' };
-  // 신 구조: subGroupId, 구 구조(마이그레이션 전 잔존): personId
-  const sgId = t.subGroupId || t.personId;
-  if (sgId) {
-    const sg = (State.subGroups || []).find(g => g.id === sgId);
-    if (sg) return sg.name;
-    // personId 구버전 fallback
-    const p = personById(sgId);
-    if (p) return p.name;
-  }
-  return cat.name;
+  // 방식 B: 저장 당시의 이름을 최우선으로 사용 (카테고리가 나중에 개명/삭제되어도 유지)
+  const sgName = txSubGroupName(t);
+  if (sgName) return sgName;
+  return txCatInfo(t).name;
 }
 
 function txItemHTML(t) {
-  const cat = catById(t.categoryId) || { icon: '📦', color: '#9CA3AF', name: '삭제된 항목' };
+  const cat = txCatInfo(t);
   const lines = t.lines || [];
 
   // 제목: 하위항목(중분류)이 있으면 그 이름, 없으면 대분류명
@@ -1369,7 +1564,7 @@ function txItemHTML(t) {
   // 부제: 메모가 있으면 메모, 아니면 (인물별 대분류일 땐 대분류명도 같이) 세부항목 요약
   let itemsSummary;
   if (lines.length > 0) {
-    const names = lines.map(l => (subItemById(l.subItemId) || {}).name || '항목').filter(Boolean);
+    const names = lines.map(l => txLineName(l)).filter(Boolean);
     itemsSummary = names.slice(0, 2).join(', ');
     if (names.length > 2) itemsSummary += ` 외 ${names.length - 2}건`;
   } else {
@@ -1481,11 +1676,11 @@ function renderBudget() {
     for (const l of (t.lines || [])) incBySub[l.subItemId] = (incBySub[l.subItemId] || 0) + l.amount;
   }
 
-  const incomeBudgetCats = State.categories.filter(c => c.type === 'income' && c.budget > 0);
-  const expenseBudgetCats = State.categories.filter(c => c.type === 'expense' && c.budget > 0);
-  const totalIncomeBudget = incomeBudgetCats.reduce((s,c) => s + c.budget, 0);
+  const incomeBudgetCats = State.categories.filter(c => c.type === 'income' && getBudget(c, year) > 0);
+  const expenseBudgetCats = State.categories.filter(c => c.type === 'expense' && getBudget(c, year) > 0);
+  const totalIncomeBudget = incomeBudgetCats.reduce((s,c) => s + getBudget(c, year), 0);
   const totalIncomeSpent = incomeBudgetCats.reduce((s,c) => s + (incByCat[c.id] || 0), 0);
-  const totalExpenseBudget = expenseBudgetCats.reduce((s,c) => s + c.budget, 0);
+  const totalExpenseBudget = expenseBudgetCats.reduce((s,c) => s + getBudget(c, year), 0);
   const totalExpenseSpent = expenseBudgetCats.reduce((s,c) => s + (spentByCat[c.id] || 0), 0);
 
   // 소분류 그룹핑 정의 (대분류명 → { 그룹명: [소분류명...] })
@@ -1503,11 +1698,12 @@ function renderBudget() {
       // 그룹핑 없음 — 소분류 목록만
       return budSubs.map(s => {
         const ss = spentByS[s.id] || 0;
-        const sp = s.budget > 0 ? Math.min(100, Math.round(ss / s.budget * 100)) : 0;
+        const sBud = getBudget(s, year);
+        const sp = sBud > 0 ? Math.min(100, Math.round(ss / sBud * 100)) : 0;
         return `<div style="margin-bottom:5px;">
           <div class="budget-top" style="font-size:12px;">
             <div style="font-weight:600;color:var(--text-1);">${escapeHTML(s.name)}</div>
-            <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+            <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(sBud)}원</div>
           </div>
           <div class="budget-track" style="height:5px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
         </div>`;
@@ -1525,7 +1721,7 @@ function renderBudget() {
     }
     let html = '';
     for (const [gName, gSubs] of Object.entries(grouped)) {
-      const gTotal = gSubs.reduce((s,x) => s + (x.budget||0), 0);
+      const gTotal = gSubs.reduce((s,x) => s + getBudget(x, year), 0);
       const gSpent = gSubs.reduce((s,x) => s + (spentByS[x.id]||0), 0);
       const gPct = gTotal > 0 ? Math.min(100, Math.round(gSpent/gTotal*100)) : 0;
       const groupKey = c.id + '__' + gName;
@@ -1540,11 +1736,12 @@ function renderBudget() {
         <div class="budget-group-body" data-group-key="${escapeHTML(groupKey)}" style="padding-left:8px;${groupOpen ? '' : 'display:none;'}">
           ${gSubs.map(s => {
             const ss = spentByS[s.id]||0;
-            const sp = s.budget>0 ? Math.min(100,Math.round(ss/s.budget*100)) : 0;
+            const sBud = getBudget(s, year);
+            const sp = sBud>0 ? Math.min(100,Math.round(ss/sBud*100)) : 0;
             return `<div style="margin-bottom:4px;">
               <div class="budget-top" style="font-size:11px;">
                 <div style="color:var(--text-1);">${escapeHTML(s.name)}</div>
-                <div class="budget-nums tabular" style="font-size:11px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+                <div class="budget-nums tabular" style="font-size:11px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(sBud)}원</div>
               </div>
               <div class="budget-track" style="height:4px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
             </div>`;
@@ -1555,11 +1752,12 @@ function renderBudget() {
     }
     for (const s of ungrouped) {
       const ss = spentByS[s.id]||0;
-      const sp = s.budget>0 ? Math.min(100,Math.round(ss/s.budget*100)) : 0;
+      const sBud = getBudget(s, year);
+      const sp = sBud>0 ? Math.min(100,Math.round(ss/sBud*100)) : 0;
       html += `<div style="margin-bottom:5px;">
         <div class="budget-top" style="font-size:12px;">
           <div style="font-weight:600;color:var(--text-1);">${escapeHTML(s.name)}</div>
-          <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+          <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(sBud)}원</div>
         </div>
         <div class="budget-track" style="height:5px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
       </div>`;
@@ -1576,10 +1774,10 @@ function renderBudget() {
       if (hasGroups) {
         // 헌금 대분류: 공통 소분류(헌금종류)별 예산/실적
         const commonSubs = subItemsOfCategory(c.id).filter(s => !s.subGroupId);
-        const budSubs = commonSubs.filter(s => s.budget > 0);
+        const budSubs = commonSubs.filter(s => getBudget(s, year) > 0);
         // 실적: 이 대분류 전체 거래의 line별 subItem 합산
         const catSpent = incByCat[c.id] || 0;
-        const catBudget = c.budget || budSubs.reduce((s,x) => s + (x.budget||0), 0);
+        const catBudget = getBudget(c, year) || budSubs.reduce((s,x) => s + getBudget(x, year), 0);
         const catPct = catBudget > 0 ? Math.min(100, Math.round(catSpent / catBudget * 100)) : 0;
         return `<div class="budget-item" style="margin-bottom:14px;">
           <div class="budget-cat-header" data-cat-id="${c.id}" style="cursor:pointer;user-select:none;">
@@ -1594,11 +1792,12 @@ function renderBudget() {
             ${budSubs.length > 0 ? `<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border);">
               ${budSubs.map(s => {
                 const ss = incBySub[s.id] || 0;
-                const sp = s.budget > 0 ? Math.min(100, Math.round(ss / s.budget * 100)) : 0;
+                const sBud = getBudget(s, year);
+                const sp = sBud > 0 ? Math.min(100, Math.round(ss / sBud * 100)) : 0;
                 return `<div style="margin-bottom:5px;">
                   <div class="budget-top" style="font-size:12px;">
                     <div style="font-weight:600;color:var(--text-1);">${escapeHTML(s.name)}</div>
-                    <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(s.budget)}원</div>
+                    <div class="budget-nums tabular" style="font-size:12px;"><b>${fmtMoney(ss)}</b> / ${fmtMoney(sBud)}원</div>
                   </div>
                   <div class="budget-track" style="height:5px;"><div class="budget-fill" style="width:${sp}%; background:${budgetColor(sp)};"></div></div>
                 </div>`;
@@ -1609,13 +1808,14 @@ function renderBudget() {
       } else {
         // 이자/기타: 기존 방식 (대분류 + 소분류)
         const spent = incByCat[c.id] || 0;
-        const pct = c.budget > 0 ? Math.min(100, Math.round(spent / c.budget * 100)) : 0;
-        const budSubs = subItemsOfCategory(c.id).filter(s => s.budget > 0);
+        const cBud = getBudget(c, year);
+        const pct = cBud > 0 ? Math.min(100, Math.round(spent / cBud * 100)) : 0;
+        const budSubs = subItemsOfCategory(c.id).filter(s => getBudget(s, year) > 0);
         return `<div class="budget-item" style="margin-bottom:14px;">
           <div class="budget-cat-header" data-cat-id="${c.id}" style="cursor:pointer;user-select:none;">
             <div class="budget-top">
               <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}${budSubs.length > 0 ? ` <span style="font-size:11px;color:var(--text-3);">${catOpen ? '▾' : '▸'}</span>` : ''}</div>
-              <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+              <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(cBud)}원</div>
             </div>
             <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
             <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
@@ -1635,14 +1835,15 @@ function renderBudget() {
     if (budgetCats.length === 0) return `<div style="font-size:13px;color:var(--text-3);padding:12px 2px;">설정된 예산이 없어요</div>`;
     return budgetCats.map(c => {
       const spent = spentByC[c.id] || 0;
-      const pct = c.budget > 0 ? Math.min(100, Math.round(spent / c.budget * 100)) : 0;
-      const budSubs = subItemsOfCategory(c.id).filter(s => s.budget > 0);
+      const cBud = getBudget(c, year);
+      const pct = cBud > 0 ? Math.min(100, Math.round(spent / cBud * 100)) : 0;
+      const budSubs = subItemsOfCategory(c.id).filter(s => getBudget(s, year) > 0);
       const catOpen = !!State.budgetExpanded[c.id];
       return `<div class="budget-item" style="margin-bottom:14px;">
         <div class="budget-cat-header" data-cat-id="${c.id}" style="cursor:pointer;user-select:none;">
           <div class="budget-top">
             <div class="budget-name"><span style="font-size:15px;">${c.icon}</span> ${c.name}${budSubs.length > 0 ? ` <span style="font-size:11px;color:var(--text-3);">${catOpen ? '▾' : '▸'}</span>` : ''}</div>
-            <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(c.budget)}원</div>
+            <div class="budget-nums tabular"><b>${fmtMoney(spent)}</b> / ${fmtMoney(cBud)}원</div>
           </div>
           <div class="budget-track"><div class="budget-fill" style="width:${pct}%; background:${budgetColor(pct)};"></div></div>
           <div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px;">${pct}%</div>
@@ -1663,7 +1864,7 @@ function renderBudget() {
     </div>
     <div class="summary-month" style="justify-content:center; background:var(--card); border-radius:var(--radius-sm); padding:10px; box-shadow:var(--shadow); color:var(--text-1); margin-bottom:14px;">
       <button id="prevYear" style="color:var(--text-2);">${ICONS.chevLeft}</button>
-      <span style="font-weight:700;">${year}년 연간 예산</span>
+      <button id="budgetYearLabel" style="background:none;border:none;font-weight:700;color:var(--text-1);cursor:pointer;padding:4px 8px;border-radius:8px;display:inline-flex;align-items:center;gap:4px;">${year}년 연간 예산 <span style="font-size:11px;color:var(--text-3);">▾</span></button>
       <button id="nextYear" style="color:var(--text-2);">${ICONS.chevRight}</button>
     </div>
 
@@ -1716,7 +1917,44 @@ function renderBudget() {
   `;
   page.querySelector('#prevYear').addEventListener('click', () => changeMonth(-12));
   page.querySelector('#nextYear').addEventListener('click', () => changeMonth(12));
-  page.querySelector('#manageCatsBtn').addEventListener('click', () => openCatManageSheet());
+  page.querySelector('#manageCatsBtn').addEventListener('click', () => openCatManageSheet(year));
+
+  // 연도 레이블 클릭 → 연도 리스트 팝업
+  page.querySelector('#budgetYearLabel').addEventListener('click', () => {
+    const existing = document.getElementById('budgetYearPop');
+    if (existing) { existing.remove(); return; }
+
+    const years = allBudgetYears();
+    // 목록에 없으면 최근 연도까지 포함해서 선택폭 넓혀줌
+    for (let y = year - 5; y <= year + 1; y++) if (!years.includes(y)) years.push(y);
+    years.sort((a,b) => a-b);
+
+    const pop = document.createElement('div');
+    pop.id = 'budgetYearPop';
+    pop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+    pop.innerHTML = `
+      <div style="background:var(--card);border-radius:20px;padding:20px;width:280px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:14px;text-align:center;">연도 선택</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:260px;overflow-y:auto;">
+          ${years.map(y => `
+            <button data-year="${y}" style="padding:10px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${y===year?'700':'400'};background:${y===year?'var(--primary)':'var(--card)'};color:${y===year?'#fff':'var(--text-1)'};cursor:pointer;">${y}년</button>
+          `).join('')}
+        </div>
+        <button id="budgetYearPopClose" style="width:100%;margin-top:16px;padding:11px;border-radius:12px;background:var(--surface-2);border:none;font-size:14px;font-weight:600;color:var(--text-1);">닫기</button>
+      </div>`;
+    document.body.appendChild(pop);
+
+    pop.querySelectorAll('[data-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const selYear = Number(btn.dataset.year);
+        State.cursorDate = new Date(selYear, State.cursorDate.getMonth(), 1);
+        pop.remove();
+        renderBudget();
+      });
+    });
+    pop.querySelector('#budgetYearPopClose').addEventListener('click', () => pop.remove());
+    pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
+  });
 
   // 대분류 접기/펼치기
   page.querySelectorAll('.budget-cat-header').forEach(el => {
@@ -1795,6 +2033,96 @@ function statsPeriodRange() {
 
 function txInPeriod(start, end) {
   return mainAcctTxs().filter(t => t.date >= start && t.date <= end);
+}
+
+// 통계 탭: 년월(또는 연도) 빠른 선택 팝업
+function openStatsPeriodPicker() {
+  const existing = document.getElementById('statsPeriodPickerPop');
+  if (existing) { existing.remove(); return; }
+
+  const isMonthMode = State.statsPeriod === 'month';
+  const today = new Date();
+  const curY = isMonthMode ? State.cursorDate.getFullYear() : (today.getFullYear() + State.statsYearOffset);
+  const curM = isMonthMode ? State.cursorDate.getMonth() + 1 : null;
+
+  // 현재 연도 기준 ±5년
+  const years = [];
+  for (let y = curY - 5; y <= curY + 1; y++) years.push(y);
+  const months = Array.from({length: 12}, (_, i) => i + 1);
+
+  const pop = document.createElement('div');
+  pop.id = 'statsPeriodPickerPop';
+  pop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+  pop.innerHTML = `
+    <div style="background:var(--card);border-radius:20px;padding:20px;width:300px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:14px;text-align:center;">${isMonthMode ? '날짜 이동' : '연도 이동'}</div>
+
+      <div style="${isMonthMode ? 'margin-bottom:12px;' : 'margin-bottom:16px;'}">
+        <div style="font-size:11px;color:var(--text-2);margin-bottom:6px;font-weight:600;">연도</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">
+          ${years.map(y => `
+            <button data-year="${y}" style="padding:8px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${y===curY?'700':'400'};background:${y===curY?'var(--primary)':'var(--card)'};color:${y===curY?'#fff':'var(--text-1)'};cursor:pointer;">${y}</button>
+          `).join('')}
+        </div>
+      </div>
+
+      ${isMonthMode ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--text-2);margin-bottom:6px;font-weight:600;">월</div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;">
+          ${months.map(m => `
+            <button data-month="${m}" style="padding:8px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${m===curM?'700':'400'};background:${m===curM?'var(--primary)':'var(--card)'};color:${m===curM?'#fff':'var(--text-1)'};cursor:pointer;">${m}월</button>
+          `).join('')}
+        </div>
+      </div>` : ''}
+
+      <div style="display:flex;gap:8px;">
+        <button id="statsPeriodPickerCancel" style="flex:1;padding:11px;border-radius:12px;background:var(--surface-2);border:none;font-size:14px;font-weight:600;color:var(--text-1);">취소</button>
+        <button id="statsPeriodPickerOk" style="flex:1;padding:11px;border-radius:12px;background:var(--primary);border:none;font-size:14px;font-weight:700;color:#fff;">이동</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(pop);
+
+  let selYear = curY, selMonth = curM;
+
+  // 연도 선택
+  pop.querySelectorAll('[data-year]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selYear = Number(btn.dataset.year);
+      pop.querySelectorAll('[data-year]').forEach(b => {
+        b.style.background = b.dataset.year == selYear ? 'var(--primary)' : 'var(--card)';
+        b.style.color = b.dataset.year == selYear ? '#fff' : 'var(--text-1)';
+        b.style.fontWeight = b.dataset.year == selYear ? '700' : '400';
+      });
+    });
+  });
+
+  // 월 선택 (월 모드에서만)
+  if (isMonthMode) {
+    pop.querySelectorAll('[data-month]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selMonth = Number(btn.dataset.month);
+        pop.querySelectorAll('[data-month]').forEach(b => {
+          b.style.background = b.dataset.month == selMonth ? 'var(--primary)' : 'var(--card)';
+          b.style.color = b.dataset.month == selMonth ? '#fff' : 'var(--text-1)';
+          b.style.fontWeight = b.dataset.month == selMonth ? '700' : '400';
+        });
+      });
+    });
+  }
+
+  pop.querySelector('#statsPeriodPickerCancel').addEventListener('click', () => pop.remove());
+  pop.querySelector('#statsPeriodPickerOk').addEventListener('click', () => {
+    if (isMonthMode) {
+      State.cursorDate = new Date(selYear, selMonth - 1, 1);
+    } else {
+      State.statsYearOffset = selYear - today.getFullYear();
+    }
+    pop.remove();
+    renderStats();
+  });
+  pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
 }
 
 /* =========================================================
@@ -2064,14 +2392,13 @@ function exportLedgerToExcel(ym) {
   // ── rows 구성 (renderLedger와 동일) ──
   const rows = [];
   for (const t of txs) {
-    const cat = catById(t.categoryId)||{name:'?',type:t.type};
-    const sgId = t.subGroupId||t.personId;
-    const sg = sgId ? (State.subGroups||[]).find(g=>g.id===sgId)||(State.persons||[]).find(p=>p.id===sgId) : null;
-    const sgName = sg ? sg.name : '';
+    const cat = txCatInfo(t);
+    const sgName = txSubGroupName(t) || '';
     const lines = (t.lines&&t.lines.length>0) ? t.lines : [{subItemId:null,amount:t.amount}];
     for (const l of lines) {
       const si = l.subItemId ? subItemById(l.subItemId) : null;
-      const siName = si ? subItemDisplayName(cat.type, cat.name, si.name) : '';
+      const siRawName = txLineName(l);
+      const siName = (l.subItemId || l.subItemName) ? subItemDisplayName(cat.type, cat.name, siRawName) : '';
       const hasGroups = subGroupsOfCategory(cat.id).length > 0;
       const major = hasGroups ? sgName : (si&&si.subGroupId?((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'':'');
       running += t.type==='income' ? l.amount : -l.amount;
@@ -2264,14 +2591,13 @@ function prepareLedgerSections(range) {
 
     const rows = [];
     for (const t of monthTxs) {
-      const cat = catById(t.categoryId) || {name:'?', type:t.type};
-      const sgId = t.subGroupId || t.personId;
-      const sg = sgId ? (State.subGroups||[]).find(g=>g.id===sgId)||(State.persons||[]).find(p=>p.id===sgId) : null;
-      const sgName = sg ? sg.name : '';
+      const cat = txCatInfo(t);
+      const sgName = txSubGroupName(t) || '';
       const lines = (t.lines && t.lines.length > 0) ? t.lines : [{subItemId:null, amount:t.amount}];
       for (const l of lines) {
         const si = l.subItemId ? subItemById(l.subItemId) : null;
-        const siName = si ? subItemDisplayName(cat.type, cat.name, si.name) : '';
+        const siRawName = txLineName(l);
+        const siName = (l.subItemId || l.subItemName) ? subItemDisplayName(cat.type, cat.name, siRawName) : '';
         const hasGroups = subGroupsOfCategory(cat.id).length > 0;
         const major = hasGroups ? sgName : (si && si.subGroupId ? ((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'' : '');
         running += t.type === 'income' ? l.amount : -l.amount;
@@ -2581,7 +2907,7 @@ function printStats() {
   }
   const statRows = Object.entries(byCat)
     .map(([catId, amt]) => {
-      const cat = catById(catId) || {name:'삭제된 항목', icon: isIncome?'🙏':'📦'};
+      const cat = catFallbackInfo(catId, {icon: isIncome?'🙏':'📦'});
       return { icon: cat.icon, name: cat.name, amt };
     })
     .sort((a,b) => b.amt - a.amt);
@@ -2876,9 +3202,10 @@ function renderStats() {
   const page = document.getElementById('page-stats');
   const range = statsPeriodRange();
   const allTx  = txInPeriod(range.start, range.end);
-  const list   = allTx.filter(t => t.type === State.statsType);
-  const isIncome = State.statsType === 'income';
-  const isList   = State.statsType === 'list';
+  const isIncome   = State.statsType === 'income';
+  const isList     = State.statsType === 'list';
+  const isInterest = State.statsType === 'interest';
+  const list   = (isList || isInterest) ? [] : allTx.filter(t => t.type === State.statsType);
 
   // 기간별 내역 (날짜순)
   const detailTx = list.slice().sort((a,b) => a.date.localeCompare(b.date) || b.createdAt - a.createdAt);
@@ -2893,7 +3220,7 @@ function renderStats() {
   // 지출: 대분류 기준 집계
   let statRows = [];
   let statTotal = 0;
-  {
+  if (!isInterest) {
     const byCat = {};
     for (const t of list) {
       byCat[t.categoryId] = (byCat[t.categoryId] || 0) + t.amount;
@@ -2901,23 +3228,30 @@ function renderStats() {
     }
     statRows = Object.entries(byCat)
       .map(([catId, amt]) => {
-        const cat = catById(catId) || {name:'삭제된 항목', color:'#9CA3AF', icon: isIncome ? '🙏' : '📦'};
+        const cat = catFallbackInfo(catId, {color:'#9CA3AF', icon: isIncome ? '🙏' : '📦'});
         return { catId, icon: cat.icon, name: cat.name, color: cat.color, amt };
       })
       .sort((a,b) => b.amt - a.amt);
   }
 
+  let interestPeriodTotal = 0, interestAllTimeTotal = 0;
+  if (isInterest) {
+    interestPeriodTotal  = Object.values(buildInterestAggMap(range)).reduce((s,r)=>s+r.amount, 0);
+    interestAllTimeTotal = Object.values(buildInterestAggMap({ start: '0000-01-01', end: '9999-12-31' })).reduce((s,r)=>s+r.amount, 0);
+  }
+
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>통계</h1>
+      ${!isInterest ? `
       <div style="display:flex;gap:6px;">
         <button id="statsExcel" style="font-size:13px;color:#217346;font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:#E8F5E9;">📥 엑셀</button>
         <button id="statsPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
-      </div>
+      </div>` : ''}
     </div>
 
     <!-- 통계 | 내용 -->
-    ${!isList ? `
+    ${(!isList && !isInterest) ? `
     <div class="segctrl" id="viewToggle" style="margin-bottom:12px;">
       <button data-view="stats"  class="${State.statsView==='stats' ?'active':''}">통계</button>
       <button data-view="detail" class="${State.statsView==='detail'?'active':''}">내용</button>
@@ -2935,7 +3269,9 @@ function renderStats() {
     <!-- 기간 네비게이터 -->
     <div class="summary-month" style="justify-content:center; background:var(--card); border-radius:var(--radius-sm); padding:10px; box-shadow:var(--shadow); margin-bottom:14px;">
       ${canNav ? `<button id="statsPrev" style="color:var(--text-2);">${ICONS.chevLeft}</button>` : `<div style="width:28px;"></div>`}
-      <span style="font-weight:700; font-size:14px; flex:1; text-align:center;">${range.label}</span>
+      ${(State.statsPeriod === 'month' || State.statsPeriod === 'year')
+        ? `<button id="statsLabel" style="background:none;border:none;font-weight:700; font-size:14px; flex:1; text-align:center; color:var(--text-1); cursor:pointer; padding:4px 8px; border-radius:8px;">${range.label}</button>`
+        : `<span style="font-weight:700; font-size:14px; flex:1; text-align:center;">${range.label}</span>`}
       ${canNav ? `<button id="statsNext" style="color:var(--text-2);">${ICONS.chevRight}</button>` : `<div style="width:28px;"></div>`}
     </div>
 
@@ -2948,14 +3284,27 @@ function renderStats() {
       </div>
     ` : ''}
 
-    <!-- 수입/지출/리스트 토글 -->
+    <!-- 수입/지출/이자/리스트 토글 -->
     <div class="segctrl" id="typeToggle" style="margin-bottom:14px;">
-      <button data-type="expense" class="${State.statsType==='expense'?'active':''}">지출</button>
-      <button data-type="income"  class="${State.statsType==='income' ?'active':''}">수입</button>
-      <button data-type="list"    class="${State.statsType==='list'   ?'active':''}">리스트</button>
+      <button data-type="expense"  class="${State.statsType==='expense' ?'active':''}">지출</button>
+      <button data-type="income"   class="${State.statsType==='income'  ?'active':''}">수입</button>
+      <button data-type="interest" class="${State.statsType==='interest'?'active':''}">이자</button>
+      <button data-type="list"     class="${State.statsType==='list'    ?'active':''}">리스트</button>
     </div>
 
     <!-- 요약 숫자 -->
+    ${isInterest ? `
+    <div class="cal-summary-row" style="margin-bottom:14px;">
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">이자금액</div>
+        <div class="cal-summary-value income tabular">${fmtMoney(interestPeriodTotal)}</div>
+      </div>
+      <div class="cal-summary-col">
+        <div class="cal-summary-label">합계</div>
+        <div class="cal-summary-value income tabular">${fmtMoney(interestAllTimeTotal)}</div>
+      </div>
+    </div>
+    ` : `
     <div class="cal-summary-row" style="margin-bottom:14px;">
       <div class="cal-summary-col">
         <div class="cal-summary-label">수입</div>
@@ -2973,23 +3322,26 @@ function renderStats() {
         )}</div>
       </div>
     </div>
+    `}
 
     ${isList
       ? buildLedgerSectionsHTML(range)
-      : (State.statsView === 'stats'
-          ? `${renderStatsTabBars(statRows, statTotal, isIncome)}
-             ${!isIncome ? `<div style="margin-top:6px;">${renderExpenseTableA4(list, range)}</div>` : ''}`
-          : renderStatsTabDetail(detailTx, isIncome))
+      : isInterest
+        ? renderInterestTab(range)
+        : (State.statsView === 'stats'
+            ? `${renderStatsTabBars(statRows, statTotal, isIncome)}
+               ${!isIncome ? `<div style="margin-top:6px;">${renderExpenseTableA4(list, range)}</div>` : ''}`
+            : renderStatsTabDetail(detailTx, isIncome))
     }
   `;
 
   // 이벤트
-  page.querySelector('#statsExcel').addEventListener('click', () => {
+  page.querySelector('#statsExcel')?.addEventListener('click', () => {
     if (State.statsType === 'list') exportLedgerRangeToExcel(range);
     else if (State.statsType === 'income') exportPivotToExcel();
     else exportExpenseToExcel();
   });
-  page.querySelector('#statsPrint').addEventListener('click', () => {
+  page.querySelector('#statsPrint')?.addEventListener('click', () => {
     if (State.statsType === 'list') printLedgerRange(range);
     else printStats();
   });
@@ -3027,6 +3379,8 @@ function renderStats() {
     });
   }
 
+  page.querySelector('#statsLabel')?.addEventListener('click', openStatsPeriodPicker);
+
   if (State.statsPeriod === 'custom') {
     page.querySelector('#customStart').addEventListener('change', e => {
       State.statsCustomStart = e.target.value;
@@ -3054,6 +3408,10 @@ function renderStats() {
     el.addEventListener('click', () => openSubStatDetail(el.dataset.key));
   });
 
+  page.querySelectorAll('.interest-agg-row').forEach(el => {
+    el.addEventListener('click', () => openInterestDetail(el.dataset.key));
+  });
+
   page.querySelectorAll('[data-sortkey]').forEach(el => {
     el.addEventListener('click', () => {
       const key = el.dataset.sortkey;
@@ -3066,6 +3424,8 @@ function renderStats() {
       renderStats();
     });
   });
+
+  window._checkScrollTopBtn?.();
 }
 
 // [통계] 탭: 막대 차트형 요약 (수입=개인별 헌금 합계 / 지출=대분류별 합계)
@@ -3250,7 +3610,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
             <div style="font-size:8.5pt;font-weight:700;white-space:nowrap;">${normalNet.toLocaleString('ko-KR')}원</div>
           </div>
           <div style="flex:1;min-width:0;border-left:0.5pt solid #b0c4de;padding-left:6pt;">
-            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">정기예금</div>
+            <div style="font-size:6.5pt;color:#555;white-space:nowrap;">정기계정</div>
             <div style="font-size:8.5pt;font-weight:700;white-space:nowrap;">${depositNet.toLocaleString('ko-KR')}원</div>
           </div>
         </div>
@@ -3259,8 +3619,8 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <div class="print-section-title">일반계정 합계 · ${normalNet.toLocaleString('ko-KR')}원</div>
         ${makeTable(normalAccts, false)}
 
-        <!-- 정기예금 -->
-        <div class="print-section-title" style="margin-top:10pt;">정기예금 합계 · ${depositNet.toLocaleString('ko-KR')}원</div>
+        <!-- 정기계정 -->
+        <div class="print-section-title" style="margin-top:10pt;">정기계정 합계 · ${depositNet.toLocaleString('ko-KR')}원</div>
         ${makeTable(depositAccts, true)}
       </div>
     </div>`;
@@ -3313,11 +3673,11 @@ function buildStatsAggMap(detailTx, isIncome) {
   } else {
     // 지출: "대분류/소분류" 조합으로 집계
     for (const t of detailTx) {
-      const cat = catById(t.categoryId) || { name: '기타' };
+      const cat = txCatInfo(t);
       for (const l of (t.lines || [])) {
-        const si  = subItemById(l.subItemId);
+        const siName = txLineName(l);
         const key = `${t.categoryId}__${l.subItemId||''}`;
-        const lbl = si ? `${cat.name}/${si.name}` : cat.name;
+        const lbl = (l.subItemId || l.subItemName) ? `${cat.name}/${siName}` : cat.name;
         if (!aggMap[key]) aggMap[key] = { label: lbl, amount: 0, count: 0, entries: [] };
         aggMap[key].amount += l.amount;
         aggMap[key].count  += 1;
@@ -3380,6 +3740,88 @@ function renderStatsTabDetail(detailTx, isIncome) {
   `;
 }
 
+// [이자] 탭: 계정별 이자 합계 집계
+// key → { label(계정명), amount, count, entries:[{txId,date,amount,subName}] }
+// 대표계정(재정계정) 거래도 포함하기 위해 mainAcctTxs()가 아닌 전체 거래를 날짜로만 필터링한다.
+function buildInterestAggMap(range) {
+  const aggMap = {};
+  const interestCat = State.categories.find(c => c.type === 'income' && c.name === '이자');
+  if (!interestCat) return aggMap;
+
+  const idToName = {};
+  for (const a of (State.linkedAccounts || [])) idToName[a.id] = a.name;
+  const defAcct = (State.linkedAccounts || []).find(a => a.isDefault);
+  const mainLabel = defAcct ? defAcct.name : '대표계정';
+
+  for (const t of State.transactions) {
+    if (t.type !== 'income') continue;
+    if (t.categoryId !== interestCat.id) continue;
+    if (t.date < range.start || t.date > range.end) continue;
+
+    const key   = t.accountId || 'default';
+    const label = (t.accountId && idToName[t.accountId]) ? idToName[t.accountId] : mainLabel;
+    if (!aggMap[key]) aggMap[key] = { label, amount: 0, count: 0, entries: [] };
+
+    for (const l of (t.lines && t.lines.length ? t.lines : [{ subItemId: null, amount: t.amount }])) {
+      const si = subItemById(l.subItemId);
+      aggMap[key].amount += l.amount;
+      aggMap[key].count  += 1;
+      aggMap[key].entries.push({ txId: t.id, date: t.date, amount: l.amount, subName: si ? si.name : '이자' });
+    }
+  }
+  return aggMap;
+}
+
+function renderInterestTab(range) {
+  const sortKey = State.statsSortKey;
+  const sortDir = State.statsSortDir;
+  const arrow = sortDir === 'desc' ? ' ▼' : ' ▲';
+  const hStyle = key => `cursor:pointer; ${sortKey===key ? 'color:var(--text-1);' : ''}`;
+
+  const header = `
+    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span data-sortkey="label" style="${hStyle('label')}">계정${sortKey==='label'?arrow:''}</span>
+      <div style="display:flex; gap:16px; font-size:11.5px; color:var(--text-3); font-weight:700; padding-right:2px;">
+        <span data-sortkey="count" style="min-width:36px; text-align:right; ${hStyle('count')}">건수${sortKey==='count'?arrow:''}</span>
+        <span data-sortkey="amount" style="min-width:90px; text-align:right; ${hStyle('amount')}">이자금액${sortKey==='amount'?arrow:''}</span>
+      </div>
+    </div>
+  `;
+
+  const aggMap = buildInterestAggMap(range);
+  const aggRows = Object.entries(aggMap)
+    .map(([key, r]) => ({ key, ...r }))
+    .sort((a, b) => {
+      let cmp;
+      if (sortKey === 'label') cmp = a.label.localeCompare(b.label, 'ko');
+      else if (sortKey === 'count') cmp = a.count - b.count;
+      else cmp = a.amount - b.amount;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
+  if (aggRows.length === 0) {
+    return header + `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', '선택한 기간의 이자 내역이 없습니다')}</div>`;
+  }
+
+  const totalAmt = aggRows.reduce((s,r) => s + r.amount, 0);
+
+  return header + `
+    <div class="card" style="padding:0 16px;">
+      ${aggRows.map(r => `
+        <div class="interest-agg-row" data-key="${escapeHTML(r.key)}" style="cursor:pointer;">
+          <div class="stats-agg-label">🏦 ${escapeHTML(r.label)}</div>
+          <div class="stats-agg-count tabular">${r.count}건</div>
+          <div class="stats-agg-amt tabular income">${fmtMoney(r.amount)}원</div>
+        </div>
+      `).join('')}
+      <div class="stats-agg-total">
+        <span style="font-weight:700; color:var(--text-2);">합계</span>
+        <span class="tabular income" style="font-weight:800;">${fmtMoney(totalAmt)}원</span>
+      </div>
+    </div>
+  `;
+}
+
 /* =========================================================
    RENDER: SETTINGS
    ========================================================= */
@@ -3416,14 +3858,13 @@ function openLedgerSheet() {
     // 데이터 행 생성
     const rows = [];
     for (const t of txs) {
-      const cat = catById(t.categoryId) || {name:'?', type:t.type};
-      const sgId = t.subGroupId || t.personId;
-      const sg = sgId ? (State.subGroups||[]).find(g=>g.id===sgId)||(State.persons||[]).find(p=>p.id===sgId) : null;
-      const sgName = sg ? sg.name : '';
+      const cat = txCatInfo(t);
+      const sgName = txSubGroupName(t) || '';
       const lines = (t.lines && t.lines.length > 0) ? t.lines : [{subItemId:null, amount:t.amount}];
       for (const l of lines) {
         const si = l.subItemId ? subItemById(l.subItemId) : null;
-        const siName = si ? subItemDisplayName(cat.type, cat.name, si.name) : '';
+        const siRawName = txLineName(l);
+        const siName = (l.subItemId || l.subItemName) ? subItemDisplayName(cat.type, cat.name, siRawName) : '';
         // 중분류: subGroups 있는 카테고리면 sg이름, 아니면 subGroup명
         const hasGroups = subGroupsOfCategory(cat.id).length > 0;
         const major = hasGroups ? sgName : (si && si.subGroupId ? ((State.subGroups||[]).find(g=>g.id===si.subGroupId)||{}).name||'' : '');
@@ -3898,15 +4339,15 @@ async function renderAccounts() {
   const grandNet     = mainNet     + normalNet      + depositNet;
   const grandNetColor = grandNet >= 0 ? 'var(--primary)' : 'var(--expense)';
 
-  // ── 현재 탭 계좌 목록 (정기예금 탭이면 정렬 적용) ──
+  // ── 현재 탭 계좌 목록 (정기계정 탭이면 정렬 적용) ──
   let accounts = nonDefaultAccts.filter(a => {
     if (sub === 'deposit') return a.accountKind === 'deposit';
     return !a.accountKind || a.accountKind === 'normal';
   });
 
-  if (sub === 'deposit' && accounts.length > 0) {
-    const sk  = State.depositSortKey || 'name';
-    const dir = State.depositSortDir || 'asc';
+  if (accounts.length > 0) {
+    const sk  = (sub === 'deposit' ? State.depositSortKey : State.normalSortKey) || 'name';
+    const dir = (sub === 'deposit' ? State.depositSortDir : State.normalSortDir) || 'asc';
     accounts = [...accounts].sort((a, b) => {
       let va, vb;
       if (sk === 'maturity') {
@@ -3933,7 +4374,7 @@ async function renderAccounts() {
   const shortName = name => name.replace(/계정$/, '');
 
   const emptyMsg = sub === 'deposit'
-    ? '등록된 정기예금 계좌가 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>'
+    ? '등록된 정기계정 계좌가 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>'
     : '등록된 계정이 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>';
 
   const rowsHTML = accounts.length === 0
@@ -3943,7 +4384,7 @@ async function renderAccounts() {
         const carry = a.carryover || 0;
         const net   = carry + t.income - t.expense;
         const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
-        // 만기일 표시 (정기예금 탭)
+        // 만기일 표시 (정기계정 탭)
         let maturityTd = '';
         if (sub === 'deposit') {
           const md = a.maturityDate || '';
@@ -3966,7 +4407,7 @@ async function renderAccounts() {
         </tr>`;
       }).join('');
 
-  const summaryTitle = sub === 'deposit' ? '정기예금 합계' : '계좌 합계';
+  const summaryTitle = sub === 'deposit' ? '정기계정 합계' : '계좌 합계';
 
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;display:flex;align-items:center;justify-content:space-between;">
@@ -3988,7 +4429,7 @@ async function renderAccounts() {
           <span class="acct-grand-val">${normalNet.toLocaleString('ko-KR')}원</span>
         </div>
         <div class="acct-grand-row">
-          <span class="acct-grand-label">정기예금</span>
+          <span class="acct-grand-label">정기계정</span>
           <span class="acct-grand-val">${depositNet.toLocaleString('ko-KR')}원</span>
         </div>
       </div>
@@ -3997,7 +4438,7 @@ async function renderAccounts() {
     <!-- 서브탭 -->
     <div class="acct-sub-tabs">
       <button class="acct-sub-tab ${sub==='normal'?'active':''}" data-sub="normal">일반계정</button>
-      <button class="acct-sub-tab ${sub==='deposit'?'active':''}" data-sub="deposit">정기예금</button>
+      <button class="acct-sub-tab ${sub==='deposit'?'active':''}" data-sub="deposit">정기계정</button>
     </div>
 
     <div class="acct-summary-card">
@@ -4014,8 +4455,8 @@ async function renderAccounts() {
       <table class="acct-tbl" style="min-width:${sub==='deposit'?'580px':'460px'};">
         <thead>
           <tr>
-            <th class="acct-tbl-name ${sub==='deposit'?'acct-th-sort':''}" data-sort="name">
-              계좌이름${sub==='deposit' ? `<span class="acct-sort-icon">${State.depositSortKey==='name' ? (State.depositSortDir==='asc'?'↑':'↓') : '↕'}</span>` : ''}
+            <th class="acct-tbl-name acct-th-sort" data-sort="name">
+              계좌이름<span class="acct-sort-icon">${(sub==='deposit' ? State.depositSortKey : State.normalSortKey)==='name' ? ((sub==='deposit' ? State.depositSortDir : State.normalSortDir)==='asc'?'↑':'↓') : '↕'}</span>
             </th>
             <th class="acct-tbl-num">이월금</th>
             <th class="acct-tbl-num">수입금</th>
@@ -4044,21 +4485,21 @@ async function renderAccounts() {
     nonDefaultAccts
   }));
 
-  // 정기예금 탭: 헤더 클릭 정렬
-  if (sub === 'deposit') {
-    page.querySelectorAll('.acct-th-sort[data-sort]').forEach(th => {
-      th.addEventListener('click', () => {
-        const key = th.dataset.sort;
-        if (State.depositSortKey === key) {
-          State.depositSortDir = State.depositSortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-          State.depositSortKey = key;
-          State.depositSortDir = 'asc';
-        }
-        renderAccounts();
-      });
+  // 계정 탭(일반계정/정기계정): 헤더 클릭 정렬
+  page.querySelectorAll('.acct-th-sort[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      const sortKeyProp = sub === 'deposit' ? 'depositSortKey' : 'normalSortKey';
+      const sortDirProp = sub === 'deposit' ? 'depositSortDir' : 'normalSortDir';
+      if (State[sortKeyProp] === key) {
+        State[sortDirProp] = State[sortDirProp] === 'asc' ? 'desc' : 'asc';
+      } else {
+        State[sortKeyProp] = key;
+        State[sortDirProp] = 'asc';
+      }
+      renderAccounts();
     });
-  }
+  });
 
   page.querySelectorAll('.acct-tbl-row[data-acct-id]').forEach(row => {
     row.addEventListener('click', () => {
@@ -4425,7 +4866,7 @@ function renderSettings() {
     </div>` : ''}
 
     <div class="settings-group">
-      <div class="settings-group-title">정기예금 만기 알림</div>
+      <div class="settings-group-title">정기계정 만기 알림</div>
       <div class="settings-row" style="justify-content:space-between;align-items:center;" id="emailDisplayRow">
         <div>
           <div class="settings-label">알림 수신 이메일</div>
@@ -4527,8 +4968,8 @@ function renderSettings() {
   page.querySelector('#rowCats').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openCatManageSheet(); });
   page.querySelector('#rowItemStructure').addEventListener('click', () => openItemStructureSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
-  page.querySelector('#rowExport').addEventListener('click', openBackupRangeSheet);
-  page.querySelector('#rowEmailBackup').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } sendBackupByEmail(); });
+  page.querySelector('#rowExport').addEventListener('click', () => openBackupRangeSheet('download'));
+  page.querySelector('#rowEmailBackup').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openBackupRangeSheet('email'); });
   // 로그아웃
   const btnLogout = page.querySelector('#btnLogout');
   if (btnLogout) {
@@ -5066,7 +5507,7 @@ function isSunday() {
 }
 
 /* =========================================================
-   정기예금 만기 알림 — Gmail MCP via Anthropic API
+   정기계정 만기 알림 — Gmail MCP via Anthropic API
    ========================================================= */
 async function checkMaturityAndNotify(force = false) {
   const emailRec = await DB.get('settings', 'maturityEmail');
@@ -5085,7 +5526,7 @@ async function checkMaturityAndNotify(force = false) {
   const d30 = new Date(); d30.setDate(d30.getDate() + 30);
   const date30 = `${d30.getFullYear()}-${String(d30.getMonth()+1).padStart(2,'0')}-${String(d30.getDate()).padStart(2,'0')}`;
 
-  // 정기예금 계좌 중 만기일이 오늘 ~ 30일 이내인 것 찾기
+  // 정기계정 계좌 중 만기일이 오늘 ~ 30일 이내인 것 찾기
   const deposits = (State.linkedAccounts || []).filter(a => a.isDeposit && a.maturityDate);
   const targets = deposits.filter(a => a.maturityDate >= today && a.maturityDate <= date30);
 
@@ -5103,8 +5544,8 @@ async function checkMaturityAndNotify(force = false) {
     return `• ${tag} | ${a.name} | ${a.maturityDate} | ${amt}원`;
   }).join('\n');
 
-  const subject = `[${appName}] 정기예금 만기 알림 (${today})`;
-  const body = `안녕하세요.\n\n정기예금 만기 계좌를 알려드립니다.\n\n${rows}\n\n확인 후 적절한 조치를 취해주세요.\n\n— ${appName}`;
+  const subject = `[${appName}] 정기계정 만기 알림 (${today})`;
+  const body = `안녕하세요.\n\n정기계정 만기 계좌를 알려드립니다.\n\n${rows}\n\n확인 후 적절한 조치를 취해주세요.\n\n— ${appName}`;
 
   // mailto로 메일 앱 열기
   try {
@@ -5206,12 +5647,8 @@ function subItemDisplayName(catType, catName, subName) {
 // 인물단계 대분류: 대분류칸=인물이름, 소분류칸=세부항목명(헌금 표기)
 // 인물단계 없는 대분류: 대분류칸=대분류명, 소분류칸=세부항목명
 function explodeTxToRows(t) {
-  const cat = catById(t.categoryId) || { name: '삭제된 항목', usePersonLevel: false, type: t.type };
-  const sgId = t.subGroupId || t.personId;
-  // subGroups 스토어에서 먼저 찾고, 없으면 persons에서 찾기
-  const sg = sgId ? (State.subGroups || []).find(g => g.id === sgId) : null;
-  const person = (!sg && sgId) ? (State.persons || []).find(p => p.id === sgId) : null;
-  const sgName = sg ? sg.name : (person ? person.name : null);
+  const cat = txCatInfo(t);
+  const sgName = txSubGroupName(t);
   const hasGroupStructure = subGroupsOfCategory(cat.id).length > 0;
 
   let major, minor_prefix;
@@ -5225,8 +5662,8 @@ function explodeTxToRows(t) {
 
   const lines = (t['lines'] && t['lines'].length > 0) ? t['lines'] : [{ subItemId: null, amount: t['amount'] }];
   return lines.map(l => {
-    const si = l['subItemId'] ? subItemById(l['subItemId']) : null;
-    const subName = si ? subItemDisplayName(cat['type'], cat['name'], si['name']) : '';
+    const subRawName = txLineName(l);
+    const subName = (l['subItemId'] || l.subItemName) ? subItemDisplayName(cat['type'], cat['name'], subRawName) : '';
     return {
       date: t['date'],
       major,
@@ -5395,11 +5832,11 @@ function availableDateRangeFromTx() {
   return { min, max };
 }
 
-let excelMode = 'monthly'; // 'monthly' | 'custom'
+let excelMode = 'all'; // 'all' | 'monthly' | 'custom'
 
 function openExcelRangeSheet() {
   if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
-  excelMode = 'monthly';
+  excelMode = 'all';
   renderExcelRangeSheet();
   openSheet('excelRangeSheet');
 }
@@ -5422,11 +5859,14 @@ function renderExcelRangeSheet() {
     </div>
     <div class="sheet-body">
       <div class="segctrl">
+        <button data-mode="all"     class="${excelMode==='all'    ?'active':''}">전체</button>
         <button data-mode="monthly" class="${excelMode==='monthly'?'active':''}">월간</button>
         <button data-mode="custom"  class="${excelMode==='custom' ?'active':''}">지정기간</button>
       </div>
 
-      ${excelMode === 'monthly' ? `
+      ${excelMode === 'all' ? `
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">전체 기간의 모든 달을 정식 교회 결산 양식으로, 달별로 나누어 만들어요.</div>
+      ` : excelMode === 'monthly' ? `
       <div class="formrow">
         <label>월 선택</label>
         <select class="dateinput" id="excMSingle">${optionHTML}</select>
@@ -5470,7 +5910,7 @@ function renderExcelRangeSheet() {
   // 초기값 설정
   if (excelMode === 'monthly') {
     sheet.querySelector('#excMSingle').value = months[months.length - 1];
-  } else {
+  } else if (excelMode === 'custom') {
     // 날일 select 채우기 함수
     const fillDays = (ySel, mSel, dSel, defaultDay) => {
       const y = Number(ySel.value), m = Number(mSel.value);
@@ -5523,11 +5963,16 @@ function renderExcelRangeSheet() {
       return;
     }
 
-    // 월간
-    const sYm = sheet.querySelector('#excMSingle').value;
-    const eYm = sYm;
-    let [sy, sm] = sYm.split('-').map(Number);
-    let [ey, em] = eYm.split('-').map(Number);
+    // 전체 / 월간 — 정식 결산 양식
+    let sy, sm, ey, em;
+    if (excelMode === 'all') {
+      [sy, sm] = months[0].split('-').map(Number);
+      [ey, em] = months[months.length - 1].split('-').map(Number);
+    } else {
+      const sYm = sheet.querySelector('#excMSingle').value;
+      [sy, sm] = sYm.split('-').map(Number);
+      ey = sy; em = sm;
+    }
 
     const monthsRange = buildMonthRange(sy, sm, ey, em);
     const yearsNeeded = Array.from(new Set(monthsRange.map(m => m.year)));
@@ -5538,7 +5983,9 @@ function renderExcelRangeSheet() {
       carryoverByYear[y] = amt;
     }
     const wb = generateChurchLedgerWorkbook(monthsRange, carryoverByYear);
-    const fname = (sYm === eYm) ? `회계부-${sYm}.xlsx` : `회계부-${sYm}_${eYm}.xlsx`;
+    const fname = excelMode === 'all'
+      ? `회계부-전체_${todayStr()}.xlsx`
+      : `회계부-${sy}-${String(sm).padStart(2,'0')}.xlsx`;
     XLSX.writeFile(wb, fname);
     closeAllSheets();
     showToast('엑셀 내보내기 완료');
@@ -5705,10 +6152,19 @@ function generateChurchLedgerWorkbook(months, carryoverByYear) {
 }
 
 let backupMode = 'all'; // 'all' | 'single' | 'range'
+let backupAction = 'download'; // 'download' | 'email'
 
-function openBackupRangeSheet() {
+async function openBackupRangeSheet(action = 'download') {
   if (State.transactions.length === 0) { showToast('내보낼 거래가 없어요'); return; }
+  if (action === 'email') {
+    const emailRec = await DB.get('settings', 'maturityEmail');
+    if (!emailRec || !emailRec.email) {
+      showToast('설정에서 이메일을 먼저 등록해주세요');
+      return;
+    }
+  }
   backupMode = 'all';
+  backupAction = action;
   renderBackupRangeSheet();
   openSheet('backupRangeSheet');
 }
@@ -5721,28 +6177,29 @@ function renderBackupRangeSheet() {
     const [y, m] = ym.split('-');
     return `<option value="${ym}">${y}년 ${Number(m)}월</option>`;
   }).join('');
+  const isEmail = backupAction === 'email';
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>데이터 백업</h3>
+      <h3>${isEmail ? '백업 메일 발송' : '데이터 백업'}</h3>
       <button id="bkClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
       <div class="segctrl">
-        <button data-mode="all"    class="${backupMode==='all'   ?'active':''}">전체 백업</button>
+        <button data-mode="all"    class="${backupMode==='all'   ?'active':''}">${isEmail ? '전체' : '전체 백업'}</button>
         <button data-mode="single" class="${backupMode==='single'?'active':''}">개별 달</button>
         <button data-mode="range"  class="${backupMode==='range' ?'active':''}">범위 설정</button>
       </div>
 
       ${backupMode === 'all' ? `
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">전체 기간의 모든 거래 데이터와 카테고리/이름 정보가 저장됩니다.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">전체 기간의 모든 거래 데이터와 카테고리/이름 정보가 ${isEmail ? '메일로 발송됩니다.' : '저장됩니다.'}</div>
       ` : backupMode === 'single' ? `
       <div class="formrow">
-        <label>백업할 달</label>
+        <label>${isEmail ? '발송할 달' : '백업할 달'}</label>
         <select class="dateinput" id="bkSingle">${optionHTML}</select>
       </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 달의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 달의 거래 데이터와 모든 카테고리/이름 정보가 함께 ${isEmail ? '발송됩니다.' : '저장됩니다.'}</div>
       ` : `
       <div class="formrow">
         <label>시작일</label>
@@ -5754,10 +6211,10 @@ function renderBackupRangeSheet() {
         <input type="date" class="dateinput" id="bkEnd"
           ${dateRange ? `min="${dateRange.min}" max="${dateRange.max}"` : ''}>
       </div>
-      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 기간(연-월-일)의 거래 데이터와 모든 카테고리/이름 정보가 함께 저장됩니다.</div>
+      <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 기간(연-월-일)의 거래 데이터와 모든 카테고리/이름 정보가 함께 ${isEmail ? '발송됩니다.' : '저장됩니다.'}</div>
       `}
 
-      <button class="btn-primary" id="bkGo">JSON 백업 파일 만들기</button>
+      <button class="btn-primary" id="bkGo">${isEmail ? '메일로 발송하기' : 'JSON 백업 파일 만들기'}</button>
     </div>
   `;
 
@@ -5779,29 +6236,28 @@ function renderBackupRangeSheet() {
 
   sheet.querySelector('#bkClose').addEventListener('click', closeAllSheets);
   sheet.querySelector('#bkGo').addEventListener('click', () => {
-    if (backupMode === 'all') {
-      exportData(null, null);
-      closeAllSheets();
-      return;
-    }
-    let sDate, eDate;
+    let sDate = null, eDate = null;
     if (backupMode === 'single') {
       const ym = sheet.querySelector('#bkSingle').value;
       sDate = `${ym}-01`;
       const [y, m] = ym.split('-').map(Number);
       eDate = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`;
-    } else {
+    } else if (backupMode === 'range') {
       sDate = sheet.querySelector('#bkStart').value;
       eDate = sheet.querySelector('#bkEnd').value;
       if (!sDate || !eDate) { showToast('시작일과 종료일을 선택해주세요'); return; }
       if (sDate > eDate) { showToast('시작일이 종료일보다 늦어요'); return; }
     }
-    exportData(sDate, eDate);
+    if (backupAction === 'email') {
+      sendBackupByEmail(sDate, eDate);
+    } else {
+      exportData(sDate, eDate);
+    }
     closeAllSheets();
   });
 }
 
-async function sendBackupByEmail() {
+async function sendBackupByEmail(startDate = null, endDate = null) {
   const emailRec = await DB.get('settings', 'maturityEmail');
   if (!emailRec || !emailRec.email) {
     showToast('설정에서 이메일을 먼저 등록해주세요');
@@ -5811,21 +6267,35 @@ async function sendBackupByEmail() {
   const appName = State.appName || '교회 회계부';
   const today = todayStr();
 
+  const txs = (startDate && endDate)
+    ? State.transactions.filter(t => t.date >= startDate && t.date <= endDate)
+    : State.transactions;
+
+  let rangeLabel;
+  if (startDate && endDate) {
+    const fmt = (d) => { const [y, m, dd] = d.split('-'); return `${y}년${Number(m)}월${Number(dd)}일`; };
+    rangeLabel = (startDate === endDate) ? fmt(startDate) : `${fmt(startDate)}-${fmt(endDate)}`;
+  } else {
+    rangeLabel = `전체_${today}`;
+  }
+
   const allTemplates = await DB.getAll('templates');
   const data = {
     exportedAt: new Date().toISOString(),
+    rangeStart: startDate || null,
+    rangeEnd:   endDate   || null,
     categories: State.categories,
     persons: State.persons,
     subItems: State.subItems,
     subGroups: State.subGroups || [],
     linkedAccounts: State.linkedAccounts || [],
-    transactions: State.transactions,
+    transactions: txs,
     templates: allTemplates || [],
   };
   const jsonStr = JSON.stringify(data, null, 2);
-  const txCount = State.transactions.length;
-  const fileName = `backup-${today}.json`;
-  const subject = `[${appName}] 데이터 백업 ${today}`;
+  const txCount = txs.length;
+  const fileName = `backup-${rangeLabel}.json`;
+  const subject = `[${appName}] 데이터 백업 ${rangeLabel}`;
   const blob = new Blob([jsonStr], { type: 'application/json' });
 
   // iOS/Android: Web Share API로 파일 공유 (메일 앱에 첨부 가능)
@@ -5834,7 +6304,7 @@ async function sendBackupByEmail() {
     try {
       await navigator.share({
         title: subject,
-        text: `${appName} 전체 데이터 백업\n거래 ${txCount}건\n백업일시: ${new Date().toLocaleString('ko-KR')}`,
+        text: `${appName} 데이터 백업 (${rangeLabel})\n거래 ${txCount}건\n백업일시: ${new Date().toLocaleString('ko-KR')}`,
         files: [file],
       });
       showToast('📧 공유 완료');
@@ -5854,7 +6324,7 @@ async function sendBackupByEmail() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 
-  const bodyShort = `${appName} 백업\n\n백업일시: ${new Date().toLocaleString('ko-KR')}\n거래 건수: ${txCount}건\n\n다운로드된 JSON 파일을 첨부해 보내주세요.`;
+  const bodyShort = `${appName} 백업 (${rangeLabel})\n\n백업일시: ${new Date().toLocaleString('ko-KR')}\n거래 건수: ${txCount}건\n\n다운로드된 JSON 파일을 첨부해 보내주세요.`;
   window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyShort)}`;
   showToast('📥 JSON 다운로드 완료 — 메일에 첨부해 발송해주세요');
 }
@@ -6049,6 +6519,7 @@ function closeAllSheets() {
   State.dayDetailDate = null;
   State.catStatDetailId = null;
   State.subStatDetailKey = null;
+  State.interestDetailKey = null;
 }
 
 function openSheet(id) {
@@ -6076,6 +6547,9 @@ function closeTxSheet() {
   } else if (State.subStatDetailKey) {
     document.getElementById('txSheet').classList.remove('show');
     openSubStatDetail(State.subStatDetailKey);
+  } else if (State.interestDetailKey) {
+    document.getElementById('txSheet').classList.remove('show');
+    openInterestDetail(State.interestDetailKey);
   } else {
     closeAllSheets();
   }
@@ -6712,16 +7186,24 @@ async function saveTx() {
 
   const lines = Object.entries(State.formAmounts)
     .filter(([, amt]) => Number(amt) > 0)
-    .map(([subItemId, amt]) => ({
-      subItemId: subItemId === '__direct__' ? null : subItemId,
-      amount: Number(amt)
-    }));
+    .map(([subItemId, amt]) => {
+      const realId = subItemId === '__direct__' ? null : subItemId;
+      const si = realId ? subItemById(realId) : null;
+      return {
+        subItemId: realId,
+        amount: Number(amt),
+        subItemName: si ? si.name : null, // 방식 B: 저장 시점의 세부항목 이름을 함께 기록
+      };
+    });
 
   if (lines.length === 0) { showToast('금액을 1개 이상 입력해주세요'); return; }
   // usePersonLevel 구조 사용 안 함 — subGroupId 필수 여부는 subGroups 여부로 판단
   if (!date) { showToast('날짜를 선택해주세요'); return; }
 
   const total = lines.reduce((s, l) => s + l.amount, 0);
+
+  // 방식 B: 저장 시점의 대분류/중분류(하위항목) 이름을 거래에 함께 저장 (비정규화)
+  const sg = State.formSubGroupId ? (State.subGroups || []).find(g => g.id === State.formSubGroupId) : null;
 
   const record = {
     id: State.editingTx ? State.editingTx.id : uid(),
@@ -6734,6 +7216,10 @@ async function saveTx() {
     memo,
     accountId: State.formAccountId || null,
     createdAt: State.editingTx ? State.editingTx.createdAt : Date.now(),
+    categoryName: cat ? cat.name : null,
+    categoryIcon: cat ? cat.icon : null,
+    categoryColor: cat ? cat.color : null,
+    subGroupName: sg ? sg.name : null,
   };
   await DB.put('transactions', record);
   await reloadData();
@@ -6922,7 +7408,7 @@ function openCatStatDetail(categoryId) {
 function renderCatStatDetail(categoryId) {
   const sheet = document.getElementById('catStatDetailSheet');
   const range = statsPeriodRange();
-  const cat = catById(categoryId) || { name: '삭제된 항목', icon: '📦', color: '#9CA3AF' };
+  const cat = catFallbackInfo(categoryId);
   const list = txInPeriod(range.start, range.end)
     .filter(t => t.type === State.statsType && t.categoryId === categoryId)
     .sort((a,b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
@@ -7260,11 +7746,13 @@ function renderSubStatDetail(key) {
             <div class="section-title">${dayLabel(d)}</div>
             <div class="card" style="padding:0 16px; margin-bottom:14px;">
               ${byDate[d].map(e => {
-                const cat = catById(e.categoryId) || { name: '삭제된 항목', icon:'📦', color:'#9CA3AF' };
+                const srcTx = State.transactions.find(x => x.id === e.txId);
+                const cat = srcTx ? txCatInfo(srcTx) : catFallbackInfo(e.categoryId);
                 // 수입(헌금)이면 중분류(사람 이름) 표시, 지출이면 카테고리 이름
                 let rowLabel;
                 if (isIncome && e.subGroupId) {
-                  const sg = (State.subGroups||[]).find(g=>g.id===e.subGroupId);
+                  const sgName = srcTx ? txSubGroupName(srcTx) : null;
+                  const sg = sgName ? { name: sgName } : (State.subGroups||[]).find(g=>g.id===e.subGroupId);
                   rowLabel = sg ? sg.name : (cat.icon ? cat.icon+' '+cat.name : cat.name);
                 } else {
                   rowLabel = (cat.icon ? cat.icon+' ' : '') + cat.name;
@@ -7276,6 +7764,64 @@ function renderSubStatDetail(key) {
                   </div>
                 `;
               }).join('')}
+            </div>
+          `).join('')
+      }
+    </div>
+  `;
+
+  sheet.querySelector('#ssdClose').addEventListener('click', closeAllSheets);
+  sheet.querySelectorAll('.tx-item').forEach(el => {
+    el.addEventListener('click', () => openTxSheet(el.dataset.id));
+  });
+}
+
+// [이자] 탭: 계정별 이자 상세 시트
+function openInterestDetail(key) {
+  State.interestDetailKey = key;
+  renderInterestDetail(key);
+  openSheet('subStatDetailSheet');
+}
+
+function renderInterestDetail(key) {
+  const sheet = document.getElementById('subStatDetailSheet');
+  const range = statsPeriodRange();
+  const aggMap = buildInterestAggMap(range);
+  const agg = aggMap[key] || { label: '내역', amount: 0, count: 0, entries: [] };
+
+  const entries = agg.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
+
+  // 날짜별 그룹화
+  const byDate = {};
+  for (const e of entries) {
+    (byDate[e.date] = byDate[e.date] || []).push(e);
+  }
+  const dates = Object.keys(byDate).sort();
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="ssdClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+      <h3>🏦 ${escapeHTML(agg.label)}</h3>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div class="daydetail-summary">
+        <span>${range.label}</span>
+        <b class="tabular income">${fmtMoney(agg.amount)}원</b>
+      </div>
+
+      ${dates.length === 0
+        ? `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', '선택한 기간의 이자 내역이 없습니다')}</div>`
+        : dates.map(d => `
+            <div class="section-title">${dayLabel(d)}</div>
+            <div class="card" style="padding:0 16px; margin-bottom:14px;">
+              ${byDate[d].map(e => `
+                <div class="stats-agg-row tx-item" data-id="${e.txId}" style="cursor:pointer;">
+                  <div class="stats-agg-label">${escapeHTML(e.subName)}</div>
+                  <div class="stats-agg-amt tabular income">${fmtMoney(e.amount)}원</div>
+                </div>
+              `).join('')}
             </div>
           `).join('')
       }
@@ -7334,9 +7880,9 @@ function renderLinkedAccountsSheet() {
         </div>
         <div class="la-split-divider"></div>
         <div class="la-split-col">
-          <div class="la-split-header">정기예금</div>
+          <div class="la-split-header">정기계정</div>
           <div class="la-list" id="laDepositList">${depositListHTML}</div>
-          <button class="la-add-btn la-add-small" data-kind="deposit">${ICONS.plus} 정기예금 추가</button>
+          <button class="la-add-btn la-add-small" data-kind="deposit">${ICONS.plus} 정기계정 추가</button>
         </div>
       </div>
     </div>
@@ -7392,10 +7938,10 @@ function openLinkedAccountEditSheet(acct, kind) {
   const isDefault = isNew ? newIsDefault : !!acct.isDefault;
   const defaultName = isNew && accountKind === 'normal' && !existingDefault ? '대표계정' : '';
 
-  // 정기예금 프리셋 이름
+  // 정기계정 프리셋 이름
   const depositPresets = ['정기선교', '정기건축', '정기후대', '정기퇴직'];
 
-  const kindLabel = accountKind === 'deposit' ? '정기예금' : '일반계좌';
+  const kindLabel = accountKind === 'deposit' ? '정기계정' : '일반계좌';
 
   const presetsHTML = (isNew && accountKind === 'deposit') ? `
     <div class="form-field" style="margin-bottom:0;">
@@ -7430,7 +7976,7 @@ function openLinkedAccountEditSheet(acct, kind) {
         <label class="form-label">만기일</label>
         <input id="laeMaturityInput" class="form-input" type="date"
           value="${isNew ? '' : (acct.maturityDate||'')}">
-        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">정기예금 만기일을 입력하세요 (선택)</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">정기계정 만기일을 입력하세요 (선택)</div>
       </div>` : ''}
       <div class="la-default-row">
         <label class="la-default-label" for="laeDefaultChk">대표계정으로 설정</label>
@@ -7506,13 +8052,15 @@ function openLinkedAccountEditSheet(acct, kind) {
 }
 
 let catManageSelGroupId = null; // 선택된 중분류 id
+let catManageYear = new Date().getFullYear(); // 항목 관리에서 편집 중인 예산 연도
 
-function openCatManageSheet() {
+function openCatManageSheet(year) {
   catManageType = 'expense';
   catManageExpanded = new Set();
   catManageLevel = 1;
   catManageSelCatId = null;
   catManageSelGroupId = null;
+  catManageYear = year != null ? year : new Date().getFullYear();
   renderCatManageSheet();
   openSheet('catManageSheet');
 }
@@ -7522,22 +8070,91 @@ function renderCatManageSheet() {
   renderCatTree(sheet);
 }
 
+/* =========================================================
+   예전 항목 보기 (방식 A: 연도 스냅샷 조회)
+   지금은 삭제/개명되어 사라졌지만, 그 해에는 분명히 존재했던 대분류/중분류/소분류를
+   연도별로 모아 보여준다. 개별 거래 표시는 방식 B(비정규화)로 이미 해결되므로,
+   여기서는 순수하게 "히스토리 열람" 용도로만 쓰인다.
+   ========================================================= */
+function openOldItemsSheet() {
+  renderOldItemsSheet();
+  openSheet('oldItemsSheet');
+}
+
+function renderOldItemsSheet() {
+  const sheet = document.getElementById('oldItemsSheet');
+  const currentCatIds   = new Set(State.categories.map(c => c.id));
+  const currentGroupIds = new Set((State.subGroups || []).map(g => g.id));
+  const currentSubIds   = new Set(State.subItems.map(s => s.id));
+
+  const snaps = (State.categorySnapshots || []).slice().sort((a,b) => b.year - a.year);
+
+  const yearBlocks = snaps.map(snap => {
+    const goneCats   = (snap.categories || []).filter(c => !currentCatIds.has(c.id));
+    const goneGroups = (snap.subGroups  || []).filter(g => !currentGroupIds.has(g.id));
+    const goneSubs   = (snap.subItems   || []).filter(s => !currentSubIds.has(s.id));
+
+    if (goneCats.length === 0 && goneGroups.length === 0 && goneSubs.length === 0) return '';
+
+    return `
+      <div class="card" style="padding:12px 16px;margin-bottom:12px;">
+        <div style="font-size:13.5px;font-weight:800;margin-bottom:8px;">${snap.year}년에 있었던 항목</div>
+        ${goneCats.length ? `
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:4px;">대분류</div>
+          ${goneCats.map(c => `
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+              <div style="background:${hexToLight(c.color||'#9CA3AF')};width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">${c.icon||'📦'}</div>
+              <span style="font-size:13px;">${escapeHTML(c.name)}</span>
+            </div>`).join('')}
+        ` : ''}
+        ${goneGroups.length ? `
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);margin:8px 0 4px;">중분류</div>
+          ${goneGroups.map(g => `<div style="font-size:13px;padding:4px 0;">📂 ${escapeHTML(g.name)}</div>`).join('')}
+        ` : ''}
+        ${goneSubs.length ? `
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);margin:8px 0 4px;">소분류</div>
+          ${goneSubs.map(s => `<div style="font-size:13px;padding:4px 0;color:var(--text-2);">· ${escapeHTML(s.name)}</div>`).join('')}
+        ` : ''}
+      </div>
+    `;
+  }).filter(Boolean).join('');
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>예전 항목 보기</h3>
+      <button id="oldItemsClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div style="font-size:12.5px;color:var(--text-3);margin-bottom:12px;">
+        지금은 삭제되었거나 이름이 바뀐 항목들이에요. 예전 거래 기록에는 그때 이름 그대로 남아있어요.
+      </div>
+      ${yearBlocks || emptyStateHTML('아직 기록된 예전 항목이 없어요', '항목을 삭제하거나 이름을 바꾸면 여기 자동으로 남아요')}
+    </div>
+  `;
+  sheet.querySelector('#oldItemsClose').addEventListener('click', () => {
+    closeSheet('oldItemsSheet');
+  });
+}
+
 // ── 항목 관리 트리 ──
 function renderCatTree(sheet) {
   const cats = State.categories.filter(c => c.type === catManageType);
-  const totalBudget = cats.reduce((s, c) => s + (c.budget || 0), 0);
+  const year = catManageYear;
+  const totalBudget = cats.reduce((s, c) => s + getBudget(c, year), 0);
   const isIncome = catManageType === 'income';
   const accent = isIncome ? 'var(--income)' : 'var(--expense)';
   const accentBg = isIncome ? 'var(--income-light,#f0fdf4)' : 'var(--expense-light,#fff5f5)';
 
   function subRowHTML(s, catId) {
+    const sBud = getBudget(s, year);
     return `<div class="cattree-leaf" style="${s.hidden?'opacity:0.45;':''}display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:5px 0 5px 40px;border-bottom:1px solid var(--border);">
       <span style="flex:1;font-size:13px;">${s.hidden?'🚫 ':''}${escapeHTML(s.name)}</span>
       <label style="display:flex;align-items:center;gap:3px;font-size:12px;color:var(--primary);cursor:pointer;white-space:nowrap;font-weight:600;">
         <input type="checkbox" data-primary-id="${s.id}" ${s.isPrimary!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--primary);">기본
       </label>
       <div style="display:flex;align-items:center;gap:3px;">
-        <input type="text" inputmode="numeric" data-budget-id="${s.id}" data-cat-id="${catId}" value="${s.budget?fmtMoney(s.budget):''}" placeholder="연간예산" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
+        <input type="text" inputmode="numeric" data-budget-id="${s.id}" data-cat-id="${catId}" value="${sBud?fmtMoney(sBud):''}" placeholder="${year}년 예산" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;">
         <span style="font-size:11px;color:var(--text-3);">원</span>
       </div>
       <button class="grip" data-rename-sub="${s.id}">${ICONS.edit}</button>
@@ -7548,9 +8165,10 @@ function renderCatTree(sheet) {
   function groupBlockHTML(g, catId) {
     const gSubs = subItemsOfGroup(g.id);
     const expanded = catManageExpanded.has(g.id);
-    const subTotal = gSubs.reduce((s,x) => s+(x.budget||0), 0);
+    const subTotal = gSubs.reduce((s,x) => s + getBudget(x, year), 0);
     // 소분류 합이 있으면 소분류 합 표시, 없으면 중분류 직접 입력값
-    const grpBudgetVal = subTotal > 0 ? subTotal : (g.budget||0);
+    const gBud = getBudget(g, year);
+    const grpBudgetVal = subTotal > 0 ? subTotal : gBud;
     return `<div class="cattree-group-block" data-group-id="${g.id}">
       <div class="catrow" style="padding:6px 0 6px 20px;border-bottom:1px solid var(--border);cursor:pointer;" data-toggle-group="${g.id}">
         <span style="font-size:13px;margin-right:4px;transition:transform .2s;display:inline-block;transform:rotate(${expanded?'90':'0'}deg);">›</span>
@@ -7560,7 +8178,7 @@ function renderCatTree(sheet) {
           <input type="text" inputmode="numeric"
             data-group-budget-id="${g.id}" data-cat-id="${catId}"
             value="${grpBudgetVal ? fmtMoney(grpBudgetVal) : ''}"
-            placeholder="중분류예산"
+            placeholder="${year}년 예산"
             style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;${subTotal > 0 ? 'background:var(--bg-2);' : ''}">
           <span style="font-size:11px;color:var(--text-3);">원</span>
         </div>
@@ -7582,6 +8200,7 @@ function renderCatTree(sheet) {
     const groups = subGroupsOfCategory(c.id);
     const subs = subItemsOfCategory(c.id).filter(s => !s.subGroupId);
     const expanded = catManageExpanded.has(c.id);
+    const cBud = getBudget(c, year);
     return `<div class="cattree-cat-block" data-cat-id="${c.id}" style="border-bottom:1px solid var(--border);">
       <div class="catrow" style="padding:6px 0;cursor:pointer;" data-toggle-cat="${c.id}">
         <span style="font-size:14px;margin-right:4px;transition:transform .2s;display:inline-block;transform:rotate(${expanded?'90':'0'}deg);">›</span>
@@ -7590,7 +8209,7 @@ function renderCatTree(sheet) {
         <div style="display:flex;align-items:center;gap:3px;margin-right:4px;">
           <input type="text" inputmode="numeric"
             data-cat-budget-id="${c.id}"
-            value="${c.budget ? fmtMoney(c.budget) : ''}"
+            value="${cBud ? fmtMoney(cBud) : ''}"
             placeholder="미설정"
             style="width:72px;padding:2px 5px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:right;${(subGroupsOfCategory(c.id).length > 0 || subItemsOfCategory(c.id).length > 0) ? 'background:var(--bg-2);' : ''}">
           <span style="font-size:11px;color:var(--text-3);">원</span>
@@ -7635,8 +8254,13 @@ function renderCatTree(sheet) {
         <button data-type="expense" class="${catManageType==='expense'?'active':''}">지출 항목</button>
         <button data-type="income" class="${catManageType==='income'?'active':''}">수입 항목</button>
       </div>
+      <div class="summary-month" style="justify-content:center; background:var(--card); border-radius:var(--radius-sm); padding:8px; box-shadow:var(--shadow); color:var(--text-1); margin-bottom:10px;">
+        <button id="catMPrevYear" style="color:var(--text-2);">${ICONS.chevLeft}</button>
+        <button id="catMYearLabel" style="background:none;border:none;font-size:14px;font-weight:700;color:var(--text-1);cursor:pointer;padding:4px 8px;border-radius:8px;flex:1;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;">${year}년 예산 편집 <span style="font-size:11px;color:var(--text-3);">▾</span></button>
+        <button id="catMNextYear" style="color:var(--text-2);">${ICONS.chevRight}</button>
+      </div>
       <div style="background:${accentBg};border-radius:10px;padding:10px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:12px;font-weight:800;color:${accent};">${isIncome?'수입':'지출'} 연간 예산 합계</div>
+        <div style="font-size:12px;font-weight:800;color:${accent};">${isIncome?'수입':'지출'} ${year}년 예산 합계</div>
         <div style="font-size:17px;font-weight:900;color:${accent};" class="tabular">${totalBudget>0?fmtMoney(totalBudget)+'원':'미설정'}</div>
       </div>
       <div class="card" style="padding:4px 14px;">
@@ -7645,6 +8269,7 @@ function renderCatTree(sheet) {
           : cats.map(c => catBlockHTML(c)).join('')}
       </div>
       <button class="btn-secondary" id="catAddNew" style="color:var(--primary);font-weight:800;">+ 새 대분류 추가</button>
+      <button class="btn-secondary" id="oldItemsBtn" style="color:var(--text-2);font-weight:700;margin-top:6px;">🕘 예전 항목 보기</button>
     </div>
   `;
 
@@ -7653,6 +8278,41 @@ function renderCatTree(sheet) {
     b.addEventListener('click', () => { catManageType = b.dataset.type; renderCatManageSheet(); });
   });
   sheet.querySelector('#catAddNew').addEventListener('click', () => openCatEditSheet(null));
+  sheet.querySelector('#oldItemsBtn').addEventListener('click', () => openOldItemsSheet());
+
+  // 연도 이동
+  sheet.querySelector('#catMPrevYear').addEventListener('click', () => { catManageYear -= 1; renderCatManageSheet(); });
+  sheet.querySelector('#catMNextYear').addEventListener('click', () => { catManageYear += 1; renderCatManageSheet(); });
+  sheet.querySelector('#catMYearLabel').addEventListener('click', () => {
+    const existing = document.getElementById('catMYearPop');
+    if (existing) { existing.remove(); return; }
+    const years = allBudgetYears();
+    for (let y = year - 5; y <= year + 1; y++) if (!years.includes(y)) years.push(y);
+    years.sort((a,b) => a-b);
+    const pop = document.createElement('div');
+    pop.id = 'catMYearPop';
+    pop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+    pop.innerHTML = `
+      <div style="background:var(--card);border-radius:20px;padding:20px;width:280px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:14px;text-align:center;">예산 편집 연도 선택</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:260px;overflow-y:auto;">
+          ${years.map(y => `
+            <button data-year="${y}" style="padding:10px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${y===year?'700':'400'};background:${y===year?'var(--primary)':'var(--card)'};color:${y===year?'#fff':'var(--text-1)'};cursor:pointer;">${y}년</button>
+          `).join('')}
+        </div>
+        <button id="catMYearPopClose" style="width:100%;margin-top:16px;padding:11px;border-radius:12px;background:var(--surface-2);border:none;font-size:14px;font-weight:600;color:var(--text-1);">닫기</button>
+      </div>`;
+    document.body.appendChild(pop);
+    pop.querySelectorAll('[data-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        catManageYear = Number(btn.dataset.year);
+        pop.remove();
+        renderCatManageSheet();
+      });
+    });
+    pop.querySelector('#catMYearPopClose').addEventListener('click', () => pop.remove());
+    pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
+  });
 
   // 대분류 토글
   sheet.querySelectorAll('[data-toggle-cat]').forEach(el => {
@@ -7690,6 +8350,7 @@ function renderCatTree(sheet) {
       if (!g) return;
       const name = prompt('중분류 이름 수정', g.name);
       if (!name?.trim()) return;
+      await ensureYearSnapshot(new Date().getFullYear());
       g.name = name.trim();
       await DB.put('subGroups', g); await reloadData(); renderCatManageSheet();
     });
@@ -7795,11 +8456,11 @@ function renderCatTree(sheet) {
       const item = await DB.get('subItems', subId);
       if (!item) return;
       const newVal = Number(rawDigits(input.value)) || 0;
-      if (item.budget === newVal) return;
-      item.budget = newVal;
+      if (getBudget(item, catManageYear) === newVal) return;
+      setBudget(item, catManageYear, newVal);
       await DB.put('subItems', item);
-      await recalcGroupBudget(item.subGroupId);
-      await recalcCatBudget(catId);
+      await recalcGroupBudget(item.subGroupId, catManageYear);
+      await recalcCatBudget(catId, catManageYear);
       await reloadData(); renderCurrentPage();
       showToast('예산 저장됐어요');
     };
@@ -7817,10 +8478,10 @@ function renderCatTree(sheet) {
       const g = await DB.get('subGroups', grpId);
       if (!g) return;
       const newVal = Number(rawDigits(input.value)) || 0;
-      if (g.budget === newVal) return;
-      g.budget = newVal;
+      if (getBudget(g, catManageYear) === newVal) return;
+      setBudget(g, catManageYear, newVal);
       await DB.put('subGroups', g);
-      await recalcCatBudget(catId);
+      await recalcCatBudget(catId, catManageYear);
       await reloadData(); renderCurrentPage();
       showToast('예산 저장됐어요');
     };
@@ -7837,8 +8498,8 @@ function renderCatTree(sheet) {
       const cat = await DB.get('categories', catId);
       if (!cat) return;
       const newVal = Number(rawDigits(input.value)) || 0;
-      if (cat.budget === newVal) return;
-      cat.budget = newVal;
+      if (getBudget(cat, catManageYear) === newVal) return;
+      setBudget(cat, catManageYear, newVal);
       await DB.put('categories', cat);
       await reloadData(); renderCurrentPage();
       showToast('예산 저장됐어요');
@@ -7855,6 +8516,7 @@ function renderCatTree(sheet) {
       if (!item) return;
       const name = prompt('소분류 이름 수정', item.name);
       if (!name?.trim()) return;
+      await ensureYearSnapshot(new Date().getFullYear());
       item.name = name.trim();
       await DB.put('subItems', item); await reloadData(); renderCatManageSheet();
     });
@@ -7870,23 +8532,24 @@ function renderCatTree(sheet) {
 }
 
 
-// ── 중분류 예산 재합산: 소분류 합이 있으면 소분류 합으로 업데이트 ──
-async function recalcGroupBudget(groupId) {
+// ── 중분류 예산 재합산: 소분류가 있으면 소분류 합으로 업데이트 (0으로 비워진 경우도 반영, 지정 연도 기준) ──
+async function recalcGroupBudget(groupId, year) {
   if (!groupId) return;
   const g = await DB.get('subGroups', groupId);
   if (!g) return;
   const allSubs  = await DB.getAll('subItems');
   const gSubs    = allSubs.filter(s => s.subGroupId === groupId);
-  const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
-  // 소분류에 값이 있을 때만 중분류를 소분류 합으로 업데이트
-  if (subTotal > 0 && g.budget !== subTotal) {
-    g.budget = subTotal;
+  const subTotal = gSubs.reduce((s, x) => s + getBudget(x, year), 0);
+  // 소분류가 하나라도 있으면(값이 전부 0이어도) 중분류를 소분류 합으로 동기화
+  // 소분류가 아예 없을 때만 중분류 직접값을 유지
+  if (gSubs.length > 0 && getBudget(g, year) !== subTotal) {
+    setBudget(g, year, subTotal);
     await DB.put('subGroups', g);
   }
 }
 
-// ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선) ──
-async function recalcCatBudget(catId) {
+// ── 대분류 예산 재합산: 소분류합 + 중분류직접입력합 (소분류가 있는 중분류는 소분류합 우선, 지정 연도 기준) ──
+async function recalcCatBudget(catId, year) {
   const cat = await DB.get('categories', catId);
   if (!cat) return;
   const allSubs   = await DB.getAll('subItems');
@@ -7894,20 +8557,21 @@ async function recalcCatBudget(catId) {
   const catGroups = allGroups.filter(g => g.categoryId === catId);
   const catSubs   = allSubs.filter(s => s.categoryId === catId);
 
-  // 중분류별 유효 예산: 소분류 합이 있으면 소분류 합, 없으면 중분류 직접값
+  // 중분류별 유효 예산: 소분류가 있으면 소분류 합(0 포함), 없으면 중분류 직접값
   let grpTotal = 0;
   for (const g of catGroups) {
     const gSubs    = catSubs.filter(s => s.subGroupId === g.id);
-    const subTotal = gSubs.reduce((s, x) => s + (x.budget||0), 0);
-    grpTotal += subTotal > 0 ? subTotal : (g.budget||0);
+    const subTotal = gSubs.reduce((s, x) => s + getBudget(x, year), 0);
+    grpTotal += gSubs.length > 0 ? subTotal : getBudget(g, year);
   }
-  const directTotal = catSubs.filter(s => !s.subGroupId).reduce((s,x) => s+(x.budget||0), 0);
+  const directTotal = catSubs.filter(s => !s.subGroupId).reduce((s,x) => s + getBudget(x, year), 0);
   const total = grpTotal + directTotal;
 
-  // 중분류/소분류에 값이 있을 때만 대분류를 합산값으로 업데이트
-  // 값이 없으면 대분류 직접값 유지
-  if (total > 0 && cat.budget !== total) {
-    cat.budget = total;
+  // 중분류/소분류가 하나라도 있으면(합계가 0이어도) 대분류를 합산값으로 동기화
+  // 중분류/소분류가 아예 없을 때만 대분류 직접값 유지
+  const hasManagedChildren = catGroups.length > 0 || catSubs.length > 0;
+  if (hasManagedChildren && getBudget(cat, year) !== total) {
+    setBudget(cat, year, total);
     await DB.put('categories', cat);
   }
 }
@@ -7921,8 +8585,8 @@ function attachSubItemEvents(sheet, catId, groupId) {
       const item = await DB.get('subItems', subId);
       if (!item) return;
       const newVal = Number(rawDigits(input.value)) || 0;
-      if (item.budget === newVal) return;
-      item.budget = newVal;
+      if (getBudget(item, catManageYear) === newVal) return;
+      setBudget(item, catManageYear, newVal);
       await DB.put('subItems', item);
       // 중분류 예산 재합산 (있는 경우)
       if (item.subGroupId) {
@@ -7930,11 +8594,11 @@ function attachSubItemEvents(sheet, catId, groupId) {
         if (g) {
           const allSubs = await DB.getAll('subItems');
           const gSubs   = allSubs.filter(s => s.subGroupId === g.id);
-          const gTotal  = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : (sub.budget||0)), 0);
-          if (g.budget !== gTotal) { g.budget = gTotal; await DB.put('subGroups', g); }
+          const gTotal  = gSubs.reduce((s, sub) => s + (sub.id === subId ? newVal : getBudget(sub, catManageYear)), 0);
+          if (getBudget(g, catManageYear) !== gTotal) { setBudget(g, catManageYear, gTotal); await DB.put('subGroups', g); }
         }
       }
-      await recalcCatBudget(catId);
+      await recalcCatBudget(catId, catManageYear);
       await reloadData(); renderCurrentPage();
       showToast('예산 저장됐어요');
     };
@@ -7950,6 +8614,7 @@ function attachSubItemEvents(sheet, catId, groupId) {
       if (!item) return;
       const name = prompt('소분류 이름 수정', item.name);
       if (!name?.trim()) return;
+      await ensureYearSnapshot(new Date().getFullYear());
       item.name = name.trim();
       await DB.put('subItems', item); await reloadData(); renderCatManageSheet();
     });
@@ -8168,12 +8833,20 @@ async function doDeleteItem(doMove, targetCatId, targetGroupId, targetSubId, tar
     showToast(`거래 ${d.txs.length}건 이동 완료`);
   }
 
+  // 방식 A: 삭제되기 전, 올해 스냅샷에 현재 항목들을 먼저 누적 저장
+  await ensureYearSnapshot(new Date().getFullYear());
+
   // 실제 삭제
   if (d.type === 'sub') {
     await DB.del('subItems', d.id);
+    // 삭제된 소분류의 예산이 상위 중분류/대분류 합계에 남지 않도록 재계산
+    await recalcGroupBudget(d.groupId, catManageYear);
+    await recalcCatBudget(d.catId, catManageYear);
   } else if (d.type === 'group') {
     for (const s of (d.groupSubs||[])) await DB.del('subItems', s.id);
     await DB.del('subGroups', d.id);
+    // 삭제된 중분류의 예산이 대분류 합계에 남지 않도록 재계산
+    await recalcCatBudget(d.catId, catManageYear);
   } else if (d.type === 'cat') {
     for (const s of subItemsOfCategory(d.id)) await DB.del('subItems', s.id);
     for (const g of subGroupsOfCategory(d.id)) await DB.del('subGroups', g.id);
@@ -8204,7 +8877,11 @@ async function deleteSubWithConfirm(subId, catId, groupId) {
   const txs = State.transactions.filter(t => (t.lines||[]).some(l => l.subItemId === subId));
   if (txs.length === 0) {
     if (!confirm(`"${item.name}"을 삭제할까요?`)) return;
+    await ensureYearSnapshot(new Date().getFullYear());
     await DB.del('subItems', subId);
+    // 삭제된 소분류의 예산이 상위 중분류/대분류 합계에 남지 않도록 재계산
+    await recalcGroupBudget(groupId, catManageYear);
+    await recalcCatBudget(catId, catManageYear);
     await reloadData(); renderCatManageSheet(); renderCurrentPage();
     showToast('삭제됐어요');
     return;
@@ -8222,8 +8899,11 @@ async function deleteGroupWithConfirm(groupId, catId) {
   const txs = State.transactions.filter(t => (t.lines||[]).some(l => gSubs.some(s => s.id === l.subItemId)));
   if (txs.length === 0) {
     if (!confirm(`"${group.name}" 중분류와 하위 소분류 ${gSubs.length}개를 삭제할까요?`)) return;
+    await ensureYearSnapshot(new Date().getFullYear());
     for (const s of gSubs) await DB.del('subItems', s.id);
     await DB.del('subGroups', groupId);
+    // 삭제된 중분류의 예산이 대분류 합계에 남지 않도록 재계산
+    await recalcCatBudget(catId, catManageYear);
     await reloadData(); renderCatManageSheet();
     showToast('삭제됐어요');
     return;
@@ -8239,6 +8919,7 @@ async function deleteCatWithConfirm(catId) {
   const txs = State.transactions.filter(t => t.categoryId === catId);
   if (txs.length === 0) {
     if (!confirm(`"${cat.name}" 대분류를 삭제할까요? 하위 항목도 모두 삭제됩니다.`)) return;
+    await ensureYearSnapshot(new Date().getFullYear());
     for (const s of subItemsOfCategory(catId)) await DB.del('subItems', s.id);
     for (const g of subGroupsOfCategory(catId)) await DB.del('subGroups', g.id);
     for (const p of personsOfCategory(catId, true)) await DB.del('persons', p.id);
@@ -8274,7 +8955,7 @@ const COLOR_PALETTE = ['#E5484D','#F08C3A','#F0A93A','#1FAA59','#10B981','#0EA5E
 function openCatEditSheet(catId) {
   const editing = catId ? catById(catId) : null;
   const sheet = document.getElementById('catEditSheet');
-  const draft = editing ? { ...editing } : { type: catManageType, name: '', icon: ICON_PALETTE[0], color: COLOR_PALETTE[0], budget: 0, usePersonLevel: false };
+  const draft = editing ? { ...editing } : { type: catManageType, name: '', icon: ICON_PALETTE[0], color: COLOR_PALETTE[0], budgets: {}, usePersonLevel: false };
 
   function paint() {
     sheet.innerHTML = `
@@ -8311,9 +8992,9 @@ function openCatEditSheet(catId) {
         </div>
         ${draft.type === 'expense' ? `
           <div class="formrow">
-            <label>연간 예산 (선택, 0이면 미설정)</label>
+            <label>${catManageYear}년 연간 예산 (선택, 0이면 미설정)</label>
             <div class="amt-input-wrap" id="budgetWrap">
-              <input type="text" inputmode="numeric" id="catBudget" placeholder="0" value="${draft.budget ? fmtMoney(draft.budget) : ''}">
+              <input type="text" inputmode="numeric" id="catBudget" placeholder="0" value="${getBudget(draft, catManageYear) ? fmtMoney(getBudget(draft, catManageYear)) : ''}">
               <span class="won">원</span>
             </div>
           </div>
@@ -8335,7 +9016,7 @@ function openCatEditSheet(catId) {
         ${editing ? `<button class="btn-secondary" id="catDelete" style="color:var(--expense);">대분류 삭제</button>` : ''}
       </div>
     `;
-    sheet.querySelector('#catEClose').addEventListener('click', () => { closeAllSheets(); openCatManageSheet(); });
+    sheet.querySelector('#catEClose').addEventListener('click', () => { closeAllSheets(); openCatManageSheet(catManageYear); });
     sheet.querySelectorAll('.iconpick').forEach(b => {
       b.addEventListener('click', () => { draft.icon = b.dataset.icon; paint(); });
     });
@@ -8363,10 +9044,12 @@ function openCatEditSheet(catId) {
       if (!name) { showToast('이름을 입력해주세요'); return; }
       draft.name = name;
       if (draft.type === 'expense') {
-        draft.budget = Number(rawDigits(sheet.querySelector('#catBudget').value)) || 0;
+        const newVal = Number(rawDigits(sheet.querySelector('#catBudget').value)) || 0;
+        setBudget(draft, catManageYear, newVal);
       }
       const isNew = !editing;
       if (isNew) { draft.id = uid(); draft.order = State.categories.length; }
+      else await ensureYearSnapshot(new Date().getFullYear()); // 수정 전 이름/아이콘/색상을 올해 스냅샷에 남겨둠
       await DB.put('categories', draft);
 
       // 새 대분류 추가 시: 중분류·소분류가 없으면 동일 이름으로 자동 생성
@@ -8383,7 +9066,7 @@ function openCatEditSheet(catId) {
 
       await reloadData();
       closeAllSheets();
-      openCatManageSheet();
+      openCatManageSheet(catManageYear);
       renderCurrentPage();
       showToast(editing ? '수정되었습니다' : `'${draft.name}' 대분류가 추가되었습니다`);
     });
@@ -8391,15 +9074,16 @@ function openCatEditSheet(catId) {
       sheet.querySelector('#catDelete').addEventListener('click', async () => {
         const usedCount = State.transactions.filter(t => t.categoryId === editing.id).length;
         const msg = usedCount > 0
-          ? `이 대분류를 사용한 거래가 ${usedCount}건 있습니다. 삭제해도 거래 기록은 남지만 분류명이 표시되지 않습니다. 계속할까요?`
+          ? `이 대분류를 사용한 거래가 ${usedCount}건 있습니다. 삭제해도 기존 거래에는 그때의 분류명이 그대로 남아있어요. 계속할까요?`
           : '이 대분류를 삭제할까요? 하위 세부항목/이름도 함께 삭제됩니다.';
         if (!confirm(msg)) return;
+        await ensureYearSnapshot(new Date().getFullYear());
         await DB.del('categories', editing.id);
         for (const s of subItemsOfCategory(editing.id)) await DB.del('subItems', s.id);
         for (const p of personsOfCategory(editing.id)) await DB.del('persons', p.id);
         await reloadData();
         closeAllSheets();
-        openCatManageSheet();
+        openCatManageSheet(catManageYear);
         renderCurrentPage();
         showToast('삭제되었습니다');
       });
@@ -8445,7 +9129,7 @@ function renderCatSubSheet(categoryId, mode) {
                 <input type="checkbox" data-primary-id="${item.id}" ${item.isPrimary!==false?'checked':''} style="width:15px;height:15px;cursor:pointer;">
                 기본
               </label>
-              <input type="text" inputmode="numeric" data-budget-id="${item.id}" value="${item.budget ? fmtMoney(item.budget) : ''}" placeholder="연간예산" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;">
+              <input type="text" inputmode="numeric" data-budget-id="${item.id}" value="${getBudget(item, catManageYear) ? fmtMoney(getBudget(item, catManageYear)) : ''}" placeholder="${catManageYear}년 예산" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;">
               <span style="color:var(--text-3);">원</span>
             </div>` : ''}
             <button class="grip" data-rename="${item.id}">${ICONS.edit}</button>
@@ -8470,16 +9154,16 @@ function renderCatSubSheet(categoryId, mode) {
         const item = list.find(x => x.id === input.dataset.budgetId);
         if (!item) return;
         const newVal = Number(rawDigits(input.value)) || 0;
-        if (item.budget === newVal) return;
-        item.budget = newVal;
+        if (getBudget(item, catManageYear) === newVal) return;
+        setBudget(item, catManageYear, newVal);
         await DB.put('subItems', item);
         // 대분류 예산 = 소분류 예산 합산
         const allSubs = subItemsOfCategory(categoryId);
         const updatedSubs = allSubs.map(s => s.id === item.id ? item : s);
-        const catTotal = updatedSubs.reduce((s, sub) => s + (sub.budget || 0), 0);
+        const catTotal = updatedSubs.reduce((s, sub) => s + getBudget(sub, catManageYear), 0);
         const catObj = catById(categoryId);
         if (catObj) {
-          catObj.budget = catTotal;
+          setBudget(catObj, catManageYear, catTotal);
           await DB.put('categories', catObj);
         }
         await reloadData();
