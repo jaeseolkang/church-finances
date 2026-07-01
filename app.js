@@ -882,12 +882,92 @@ async function setYearCarryover(year, amount) {
   await DB.put('settings', { key: `yearCarryover:${year}`, amount: Number(amount) || 0 });
 }
 
-// 재정계정(대표계정) 거래만 반환 — accountId가 null이거나 대표계정 id인 거래
+/* ---------------------------------------------------------
+   서브계좌 ↔ 재정계정(대표계정) 간 이체 자동 반영 (가상 거래)
+   -----------------------------------------------------------
+   서브계좌끼리(예: 건축계정→정기건축2)의 이체는 거래 1건만 입력해도
+   calcAcctTotals()/renderAcctDetail()가 예금(지출)·통장이동(수입)
+   카테고리의 소분류명(=상대 계좌명)을 읽어 양쪽 계좌에 자동 반영해준다.
+   그런데 대표계정(재정계정)은 이 매칭 대상(nonDefaultAccts)에서 제외되어
+   있어서, 서브계좌 쪽에서만 기록된 이체가 재정계정 장부/통계에는 전혀
+   반영되지 않는 비대칭이 있었다. 아래 함수는 그 누락된 반대쪽을
+   "가상 거래(synthetic tx)"로 만들어 mainAcctTxs()에 병합해준다.
+   - 원본 거래는 State.transactions에 그대로 두고 건드리지 않는다
+     (서브계좌 쪽 집계는 기존 로직 그대로 정상 동작).
+   - 가상 거래는 mainAcctTxs()를 사용하는 화면(총자산, 홈 요약, 통계
+     [리스트] 탭, 재정계정 관련 엑셀 등)에서만 보이며, State.transactions
+     자체에는 저장되지 않으므로 서브계좌 집계가 이중으로 잡히지 않는다.
+   --------------------------------------------------------- */
+function mainAcctSyntheticTxs() {
+  const defAcct = (State.linkedAccounts || []).find(a => a.isDefault);
+  if (!defAcct) return [];
+  const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income'); // 계정→재정 반환
+  const expCat  = State.categories.find(c => c.name === '예금'   && c.type === 'expense');  // 재정→계정 이체
+
+  const result = [];
+  for (const t of (State.transactions || [])) {
+    // 재정계정 자체 거래(accountId 없음/대표계정)는 mainAcctTxs()가 이미 직접 포함하므로 제외
+    if (!t.accountId || t.accountId === defAcct.id) continue;
+    const srcAcct = (State.linkedAccounts || []).find(a => a.id === t.accountId);
+    if (!srcAcct || srcAcct.isDefault) continue;
+
+    const isDeposit = expCat  && t.categoryId === expCat.id  && t.type === 'expense'; // 서브계좌→ 상대계좌 지출
+    const isReturn  = tongCat && t.categoryId === tongCat.id && t.type === 'income';  // 서브계좌→ 상대계좌로부터 수입
+    if (!isDeposit && !isReturn) continue;
+
+    (t.lines || []).forEach((line, i) => {
+      const si = line.subItemId ? subItemById(line.subItemId) : null;
+      const lineName = line.subItemName || (si ? si.name : null);
+      if (lineName !== defAcct.name) return; // 이 라인의 상대방이 재정계정일 때만 처리
+
+      if (isDeposit) {
+        // 서브계좌 입장: 재정계정으로 지출 → 재정계정 입장: 수입(통장이동, 계정→재정 반환)
+        result.push({
+          id: `syn_${t.id}_${i}`,
+          type: 'income',
+          amount: line.amount,
+          date: t.date,
+          categoryId: tongCat ? tongCat.id : t.categoryId,
+          subGroupId: t.subGroupId,
+          memo: t.memo || '',
+          accountId: null,
+          createdAt: t.createdAt,
+          isSynthetic: true,
+          sourceTxId: t.id,
+          sourceAccountId: t.accountId,
+          lines: [{ subItemId: line.subItemId, amount: line.amount, subItemName: srcAcct.name }],
+        });
+      } else {
+        // 서브계좌 입장: 재정계정으로부터 수입(반환) → 재정계정 입장: 지출(예금)
+        result.push({
+          id: `syn_${t.id}_${i}`,
+          type: 'expense',
+          amount: line.amount,
+          date: t.date,
+          categoryId: expCat ? expCat.id : t.categoryId,
+          subGroupId: t.subGroupId,
+          memo: t.memo || '',
+          accountId: null,
+          createdAt: t.createdAt,
+          isSynthetic: true,
+          sourceTxId: t.id,
+          sourceAccountId: t.accountId,
+          lines: [{ subItemId: line.subItemId, amount: line.amount, subItemName: srcAcct.name }],
+        });
+      }
+    });
+  }
+  return result;
+}
+
+// 재정계정(대표계정) 거래 반환 — accountId가 null이거나 대표계정 id인 거래
+// + 서브계좌↔재정계정 이체 중 재정계정 쪽에 누락된 반대쪽을 가상 거래로 보강
 function mainAcctTxs() {
   const defAcct = (State.linkedAccounts || []).find(a => a.isDefault);
-  return State.transactions.filter(t =>
+  const direct = State.transactions.filter(t =>
     !t.accountId || (defAcct && t.accountId === defAcct.id)
   );
+  return [...direct, ...mainAcctSyntheticTxs()];
 }
 
 function txInCursorMonth() {
@@ -6583,6 +6663,14 @@ function resetTxForm(type) {
 }
 
 function openTxSheet(txId, presetDate, presetType, presetAccountId) {
+  // 가상 거래(서브계좌↔재정계정 자동 반영분)는 실제 저장된 거래가 아니므로 직접 수정 불가.
+  // 원본은 상대 계좌(서브계좌) 쪽에 있으니 그쪽에서 수정하도록 안내한다.
+  if (typeof txId === 'string' && txId.startsWith('syn_')) {
+    const srcTx = State.transactions.find(t => txId.startsWith(`syn_${t.id}_`));
+    const srcAcct = srcTx ? (State.linkedAccounts || []).find(a => a.id === srcTx.accountId) : null;
+    showToast(srcAcct ? `'${srcAcct.name}' 계좌 쪽 거래를 수정해주세요` : '연결된 계좌 쪽 거래를 수정해주세요');
+    return;
+  }
   if (!getIsAdmin()) { showPasswordPrompt(() => openTxSheet(txId, presetDate, presetType, presetAccountId)); return; }
   const editing = txId ? State.transactions.find(t => t.id === txId) : null;
   State.editingTx = editing;
