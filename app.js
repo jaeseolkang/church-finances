@@ -1,4 +1,4 @@
-// v3.05 | 2026-07-02 KST | 수정: 계정 탭에 연도 선택 필터 추가(일반계정/정기계정), 인쇄 미리보기 좌우 스크롤+확대, 계정현황 엑셀 내보내기 버튼 추가 | cache:v209
+// v3.07 | 2026-07-02 KST | 수정: 홈 헤더 총수입/총예금/순지출/전년이월 집계 기준을 캘린더 탐색 연도(cursorDate)가 아닌 실제 현재 연도(new Date())로 고정 | cache:v211
 'use strict';
 
 // ============================================================
@@ -1024,6 +1024,58 @@ async function totalAssets() {
   return { totalIncome: income, totalExpense: expense, depositExp, netExpense, carryover, net };
 }
 
+/* ---------------------------------------------------------
+   연도별 전년이월 / 당해년도 자산 계산 (홈 헤더 전용)
+   - 최초 거래연도: 그 해 수입 중 "전년이월" 카테고리로 명시된 금액을 사용
+   - 그 다음 연도부터: 전년도의 "년말 순자산(=전년이월+수입-지출)"을
+     자동으로 그 해의 전년이월로 이월 처리 (연속기재)
+   - 총수입/총예금/순지출은 해당 연도 거래만 집계
+   --------------------------------------------------------- */
+async function totalAssetsForYear(year) {
+  const carryoverCat = State.categories.find(c => c.name === '전년이월');
+  const depositCat   = State.categories.find(c => c.name === '예금');
+  const allTxs = mainAcctTxs();
+
+  const yearsWithTx = Array.from(new Set(allTxs.map(t => Number(t.date.slice(0, 4))))).sort((a, b) => a - b);
+  const firstYear = yearsWithTx.length ? yearsWithTx[0] : year;
+
+  function summarizeYear(yr) {
+    let income = 0, expense = 0, carryoverTx = 0, depositExp = 0;
+    for (const t of allTxs) {
+      if (Number(t.date.slice(0, 4)) !== yr) continue;
+      if (t.type === 'income') {
+        if (carryoverCat && t.categoryId === carryoverCat.id) carryoverTx += t.amount;
+        else income += t.amount;
+      } else {
+        if (depositCat && t.categoryId === depositCat.id) depositExp += t.amount;
+        expense += t.amount;
+      }
+    }
+    return { income, expense, carryoverTx, depositExp };
+  }
+
+  // firstYear부터 요청 연도까지 순차적으로 전년이월을 이월 계산
+  const cache = {};
+  function carryoverFor(yr) {
+    if (cache[yr] !== undefined) return cache[yr];
+    let result;
+    if (yr <= firstYear) {
+      result = summarizeYear(yr).carryoverTx; // 최초 연도: 명시된 전년이월 그대로 사용
+    } else {
+      const prev = summarizeYear(yr - 1);
+      result = carryoverFor(yr - 1) + prev.income - prev.expense + prev.carryoverTx;
+    }
+    cache[yr] = result;
+    return result;
+  }
+
+  const carryover = carryoverFor(year);
+  const { income, expense, depositExp } = summarizeYear(year);
+  const netExpense = expense - depositExp;
+  const net = carryover + income - expense;
+  return { totalIncome: income, totalExpense: expense, depositExp, netExpense, carryover, net, year };
+}
+
 /* =========================================================
    ICONS (inline SVG, stroke-based, consistent 22x22 viewBox)
    ========================================================= */
@@ -1343,7 +1395,8 @@ function dateToStr(d) {
 async function renderHome() {
   const page = document.getElementById('page-home');
   const { income, expense, balance, deposit, netExpense: monthNetExpense, netTotal } = monthSummary();
-  const { totalIncome, totalExpense, depositExp, netExpense, carryover, net } = await totalAssets();
+  const homeYear = new Date().getFullYear();
+  const { totalIncome, totalExpense, depositExp, netExpense, carryover, net } = await totalAssetsForYear(homeYear);
   const netColor = net < 0 ? 'var(--expense-light)' : '#fff';
 
   const viewTabsHTML = `
@@ -1372,7 +1425,7 @@ async function renderHome() {
     <div class="total-assets-banner" style="display:flex;justify-content:space-between;align-items:stretch;">
       <div style="display:flex;flex-direction:column;justify-content:center;gap:10px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">년이월</span>
+          <span style="font-size:12px;color:rgba(255,255,255,0.75);font-weight:600;min-width:52px;">전년이월</span>
           <span class="tabular" style="font-size:12.5px;color:#fff;font-weight:700;">${fmtMoney(carryover)}원</span>
         </div>
         <div>
