@@ -1,6 +1,6 @@
-// 2026-07-01 KST | CACHE_NAME v2016 (계좌간 이체 시 상대 정기계좌 수입 미반영 버그 수정 + 상대계좌 라벨 오표시 수정)
+// 2026-07-02 KST | CACHE_NAME v2017 (계정 탭 연도별 필터 추가 + 인쇄 미리보기 좌우 스크롤/확대 + 계정현황 엑셀 내보내기 추가)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2016';
+const CACHE_NAME = 'gaegyebu-v2017';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

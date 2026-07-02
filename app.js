@@ -1,4 +1,4 @@
-// v3.04 | 2026-06-29 KST | 수정: 설정의 앱이름 입력란에 안내 placeholder('이름을 입력하세요. 예:oo교회') 추가, 미설정 시 빈 값+기본표시로 변경 | cache:v208
+// v3.05 | 2026-07-02 KST | 수정: 계정 탭에 연도 선택 필터 추가(일반계정/정기계정), 인쇄 미리보기 좌우 스크롤+확대, 계정현황 엑셀 내보내기 버튼 추가 | cache:v209
 'use strict';
 
 // ============================================================
@@ -466,6 +466,7 @@ const State = {
   normalSortDir: 'asc',     // 'asc' | 'desc'
   depositSortKey: 'name',   // 'name' | 'maturity'
   depositSortDir: 'asc',    // 'asc' | 'desc'
+  accountsYear: 'all',      // 'all' | 숫자연도 — 일반계정/정기계정 탭 연도 필터
 };
 
 function fmtMoney(n) {
@@ -1136,8 +1137,20 @@ function _doPrintBlob(html) {
         border:none;border-radius:12px;cursor:pointer;
         font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
       }
-      /* 화면에서는 페이지 구분 없이 연속 표시 */
+      /* 화면에서는 페이지 구분 없이 연속 표시 + 좌우 스크롤 가능하도록 넓게 펼침 */
       .print-page{display:block;margin-bottom:24px;}
+      .print-scroll-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
+      .print-scroll-wrap .page-inner{min-width:760px;}
+      .print-scroll-hint{
+        display:flex;align-items:center;gap:6px;
+        margin:0 16px 8px;padding:8px 12px;border-radius:10px;
+        background:#EFF6FF;color:#1d4ed8;font-size:12px;font-weight:700;
+      }
+      @media print{
+        .print-scroll-wrap{overflow:visible!important;}
+        .print-scroll-wrap .page-inner{min-width:0!important;}
+        .print-scroll-hint{display:none!important;}
+      }
       #print-scrolltop{
         display:none;position:fixed;right:18px;bottom:24px;
         width:48px;height:48px;border-radius:50%;
@@ -1151,7 +1164,8 @@ function _doPrintBlob(html) {
     </style>
   </head><body>
     <button id="print-btn" onclick="window.print()">🖨️ 인쇄</button>
-    ${html}
+    <div class="print-scroll-hint">👉 좌우로 스크롤하면 전체 표를 볼 수 있어요</div>
+    <div class="print-scroll-wrap">${html}</div>
     <button id="print-scrolltop" title="맨 위로" onclick="window.scrollTo({top:0,behavior:'smooth'})">▲</button>
     <script>
       (function(){
@@ -3600,18 +3614,19 @@ function renderExpenseTableA4(list, range) {
 function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet, mainLabel,
   totalCarry, totalIncome, totalExpense, totalNet, summaryTitle,
   normalCarry, normalIncome, normalExpense,
-  depositCarry, depositIncome, depositExpense, nonDefaultAccts}) {
+  depositCarry, depositIncome, depositExpense, nonDefaultAccts, selectedYear, yearLabel}) {
 
   const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
   const shortName = name => name.replace(/계정$/, '');
   const today = todayStr();
+  const yLabel = yearLabel || (selectedYear && selectedYear !== 'all' ? `${selectedYear}년` : '전체 연도');
 
   // 테이블 행 생성 함수
   const makeRows = (acctList, isDeposit) => {
     if (!acctList.length) return `<tr><td colspan="${isDeposit?6:5}" style="text-align:center;padding:12pt;color:#888;">등록된 계좌가 없습니다</td></tr>`;
     return acctList.map(a => {
-      const t = totals[a.name] || {income:0, expense:0};
-      const carry = a.carryover || 0;
+      const t = totals[a.name] || {income:0, expense:0, carryIn:0};
+      const carry = (a.carryover || 0) + (t.carryIn || 0);
       const net = carry + t.income - t.expense;
       const netColor = net >= 0 ? '#1F497D' : '#CC0000';
       let matTd = '';
@@ -3638,8 +3653,16 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
   const normalAccts  = nonDefaultAccts.filter(a => !a.accountKind || a.accountKind === 'normal');
   const depositAccts = nonDefaultAccts.filter(a => a.accountKind === 'deposit');
 
+  // 표시용 순증감 합계 — 연도 필터가 적용된 totals 기준(연도 미선택 시 all-time과 동일)
+  const netOf = acctList => acctList.reduce((s,a)=>{
+    const t = totals[a.name] || {income:0, expense:0, carryIn:0};
+    return s + (a.carryover||0) + (t.carryIn||0) + t.income - t.expense;
+  }, 0);
+  const normalNetDisp  = netOf(normalAccts);
+  const depositNetDisp = netOf(depositAccts);
+
   const makeTable = (acctList, isDeposit) => {
-    const carry = acctList.reduce((s,a)=>s+(a.carryover||0),0);
+    const carry = acctList.reduce((s,a)=>s+(a.carryover||0)+(totals[a.name]?.carryIn||0),0);
     const inc   = acctList.reduce((s,a)=>s+(totals[a.name]?.income||0),0);
     const exp   = acctList.reduce((s,a)=>s+(totals[a.name]?.expense||0),0);
     const net   = carry + inc - exp;
@@ -3674,7 +3697,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
     <div class="print-page" style="display:block;">
       <div class="page-inner">
         <div class="print-title">🏦 계정 현황</div>
-        <div class="print-period">${new Date().toLocaleDateString('ko-KR')}</div>
+        <div class="print-period">${new Date().toLocaleDateString('ko-KR')} · ${yLabel}</div>
 
         <!-- 자산합계 -->
         <div style="display:flex;gap:8pt;margin-bottom:10pt;border:1pt solid #1F4E79;border-radius:6pt;padding:7pt 10pt;background:#EBF3FB;-webkit-print-color-adjust:exact;print-color-adjust:exact;align-items:center;">
@@ -3697,16 +3720,99 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         </div>
 
         <!-- 일반계정 -->
-        <div class="print-section-title">일반계정 합계 · ${normalNet.toLocaleString('ko-KR')}원</div>
+        <div class="print-section-title">일반계정 합계 (${yLabel}) · ${normalNetDisp.toLocaleString('ko-KR')}원</div>
         ${makeTable(normalAccts, false)}
 
         <!-- 정기계정 -->
-        <div class="print-section-title" style="margin-top:10pt;">정기계정 합계 · ${depositNet.toLocaleString('ko-KR')}원</div>
+        <div class="print-section-title" style="margin-top:10pt;">정기계정 합계 (${yLabel}) · ${depositNetDisp.toLocaleString('ko-KR')}원</div>
         ${makeTable(depositAccts, true)}
       </div>
     </div>`;
 
   doPrint(html);
+}
+
+// ── 계정 현황 엑셀 내보내기 (일반계정/정기계정 각각 시트로) ──
+function exportAccountsToExcel({totals, mainNet, normalNet, depositNet, mainLabel, grandNet, nonDefaultAccts, selectedYear, yearLabel}) {
+  const wb = XLSX.utils.book_new();
+  const numFmt = '#,##0';
+  const gBdr = {style:'thin', color:{rgb:'CCCCCC'}};
+  const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
+  const HDR_FILL = {patternType:'solid',fgColor:{rgb:'1F4E79'}};
+  const SUM_FILL = {patternType:'solid',fgColor:{rgb:'2E74B5'}};
+  const whiteFont = {bold:true,color:{rgb:'FFFFFF'}};
+  const blueFont  = {color:{rgb:'1F497D'}};
+  const redFont   = {color:{rgb:'CC0000'}};
+  const shortName = name => name.replace(/계정$/, '');
+  const today = todayStr();
+  const yLabel = yearLabel || (selectedYear && selectedYear !== 'all' ? `${selectedYear}년` : '전체 연도');
+
+  const buildSheet = (acctList, isDeposit, sheetName) => {
+    const header = isDeposit
+      ? ['계좌이름','이월금','수입금','지출금','합계','만기일']
+      : ['계좌이름','이월금','수입금','지출금','합계'];
+    const aoa = [header];
+    let sCarry=0, sInc=0, sExp=0;
+    for (const a of acctList) {
+      const t = totals[a.name] || {income:0, expense:0, carryIn:0};
+      const carry = (a.carryover||0) + (t.carryIn||0);
+      const net   = carry + t.income - t.expense;
+      sCarry += carry; sInc += t.income; sExp += t.expense;
+      const row = [shortName(a.name), carry, t.income, t.expense, net];
+      if (isDeposit) {
+        const md = a.maturityDate || '';
+        row.push(md ? md.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1.$2.$3') : '-');
+      }
+      aoa.push(row);
+    }
+    const sNet = sCarry + sInc - sExp;
+    const sumRow = ['합계', sCarry, sInc, sExp, sNet];
+    if (isDeposit) sumRow.push('');
+    aoa.push(sumRow);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const nCols = header.length;
+    ws['!cols'] = isDeposit
+      ? [{wch:14},{wch:13},{wch:13},{wch:13},{wch:14},{wch:12}]
+      : [{wch:14},{wch:13},{wch:13},{wch:13},{wch:14}];
+
+    const sc = (r,c,s) => {
+      const addr = XLSX.utils.encode_cell({r,c});
+      if (!ws[addr]) ws[addr] = {t:'s',v:''};
+      ws[addr].s = s;
+    };
+    for (let c=0;c<nCols;c++) sc(0,c,{fill:HDR_FILL,font:whiteFont,border:allGray,alignment:{horizontal:c>0?'right':'center',vertical:'center'}});
+    for (let r=1;r<aoa.length-1;r++) {
+      for (let c=0;c<nCols;c++) {
+        const addr = XLSX.utils.encode_cell({r,c});
+        if (!ws[addr]) ws[addr]={t:'s',v:''};
+        const isNum = typeof ws[addr].v === 'number';
+        let font = {};
+        if (c===2) font = blueFont;
+        if (c===3) font = redFont;
+        ws[addr].s = {font,border:allGray,alignment:{horizontal:c>0?'right':'left',vertical:'center'}, ...(isNum?{numFmt}:{})};
+        if (isNum) ws[addr].z = numFmt;
+      }
+    }
+    const sumR = aoa.length-1;
+    for (let c=0;c<nCols;c++) {
+      const addr = XLSX.utils.encode_cell({r:sumR,c});
+      if (!ws[addr]) ws[addr]={t:'s',v:''};
+      const isNum = typeof ws[addr].v === 'number';
+      ws[addr].s = {fill:SUM_FILL,font:whiteFont,border:allGray,alignment:{horizontal:c>0?'right':'center',vertical:'center'},...(isNum?{numFmt}:{})};
+      if (isNum) ws[addr].z = numFmt;
+    }
+    ws['!pageSetup'] = {paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  };
+
+  const normalAccts  = nonDefaultAccts.filter(a => !a.accountKind || a.accountKind === 'normal');
+  const depositAccts = nonDefaultAccts.filter(a => a.accountKind === 'deposit');
+
+  buildSheet(normalAccts, false, '일반계정');
+  buildSheet(depositAccts, true, '정기계정');
+
+  XLSX.writeFile(wb, `계정현황_${yLabel}_${today}.xlsx`);
 }
 
 function renderStatsTabBars(rows, total, isIncome) {
@@ -4335,7 +4441,11 @@ function calcAcctBalanceMap() {
   return map;
 }
 
-function calcAcctTotals() {
+// year: null/undefined/'all' → 전체 기간 합산(기존 동작과 동일, carryIn은 항상 0)
+//       숫자연도 지정 시 → income/expense는 해당 연도 거래만 집계하고,
+//       carryIn에는 그 연도 이전(1/1 이전) 거래들의 순증감(수입-지출)을 누적해
+//       "해당 연도 시작 시점 이월잔액에 더할 보정값"으로 반환한다.
+function calcAcctTotals(year) {
   const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
   const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
 
@@ -4351,8 +4461,24 @@ function calcAcctTotals() {
   const idToName = {};
   for (const a of (State.linkedAccounts || [])) idToName[a.id] = a.name;
 
-  const result = {};  // acctName → { income, expense }
-  const ensure = name => { if (!result[name]) result[name] = {income:0, expense:0}; };
+  const yearFilter = (year != null && year !== 'all') ? String(year) : null;
+
+  const result = {};  // acctName → { income, expense, carryIn }
+  const ensure = name => { if (!result[name]) result[name] = {income:0, expense:0, carryIn:0}; };
+
+  const applyOne = (name, date, type, amt) => {
+    ensure(name);
+    if (!yearFilter) {
+      if (type === 'income') result[name].income += amt; else result[name].expense += amt;
+      return;
+    }
+    const y = (date || '').slice(0, 4);
+    if (y === yearFilter) {
+      if (type === 'income') result[name].income += amt; else result[name].expense += amt;
+    } else if (y && y < yearFilter) {
+      result[name].carryIn += (type === 'income' ? amt : -amt);
+    }
+  };
 
   for (const t of (State.transactions || [])) {
     // ── 방식 A: accountId 직접 태깅 (v2.25 이후 신규 거래) ──
@@ -4363,9 +4489,7 @@ function calcAcctTotals() {
       const acct = (State.linkedAccounts||[]).find(a => a.id === t.accountId);
       if (acct && !acct.isDefault) {
         taggedName = name;
-        ensure(name);
-        if (t.type === 'income')  result[name].income  += t.amount;
-        if (t.type === 'expense') result[name].expense += t.amount;
+        applyOne(name, t.date, t.type, t.amount);
       }
     }
     // ── 방식 B: 예금/통장이동 subItem 기준 — 계좌간 이체의 상대 계좌를 반영 ──
@@ -4375,14 +4499,24 @@ function calcAcctTotals() {
       const sid = line.subItemId;
       const amt = line.amount || 0;
       for (const [name, id] of Object.entries(incomeMap)) {
-        if (sid === id && name !== taggedName) { ensure(name); result[name].income += amt; }
+        if (sid === id && name !== taggedName) applyOne(name, t.date, 'income', amt);
       }
       for (const [name, id] of Object.entries(expenseMap)) {
-        if (sid === id && name !== taggedName) { ensure(name); result[name].expense += amt; }
+        if (sid === id && name !== taggedName) applyOne(name, t.date, 'expense', amt);
       }
     }
   }
   return result;
+}
+
+// 계정 탭에서 연도 필터 선택지로 사용할 연도 목록 (오름차순, 올해 포함)
+function allAccountsYears() {
+  const years = new Set();
+  years.add(new Date().getFullYear());
+  for (const t of (State.transactions || [])) {
+    if (t.date) years.add(Number(t.date.slice(0, 4)));
+  }
+  return [...years].sort((a, b) => a - b);
 }
 
 async function renderAccounts() {
@@ -4394,8 +4528,11 @@ async function renderAccounts() {
   const defaultAcct = (State.linkedAccounts || []).find(a => a.isDefault);
   const mainLabel = defaultAcct ? defaultAcct.name : '대표계정';
 
-  // ── 연결계좌 합계 ──
+  // ── 연결계좌 합계 (자산합계 카드는 항상 전체기간 기준) ──
   const totals = calcAcctTotals();
+  // ── 연도 필터 적용 합계 (일반계정/정기계정 표 + 인쇄/엑셀에 사용) ──
+  const selectedYear = State.accountsYear || 'all';
+  const yearTotals = selectedYear === 'all' ? totals : calcAcctTotals(selectedYear);
   const nonDefaultAccts = (State.linkedAccounts || []).filter(a => !a.isDefault);
 
   let normalCarry = 0, normalIncome = 0, normalExpense = 0;
@@ -4447,8 +4584,8 @@ async function renderAccounts() {
 
   let totalCarry = 0, totalIncome = 0, totalExpense = 0;
   for (const a of accounts) {
-    const t = totals[a.name] || {income:0, expense:0};
-    totalCarry   += (a.carryover || 0);
+    const t = yearTotals[a.name] || {income:0, expense:0, carryIn:0};
+    totalCarry   += (a.carryover || 0) + (t.carryIn || 0);
     totalIncome  += t.income;
     totalExpense += t.expense;
   }
@@ -4464,8 +4601,8 @@ async function renderAccounts() {
   const rowsHTML = accounts.length === 0
     ? `<tr><td colspan="${sub==='deposit'?6:5}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
     : accounts.map(a => {
-        const t = totals[a.name] || {income:0, expense:0};
-        const carry = a.carryover || 0;
+        const t = yearTotals[a.name] || {income:0, expense:0, carryIn:0};
+        const carry = (a.carryover || 0) + (t.carryIn || 0);
         const net   = carry + t.income - t.expense;
         const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
         // 만기일 표시 (정기계정 탭)
@@ -4492,11 +4629,15 @@ async function renderAccounts() {
       }).join('');
 
   const summaryTitle = sub === 'deposit' ? '정기계정 합계' : '계좌 합계';
+  const yearLabel = selectedYear === 'all' ? '전체 연도' : `${selectedYear}년`;
 
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;display:flex;align-items:center;justify-content:space-between;">
       <h1>계정</h1>
-      <button id="acctPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      <div style="display:flex;gap:6px;">
+        <button id="acctExcel" style="font-size:13px;color:#217346;font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:#E8F5E9;">📥 엑셀</button>
+        <button id="acctPrint" style="font-size:13px;color:var(--primary);font-weight:700;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;background:var(--primary-light);">🖨️ 인쇄</button>
+      </div>
     </div>
 
     <!-- 자산합계 카드 -->
@@ -4523,6 +4664,12 @@ async function renderAccounts() {
     <div class="acct-sub-tabs">
       <button class="acct-sub-tab ${sub==='normal'?'active':''}" data-sub="normal">일반계정</button>
       <button class="acct-sub-tab ${sub==='deposit'?'active':''}" data-sub="deposit">정기계정</button>
+    </div>
+
+    <!-- 연도 필터 -->
+    <div class="acct-year-bar">
+      <button id="acctYearBtn" class="acct-year-btn">📅 ${yearLabel} <span style="font-size:10px;">▾</span></button>
+      ${selectedYear !== 'all' ? `<span class="acct-year-hint">이월금 = 연초 이월잔액</span>` : ''}
     </div>
 
     <div class="acct-summary-card">
@@ -4561,13 +4708,18 @@ async function renderAccounts() {
     });
   });
 
-  page.querySelector('#acctPrint').addEventListener('click', () => printAccounts({
-    sub, accounts, totals, grandNet, grandNetColor, mainNet, normalNet, depositNet, mainLabel,
+  page.querySelector('#acctYearBtn').addEventListener('click', () => openAccountsYearPopup());
+
+  const printPayload = {
+    sub, accounts, totals: yearTotals, grandNet, grandNetColor, mainNet, normalNet, depositNet, mainLabel,
     totalCarry, totalIncome, totalExpense, totalNet, summaryTitle,
     normalCarry, normalIncome, normalExpense,
     depositCarry, depositIncome, depositExpense,
-    nonDefaultAccts
-  }));
+    nonDefaultAccts, selectedYear, yearLabel
+  };
+
+  page.querySelector('#acctPrint').addEventListener('click', () => printAccounts(printPayload));
+  page.querySelector('#acctExcel').addEventListener('click', () => exportAccountsToExcel(printPayload));
 
   // 계정 탭(일반계정/정기계정): 헤더 클릭 정렬
   page.querySelectorAll('.acct-th-sort[data-sort]').forEach(th => {
@@ -4591,6 +4743,42 @@ async function renderAccounts() {
       if (acct) openAcctDetail(acct);
     });
   });
+}
+
+// ── 계정 탭: 연도 선택 팝업 ──
+function openAccountsYearPopup() {
+  const existing = document.getElementById('acctYearPop');
+  if (existing) { existing.remove(); return; }
+
+  const years = allAccountsYears();
+  const cur = State.accountsYear || 'all';
+
+  const pop = document.createElement('div');
+  pop.id = 'acctYearPop';
+  pop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+  pop.innerHTML = `
+    <div style="background:var(--card);border-radius:20px;padding:20px;width:280px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:14px;text-align:center;">연도 선택</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:260px;overflow-y:auto;">
+        <button data-year="all" style="padding:10px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${cur==='all'?'700':'400'};background:${cur==='all'?'var(--primary)':'var(--card)'};color:${cur==='all'?'#fff':'var(--text-1)'};cursor:pointer;">전체</button>
+        ${years.map(y => `
+          <button data-year="${y}" style="padding:10px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:${String(y)===String(cur)?'700':'400'};background:${String(y)===String(cur)?'var(--primary)':'var(--card)'};color:${String(y)===String(cur)?'#fff':'var(--text-1)'};cursor:pointer;">${y}년</button>
+        `).join('')}
+      </div>
+      <button id="acctYearPopClose" style="width:100%;margin-top:16px;padding:11px;border-radius:12px;background:var(--surface-2);border:none;font-size:14px;font-weight:600;color:var(--text-1);">닫기</button>
+    </div>`;
+  document.body.appendChild(pop);
+
+  pop.querySelectorAll('[data-year]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const y = btn.dataset.year;
+      State.accountsYear = y === 'all' ? 'all' : Number(y);
+      pop.remove();
+      renderAccounts();
+    });
+  });
+  pop.querySelector('#acctYearPopClose').addEventListener('click', () => pop.remove());
+  pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
 }
 
 /* =========================================================

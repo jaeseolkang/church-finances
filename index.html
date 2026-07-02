@@ -1,4 +1,4 @@
-<!-- 2026-06-25 17:40 KST | 수정: @media print A4 스타일 + #print-area 추가 -->
+<!-- 2026-07-02 KST | 수정: 계정 탭 연도 선택 버튼 CSS 추가 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -754,6 +754,14 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .la-default-label{font-size:14px; font-weight:600; color:var(--text-1);}
 
 /* ── 계정 탭 ── */
+.acct-year-bar{display:flex; align-items:center; gap:8px; margin-bottom:14px;}
+.acct-year-btn{
+  padding:8px 14px; border-radius:20px; font-size:13px; font-weight:700;
+  background:var(--primary-light); color:var(--primary); border:1.5px solid var(--primary);
+  display:inline-flex; align-items:center; gap:5px;
+}
+.acct-year-btn:active{background:var(--primary); color:#fff;}
+.acct-year-hint{font-size:11px; color:var(--text-3);}
 .acct-summary-card{
   background:var(--primary); color:#fff;
   border-radius:18px; padding:20px 20px 18px;
