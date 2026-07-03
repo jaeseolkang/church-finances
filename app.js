@@ -6,7 +6,7 @@ const APP_VERSION = 'v3.33 (cache v237)';
 // 🔧 배포 설정 스위치
 // church-finances 저장소: true / finances 저장소: false
 // ============================================================
-const USE_FIREBASE = false;
+const USE_FIREBASE = true;
 
 
 
