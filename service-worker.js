@@ -1,6 +1,6 @@
-// 2026-07-02 KST | CACHE_NAME v2045 (기부금영수증 폰트 크기 조정: 데이터 확대, 작성방법 이하 축소)
+// 2026-07-04 KST | CACHE_NAME v2046 (항목구조표 테두리/색상 구분 개선)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2045';
+const CACHE_NAME = 'gaegyebu-v2046';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

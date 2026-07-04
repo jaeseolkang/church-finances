@@ -1,6 +1,6 @@
-// v3.33 | 2026-07-02 KST | 수정: 기부금영수증 입력데이터(성명/주민번호/주소/단체정보/금액/날짜) 폰트 2단계 확대(11→13px), 작성방법 이하 섹션 폰트 2단계 축소(제목12→10px, 본문10→8px, 하단11→9px) | cache:v237
+// v3.34 | 2026-07-04 KST | 수정: 항목구조표 테두리 진하게, 대분류 경계선 굵게, 중분류 그룹별 줄무늬 배경 추가해서 구분 쉽게 | cache:v238
 'use strict';
-const APP_VERSION = 'v3.33 (cache v237)';
+const APP_VERSION = 'v3.34 (cache v238)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4496,6 +4496,20 @@ function exportItemStructureToExcel() {
   XLSX.writeFile(wb, `항목구조표_${appTitle}.xlsx`);
 }
 
+// hex 색상을 percent만큼 어둡게(음수)/밝게(양수) 조정 (항목구조표 줄무늬 배경용)
+function shadeColor(hex, percent) {
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const num = parseInt(hex, 16);
+  let r = (num >> 16) + Math.round(255 * (percent / 100));
+  let g = ((num >> 8) & 0x00FF) + Math.round(255 * (percent / 100));
+  let b = (num & 0x0000FF) + Math.round(255 * (percent / 100));
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+}
+
 function openItemStructureSheet() {
   const sheet = document.getElementById('itemStructureSheet');
   const cats = [...State.categories].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
@@ -4526,31 +4540,43 @@ function openItemStructureSheet() {
       // 중분류 이름순 정렬
       const sortedSgMap = [...sgMap.entries()].sort((a,b) => a[1].name.localeCompare(b[1].name,'ko'));
       let first = true;
+      let groupIdx = 0;
+      const totalGroups = sortedSgMap.length + (direct.length ? 1 : 0);
       for (const [,grp] of sortedSgMap) {
         grp.items.sort((a,b) => a.name.localeCompare(b.name,'ko'));
+        const zebraGrp = (groupIdx % 2 === 0) ? grpBg : shadeColor(grpBg, -6);
+        const zebraItem = (groupIdx % 2 === 0) ? itemBg : shadeColor(itemBg, -4);
+        const isLastGroup = (groupIdx === totalGroups - 1);
         let gFirst = true;
-        for (const item of grp.items) {
+        for (let ii = 0; ii < grp.items.length; ii++) {
+          const item = grp.items[ii];
+          const isLastRowOfGroup = (ii === grp.items.length - 1);
+          const catBorderBottom = (isLastGroup && isLastRowOfGroup) ? `border-bottom:2pt solid ${catFg};` : '';
           rows += `<tr>
-            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
-            ${gFirst ? `<td rowspan="${grp.items.length}" style="font-size:9px;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 3pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(grp.name)}</td>` : ''}
-            <td style="font-size:9px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
+            ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:1pt solid #9CA3AF;border-right:2pt solid ${catFg};vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+            ${gFirst ? `<td rowspan="${grp.items.length}" style="font-size:9px;font-weight:700;background:${zebraGrp};border:1pt solid #9CA3AF;border-right:1.5pt solid #B0B7C3;${isLastGroup?`border-bottom:2pt solid ${catFg};`:''}vertical-align:middle;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(grp.name)}</td>` : ''}
+            <td style="font-size:9px;background:${zebraItem};border:1pt solid #9CA3AF;${catBorderBottom}padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
           </tr>`;
           first = false; gFirst = false;
         }
+        groupIdx++;
       }
       direct.sort((a,b) => a.name.localeCompare(b.name,'ko'));
-      for (const item of direct) {
+      for (let di = 0; di < direct.length; di++) {
+        const item = direct[di];
+        const isLastRow = (di === direct.length - 1);
+        const catBorderBottom = isLastRow ? `border-bottom:2pt solid ${catFg};` : '';
         rows += `<tr>
-          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:0.5pt solid #ccc;vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
-          <td style="font-size:9px;color:#9CA3AF;background:${grpBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">(그룹없음)</td>
-          <td style="font-size:9px;background:${itemBg};border:0.5pt solid #ccc;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
+          ${first ? `<td rowspan="${totalRows}" style="text-align:center;font-weight:700;font-size:9px;background:${catBg};color:${catFg};border:1pt solid #9CA3AF;border-right:2pt solid ${catFg};vertical-align:middle;padding:1pt 2pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(cat.icon)} ${escapeHTML(cat.name)}</td>` : ''}
+          ${di===0 ? `<td rowspan="${direct.length}" style="font-size:9px;color:#9CA3AF;font-style:italic;background:${grpBg};border:1pt solid #9CA3AF;border-right:1.5pt solid #B0B7C3;${isLastRow?`border-bottom:2pt solid ${catFg};`:''}vertical-align:middle;padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">(그룹없음)</td>` : ''}
+          <td style="font-size:9px;background:${itemBg};border:1pt solid #9CA3AF;${catBorderBottom}padding:2pt 3pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHTML(item.name)}</td>
         </tr>`;
         first = false;
       }
     }
     if (!rows) return '';
     return `
-      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:10px;padding:1pt 4pt;line-height:1.4;border:0.5pt solid #ccc;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
+      <tr><td colspan="3" style="background:${titleBg};color:#fff;font-weight:700;font-size:10px;padding:3pt 4pt;line-height:1.4;border:1pt solid #555;-webkit-print-color-adjust:exact;print-color-adjust:exact;">▶ ${typeLabel}</td></tr>
       ${rows}`;
   }
 
