@@ -1,6 +1,6 @@
-// v3.34 | 2026-07-04 KST | 수정: 항목구조표 테두리 진하게, 대분류 경계선 굵게, 중분류 그룹별 줄무늬 배경 추가해서 구분 쉽게 | cache:v238
+// v3.35 | 2026-07-05 KST | 수정: 데이터 백업(JSON) 파일명에서 한글 제거 — "전체"→"ALL", 날짜 표기도 "2025년1월5일"→"2025-01-05"로 바꿔서 다운로드/메일첨부 시 파일명 깨짐 방지 | cache:v239
 'use strict';
-const APP_VERSION = 'v3.34 (cache v238)';
+const APP_VERSION = 'v3.35 (cache v239)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -7411,10 +7411,10 @@ async function sendBackupByEmail(startDate = null, endDate = null) {
 
   let rangeLabel;
   if (startDate && endDate) {
-    const fmt = (d) => { const [y, m, dd] = d.split('-'); return `${y}년${Number(m)}월${Number(dd)}일`; };
-    rangeLabel = (startDate === endDate) ? fmt(startDate) : `${fmt(startDate)}-${fmt(endDate)}`;
+    const fmt = (d) => d; // yyyy-mm-dd 그대로 사용 (한글 없이 인코딩 안전하게)
+    rangeLabel = (startDate === endDate) ? fmt(startDate) : `${fmt(startDate)}_${fmt(endDate)}`;
   } else {
-    rangeLabel = `전체_${today}`;
+    rangeLabel = `ALL_${today}`;
   }
 
   const allTemplates = await DB.getAll('templates');
@@ -7475,10 +7475,10 @@ async function exportData(startDate, endDate, customName = null) {
 
   let rangeLabel;
   if (startDate && endDate) {
-    const fmt = (d) => { const [y, m, dd] = d.split('-'); return `${y}년${Number(m)}월${Number(dd)}일`; };
-    rangeLabel = (startDate === endDate) ? fmt(startDate) : `${fmt(startDate)}-${fmt(endDate)}`;
+    const fmt = (d) => d; // yyyy-mm-dd 그대로 사용 (한글 없이 인코딩 안전하게)
+    rangeLabel = (startDate === endDate) ? fmt(startDate) : `${fmt(startDate)}_${fmt(endDate)}`;
   } else {
-    rangeLabel = `전체_${todayStr()}`;
+    rangeLabel = `ALL_${todayStr()}`;
   }
 
   const data = {
