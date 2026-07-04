@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2047 (백업 파일명 한글 제거, ALL/날짜 ASCII 표기)
+// 2026-07-05 KST | CACHE_NAME v2048 (자동백업 파일명 한글 제거)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2047';
+const CACHE_NAME = 'gaegyebu-v2048';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

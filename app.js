@@ -1,6 +1,6 @@
-// v3.35 | 2026-07-05 KST | 수정: 데이터 백업(JSON) 파일명에서 한글 제거 — "전체"→"ALL", 날짜 표기도 "2025년1월5일"→"2025-01-05"로 바꿔서 다운로드/메일첨부 시 파일명 깨짐 방지 | cache:v239
+// v3.36 | 2026-07-05 KST | 수정: 자동백업(File System Access API) 파일명에도 남아있던 한글("자동백업", 앱이름)을 제거 — autobackup_날짜.json 형식으로 통일, 이제 JSON 백업 전 경로가 한글 없이 ASCII로만 구성됨 | cache:v240
 'use strict';
-const APP_VERSION = 'v3.35 (cache v239)';
+const APP_VERSION = 'v3.36 (cache v240)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6711,8 +6711,7 @@ async function runAutoBackup(manual = false) {
   const today = todayStr();
   const months = availableMonthsFromTx();
   const sYm = months[0], eYm = months[months.length - 1];
-  const appTitle = await getAppTitle();
-  const fname = `${appTitle}_자동백업_${today}.json`;
+  const fname = `autobackup_${today}.json`;
 
   const payload = buildBackupPayload(sYm, eYm);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
