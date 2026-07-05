@@ -1,6 +1,6 @@
-// v3.40 | 2026-07-05 KST | 수정: "안 쓰는 이름 숨기기 관리"에서 명부(persons)에 아직 등록 안 된 헌금 이름(데이터 가져오기로 생긴 이름 등)이 목록에서 빠지던 버그 수정 — 이제 전부 나오고, 숨김 체크 시 명부에도 자동 등록됨 | cache:v244
+// v3.41 | 2026-07-05 KST | 개선: 교인 삭제 기능은 이미 있었으나(수정 화면 맨 아래, 눈에 안 띄는 작은 텍스트) 발견하기 어려웠던 문제 — 명부 목록 각 줄에 삭제(휴지통) 아이콘을 바로 추가하고, 수정 화면의 삭제 버튼도 빨간 큰 버튼으로 눈에 띄게 변경 | cache:v245
 'use strict';
-const APP_VERSION = 'v3.40 (cache v244)';
+const APP_VERSION = 'v3.41 (cache v245)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6314,8 +6314,9 @@ function renderMembers() {
             <span class="toggle-slider"></span>
           </label>
         </td>
-        <td style="padding:8px 4px; text-align:center;">
+        <td style="padding:8px 4px; text-align:center; white-space:nowrap;">
           <button class="member-edit-btn" data-id="${m.id}" style="color:var(--primary);">${ICONS.edit}</button>
+          <button class="member-del-btn" data-id="${m.id}" data-name="${escapeHTML(m.name)}" style="color:var(--expense);margin-left:4px;">${ICONS.trash}</button>
         </td>
       </tr>
       ${hasExtra ? `
@@ -6409,6 +6410,20 @@ function renderMembers() {
       if (m) openMemberEditSheet(m, heongCat);
     });
   });
+  page.querySelectorAll('.member-del-btn').forEach(b => {
+    b.addEventListener('click', () => deleteMemberById(b.dataset.id, b.dataset.name, () => renderMembers()));
+  });
+}
+
+// 교인 삭제(명부 + 헌금 이름선택용 subGroup 동시 삭제). 거래 기록은 그대로 유지됨.
+async function deleteMemberById(id, name, onDone) {
+  if (!confirm(`"${name}"을(를) 명부에서 삭제할까요?\n(기존 거래 데이터는 유지됩니다)`)) return;
+  await DB.del('persons', id);
+  const sg = (State.subGroups || []).find(g => g.id === id);
+  if (sg) await DB.del('subGroups', sg.id);
+  await reloadData();
+  showToast('삭제됐어요');
+  if (onDone) onDone();
 }
 
 function openMemberEditSheet(member, heongCat) {
@@ -6473,7 +6488,7 @@ function openMemberEditSheet(member, heongCat) {
           ${headOptions}
         </select>
       </div>
-      ${!isNew ? `<button id="mEditDel" style="color:var(--expense);font-size:13px;margin-top:8px;">이 교인 삭제</button>` : ''}
+      ${!isNew ? `<button id="mEditDel" style="width:100%;margin-top:16px;padding:12px;border-radius:10px;background:var(--expense-light,#fff1f0);color:var(--expense);font-weight:800;font-size:14px;border:none;">${ICONS.trash} 이 교인 삭제</button>` : ''}
     </div>
   `;
   openSheet('memberEditSheet');
@@ -6515,15 +6530,7 @@ function openMemberEditSheet(member, heongCat) {
   });
   if (!isNew) {
     sheet.querySelector('#mEditDel').addEventListener('click', async () => {
-      if (!confirm(`"${m.name}"을(를) 명부에서 삭제할까요?\n(기존 거래 데이터는 유지됩니다)`)) return;
-      await DB.del('persons', m.id);
-      // subGroups에서도 삭제 (헌금 이름 선택 목록에서 제거)
-      const sg = (State.subGroups || []).find(g => g.id === m.id);
-      if (sg) await DB.del('subGroups', sg.id);
-      await reloadData();
-      closeSubSheet('memberEditSheet');
-      renderMembers();
-      showToast('삭제됐어요');
+      await deleteMemberById(m.id, m.name, () => { closeSubSheet('memberEditSheet'); renderMembers(); });
     });
   }
 }

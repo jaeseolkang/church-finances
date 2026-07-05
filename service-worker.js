@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2052 (숨김 관리 목록에서 누락된 이름 문제 수정)
+// 2026-07-05 KST | CACHE_NAME v2053 (교인 삭제 버튼 명부 목록에 바로 추가, 눈에 띄게 개선)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2052';
+const CACHE_NAME = 'gaegyebu-v2053';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
