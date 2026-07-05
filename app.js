@@ -1,6 +1,6 @@
-// v3.39 | 2026-07-05 KST | 수정: 연결계좌 관리 화면에서 일반계좌/정기계정이 입력 순서 그대로 나오던 것을 이름순 정렬로 변경(대표계정은 항상 맨 위 고정) | cache:v243
+// v3.40 | 2026-07-05 KST | 수정: "안 쓰는 이름 숨기기 관리"에서 명부(persons)에 아직 등록 안 된 헌금 이름(데이터 가져오기로 생긴 이름 등)이 목록에서 빠지던 버그 수정 — 이제 전부 나오고, 숨김 체크 시 명부에도 자동 등록됨 | cache:v244
 'use strict';
-const APP_VERSION = 'v3.39 (cache v243)';
+const APP_VERSION = 'v3.40 (cache v244)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -7948,10 +7948,10 @@ function renderTxStepPickGroup(sheet) {
   // subGroups(사람)가 있는 카테고리(예: 헌금)는 ungroupedItems 표시 안 함 — 공통 소분류이므로
   const ungroupedItems = groups.length > 0 ? [] : State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
 
-  // 숨김 관리 모드: 명부에 연결된(=사람인) 중분류만 대상으로, 숨김 여부와 상관없이 전부 보여줌
+  // 숨김 관리 모드: 헌금 중분류(=사람) 전부 대상. 명부에 아직 등록 안 된 이름도
+  // (예: 데이터 가져오기로 생긴 이름) 안 보이게 놓치지 않도록 전부 포함시킨다.
   const manageList = isHeonCat ? allGroupsRaw
-    .map(g => ({ g, person: (State.persons||[]).find(p => p.id === g.id) }))
-    .filter(x => x.person)
+    .map(g => ({ g, person: (State.persons||[]).find(p => p.id === g.id) || { id: g.id, hidden: false, _virtual: true } }))
     .sort((a,b) => a.g.name.localeCompare(b.g.name,'ko'))
     : [];
 
@@ -7970,7 +7970,7 @@ function renderTxStepPickGroup(sheet) {
         <div style="border:1px solid var(--border);border-radius:10px;max-height:280px;overflow-y:auto;">
           ${manageList.map(({g, person}) => `
             <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;">
-              <input type="checkbox" class="pickgroup-hide-toggle" data-person-id="${person.id}" ${person.hidden?'checked':''} style="accent-color:var(--primary);width:16px;height:16px;">
+              <input type="checkbox" class="pickgroup-hide-toggle" data-person-id="${person.id}" data-name="${escapeHTML(g.name)}" ${person.hidden?'checked':''} style="accent-color:var(--primary);width:16px;height:16px;">
               <span style="flex:1;${person.hidden?'color:var(--text-3);':''}">${person.hidden?'🚫 ':''}${escapeHTML(g.name)}</span>
             </label>
           `).join('') || `<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12.5px;">관리할 이름이 없어요</div>`}
@@ -8016,8 +8016,16 @@ function renderTxStepPickGroup(sheet) {
   });
   sheet.querySelectorAll('.pickgroup-hide-toggle').forEach(cb => {
     cb.addEventListener('change', async () => {
-      const p = await DB.get('persons', cb.dataset.personId);
-      if (!p) return;
+      const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+      let p = await DB.get('persons', cb.dataset.personId);
+      if (!p) {
+        // 명부에 아직 없던 이름(데이터 가져오기 등으로 생긴 중분류) — 이 자리에서 새로 등록
+        p = {
+          id: cb.dataset.personId, categoryId: heongCat.id, name: cb.dataset.name,
+          position: '성도', residentId: '', phone: '', address: '', memo: '',
+          hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '',
+        };
+      }
       p.hidden = cb.checked;
       await DB.put('persons', p);
       await reloadData();
