@@ -1,6 +1,6 @@
-// v3.36 | 2026-07-05 KST | 수정: 자동백업(File System Access API) 파일명에도 남아있던 한글("자동백업", 앱이름)을 제거 — autobackup_날짜.json 형식으로 통일, 이제 JSON 백업 전 경로가 한글 없이 ASCII로만 구성됨 | cache:v240
+// v3.37 | 2026-07-05 KST | 수정: 홈>추가>수입>헌금 화면에서 "+중분류 추가"로 새 이름 등록 시 명부(persons)에도 자동 등록되도록 수정 — 지금까지는 거래입력용 중분류만 생기고 명부엔 안 나타나던 버그 | cache:v241
 'use strict';
-const APP_VERSION = 'v3.36 (cache v240)';
+const APP_VERSION = 'v3.37 (cache v241)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -8016,8 +8016,21 @@ function renderTxStepPickGroup(sheet) {
     const newGroup = { id: uid(), categoryId: catId, name, order: list.length };
     await DB.put('subGroups', newGroup);
     // 기존 공통 소분류(헌금종류)를 새 중분류에도 자동 생성
-    await reloadData();
     await seedDefaultSubItemsForGroup(newGroup.id, catId);
+
+    // 헌금 카테고리에서 새 이름을 추가한 경우, 명부(persons)에도 자동 등록
+    const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+    if (heongCat && catId === heongCat.id) {
+      const existingPerson = (State.persons || []).find(p => p.id === newGroup.id);
+      if (!existingPerson) {
+        await DB.put('persons', {
+          id: newGroup.id, categoryId: catId, name,
+          position: '성도', residentId: '', phone: '', address: '', memo: '',
+          hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '',
+        });
+      }
+    }
+
     await reloadData();
     showToast(`"${name}" 추가됐어요`);
     renderTxStepPickGroup(sheet);
