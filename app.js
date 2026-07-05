@@ -1,6 +1,6 @@
-// v3.38 | 2026-07-05 KST | 추가: 홈>추가>수입>헌금>이름 선택 화면에 "안 쓰는 이름 숨기기 관리" 버튼 추가 — 명부 탭까지 안 가도 이 화면에서 바로 헌금자 이름을 숨기고 켤 수 있음(명부의 숨김 설정과 동일하게 연동) | cache:v242
+// v3.39 | 2026-07-05 KST | 수정: 연결계좌 관리 화면에서 일반계좌/정기계정이 입력 순서 그대로 나오던 것을 이름순 정렬로 변경(대표계정은 항상 맨 위 고정) | cache:v243
 'use strict';
-const APP_VERSION = 'v3.38 (cache v242)';
+const APP_VERSION = 'v3.39 (cache v243)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -9067,8 +9067,15 @@ function renderLinkedAccountsSheet() {
   const sheet = document.getElementById('linkedAccountsSheet');
   const accounts = State.linkedAccounts || [];
 
-  const normalAccts  = accounts.filter(a => a.isDefault || (!a.isDefault && (!a.accountKind || a.accountKind === 'normal')));
-  const depositAccts = accounts.filter(a => !a.isDefault && a.accountKind === 'deposit');
+  const normalAccts  = accounts
+    .filter(a => a.isDefault || (!a.isDefault && (!a.accountKind || a.accountKind === 'normal')))
+    .sort((a, b) => {
+      if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1; // 대표계정은 항상 맨 위
+      return a.name.localeCompare(b.name, 'ko');
+    });
+  const depositAccts = accounts
+    .filter(a => !a.isDefault && a.accountKind === 'deposit')
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
   const normalListHTML = normalAccts.length === 0
     ? `<div style="text-align:center;color:var(--text-3);padding:20px 0;font-size:13px;">없음</div>`
