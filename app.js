@@ -1,6 +1,6 @@
-// v3.44 | 2026-07-05 KST | 개선: 계정 탭 일반계정 표에 4번째 줄("합계") 추가 — 연도별/지난달 칸마다 그 기간의 수입-지출 순액을 보여줌. 맨 끝 전체 합계 칸은 기존과 동일하게 유지 | cache:v248
+// v3.45 | 2026-07-05 KST | 추가: 계정 탭 일반계정 표 맨 위에 대표계정(재정계정)을 📌 표시와 함께 추가 — 이월금/연도별 수입·지출·합계/지난달/전체합계 동일한 구조로 표시됨(상세보기는 지원 안 해서 클릭은 비활성) | cache:v249
 'use strict';
-const APP_VERSION = 'v3.44 (cache v248)';
+const APP_VERSION = 'v3.45 (cache v249)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -978,6 +978,22 @@ function mainAcctTxs() {
 
 function txInCursorMonth() {
   return mainAcctTxs().filter(t => isSameMonth(t.date, State.cursorDate));
+}
+
+// 대표계정(재정계정)의 임의 YYYY-MM 한 달 수입/지출 (전년이월 제외)
+function mainAcctMonthTotals(yyyyMM) {
+  const carryoverCat = State.categories.find(c => c.name === '전년이월');
+  let income = 0, expense = 0;
+  for (const t of mainAcctTxs()) {
+    if ((t.date || '').slice(0, 7) !== yyyyMM) continue;
+    if (t.type === 'income') {
+      if (carryoverCat && t.categoryId === carryoverCat.id) continue;
+      income += t.amount;
+    } else {
+      expense += t.amount;
+    }
+  }
+  return { income, expense };
 }
 
 function monthSummary() {
@@ -4879,48 +4895,63 @@ async function renderAccounts() {
   }
   const lastMonthTotals = sub === 'normal' ? calcAcctMonthTotals(lastMonthYM) : {};
 
+  // 일반계정 표의 계좌 1개당 3줄(수입/지출/합계) 블록을 만드는 공용 함수
+  const buildNormalRow = (rowAttr, label, carry, perYear, lastMonth, netOverall, pinned = false) => {
+    const netColor = netOverall >= 0 ? 'var(--primary)' : 'var(--expense)';
+    const bg = pinned ? 'background:var(--primary-light,#eef2ff);' : '';
+    const yearIncomeCells = multiYears.map(y => `<td class="acct-tbl-num income">${fmt(perYear(y).income)}</td>`).join('');
+    const yearExpenseCells = multiYears.map(y => `<td class="acct-tbl-num expense">${fmt(perYear(y).expense)}</td>`).join('');
+    const yearNetCells = multiYears.map(y => {
+      const t = perYear(y); const n = t.income - t.expense;
+      return `<td class="acct-tbl-num" style="font-weight:700;color:${n>=0?'var(--primary)':'var(--expense)'};">${n.toLocaleString('ko-KR')}</td>`;
+    }).join('');
+    const lmNet = lastMonth.income - lastMonth.expense;
+    return `
+    <tr class="acct-tbl-row" ${rowAttr} style="cursor:pointer;border-top:2px solid var(--border);${bg}">
+      <td class="acct-tbl-name" rowspan="3">${escapeHTML(label)}${pinned?' 📌':''}</td>
+      <td class="acct-tbl-num" rowspan="3">${fmt(carry)}</td>
+      <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">수입</td>
+      ${yearIncomeCells}
+      <td class="acct-tbl-num income">${fmt(lastMonth.income)}</td>
+      <td class="acct-tbl-num" rowspan="3" style="color:${netColor};font-weight:700;">${netOverall.toLocaleString('ko-KR')}</td>
+    </tr>
+    <tr class="acct-tbl-row" ${rowAttr} style="cursor:pointer;${bg}">
+      <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">지출</td>
+      ${yearExpenseCells}
+      <td class="acct-tbl-num expense">${fmt(lastMonth.expense)}</td>
+    </tr>
+    <tr class="acct-tbl-row" ${rowAttr} style="cursor:pointer;background:${pinned?'var(--primary-light,#eef2ff)':'rgba(0,0,0,0.02)'};">
+      <td style="font-size:11px;color:var(--text-2);font-weight:700;text-align:center;padding:4px 2px;">합계</td>
+      ${yearNetCells}
+      <td class="acct-tbl-num" style="font-weight:700;color:${lmNet>=0?'var(--primary)':'var(--expense)'};">${lmNet.toLocaleString('ko-KR')}</td>
+    </tr>`;
+  };
+
+  // 대표계정(재정계정)도 일반계정 표 맨 위에 같이 보여준다
+  const mainRowHTML = (sub === 'normal' && defaultAcct)
+    ? buildNormalRow(
+        `data-main-acct="1"`,
+        mainLabel, mainCarry,
+        (y) => { const r = totalAssetsForYearSync(y); return { income: r.totalIncome, expense: r.totalExpense }; },
+        mainAcctMonthTotals(lastMonthYM),
+        mainNet, true
+      ).replace(/cursor:pointer;/g, 'cursor:default;')
+    : '';
+
   const rowsHTML = accounts.length === 0
-    ? `<tr><td colspan="${sub==='deposit'?6:(multiYears.length+5)}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
+    ? `${mainRowHTML}<tr><td colspan="${sub==='deposit'?6:(multiYears.length+5)}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
     : sub === 'normal'
-    ? accounts.map(a => {
+    ? mainRowHTML + accounts.map(a => {
         const carry = a.carryover || 0;
         const lifetime = totals[a.name] || {income:0, expense:0};
         const net = carry + lifetime.income - lifetime.expense;
-        const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
-        const yearIncomeCells = multiYears.map(y => {
-          const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
-          return `<td class="acct-tbl-num income">${fmt(t.income)}</td>`;
-        }).join('');
-        const yearExpenseCells = multiYears.map(y => {
-          const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
-          return `<td class="acct-tbl-num expense">${fmt(t.expense)}</td>`;
-        }).join('');
-        const yearNetCells = multiYears.map(y => {
-          const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
-          const yNet = t.income - t.expense;
-          return `<td class="acct-tbl-num" style="font-weight:700;color:${yNet>=0?'var(--primary)':'var(--expense)'};">${yNet.toLocaleString('ko-KR')}</td>`;
-        }).join('');
-        const lm = lastMonthTotals[a.name] || {income:0, expense:0};
-        const lmNet = lm.income - lm.expense;
-        return `
-        <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;border-top:2px solid var(--border);">
-          <td class="acct-tbl-name" rowspan="3">${escapeHTML(shortName(a.name))}</td>
-          <td class="acct-tbl-num" rowspan="3">${fmt(carry)}</td>
-          <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">수입</td>
-          ${yearIncomeCells}
-          <td class="acct-tbl-num income">${fmt(lm.income)}</td>
-          <td class="acct-tbl-num" rowspan="3" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
-        </tr>
-        <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;">
-          <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">지출</td>
-          ${yearExpenseCells}
-          <td class="acct-tbl-num expense">${fmt(lm.expense)}</td>
-        </tr>
-        <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;background:rgba(0,0,0,0.02);">
-          <td style="font-size:11px;color:var(--text-2);font-weight:700;text-align:center;padding:4px 2px;">합계</td>
-          ${yearNetCells}
-          <td class="acct-tbl-num" style="font-weight:700;color:${lmNet>=0?'var(--primary)':'var(--expense)'};">${lmNet.toLocaleString('ko-KR')}</td>
-        </tr>`;
+        return buildNormalRow(
+          `data-acct-id="${a.id}"`,
+          shortName(a.name), carry,
+          (y) => yearTotalsByYear[y][a.name] || {income:0, expense:0},
+          lastMonthTotals[a.name] || {income:0, expense:0},
+          net
+        );
       }).join('')
     : accounts.map(a => {
         const t = yearTotals[a.name] || {income:0, expense:0, carryIn:0};
