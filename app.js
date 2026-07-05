@@ -1,6 +1,6 @@
-// v3.41 | 2026-07-05 KST | 개선: 교인 삭제 기능은 이미 있었으나(수정 화면 맨 아래, 눈에 안 띄는 작은 텍스트) 발견하기 어려웠던 문제 — 명부 목록 각 줄에 삭제(휴지통) 아이콘을 바로 추가하고, 수정 화면의 삭제 버튼도 빨간 큰 버튼으로 눈에 띄게 변경 | cache:v245
+// v3.42 | 2026-07-05 KST | 추가: 교인명부 하단에 전체교인/정교인/숨김교인 현황 카드 추가 | 수정: 만기 알림(수동 미리보기+메일)에서 금액이 계좌 개설시 이월금(carryover)만 표시되어 0원으로 나오던 버그 — 실제 현재 잔액(calcAcctBalanceMap)으로 계산하도록 수정, 이메일 문구도 "계좌:/만기일:/잔액:"으로 명확히 표기 | cache:v246
 'use strict';
-const APP_VERSION = 'v3.41 (cache v245)';
+const APP_VERSION = 'v3.42 (cache v246)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6378,6 +6378,20 @@ function renderMembers() {
         </thead>
         <tbody>${bodyRows}</tbody>
       </table>
+      <div style="display:flex;gap:8px;margin-top:14px;padding:0 2px;">
+        <div style="flex:1;background:var(--surface-2,var(--bg));border-radius:12px;padding:12px 8px;text-align:center;">
+          <div style="font-size:11.5px;color:var(--text-3);font-weight:700;">전체교인</div>
+          <div style="font-size:19px;font-weight:800;margin-top:2px;">${members.length}<span style="font-size:12px;font-weight:600;color:var(--text-3);">명</span></div>
+        </div>
+        <div style="flex:1;background:var(--surface-2,var(--bg));border-radius:12px;padding:12px 8px;text-align:center;">
+          <div style="font-size:11.5px;color:var(--text-3);font-weight:700;">정교인</div>
+          <div style="font-size:19px;font-weight:800;margin-top:2px;color:var(--primary);">${members.filter(m=>!m.hidden).length}<span style="font-size:12px;font-weight:600;color:var(--text-3);">명</span></div>
+        </div>
+        <div style="flex:1;background:var(--surface-2,var(--bg));border-radius:12px;padding:12px 8px;text-align:center;">
+          <div style="font-size:11.5px;color:var(--text-3);font-weight:700;">숨김교인</div>
+          <div style="font-size:19px;font-weight:800;margin-top:2px;color:var(--text-3);">${members.filter(m=>m.hidden).length}<span style="font-size:12px;font-weight:600;color:var(--text-3);">명</span></div>
+        </div>
+      </div>
       `}
     </div>
   `;
@@ -6592,10 +6606,12 @@ function maturityTag(daysLeft) {
 
 function buildMaturityMailContent(targets, today) {
   const appName = State.appName || '교회 회계부';
+  const acctBalanceMap = calcAcctBalanceMap(); // 계좌별 현재 잔액(개설 시 이월금 + 이후 입출금 반영)
   const rows = targets.map(a => {
     const tag = maturityTag(maturityDaysLeft(a.maturityDate, today));
-    const amt = (a.carryover || 0).toLocaleString('ko-KR');
-    return `• ${tag} | ${a.name} | ${a.maturityDate} | ${amt}원`;
+    const balance = acctBalanceMap[a.name] !== undefined ? acctBalanceMap[a.name] : (a.carryover || 0);
+    const amt = balance.toLocaleString('ko-KR');
+    return `• ${tag} | 계좌: ${a.name} | 만기일: ${a.maturityDate} | 잔액: ${amt}원`;
   }).join('\n');
   const subject = `[${appName}] 정기계정 만기 알림 (${today})`;
   const body = `안녕하세요.\n\n정기계정 만기 계좌를 알려드립니다.\n\n${rows}\n\n확인 후 적절한 조치를 취해주세요.\n\n— ${appName}`;
@@ -6652,6 +6668,7 @@ async function openMaturityCheckSheet() {
 
 function renderMaturitySheet(targets, today, email) {
   const sheet = document.getElementById('maturitySheet');
+  const acctBalanceMap = calcAcctBalanceMap(); // 계좌별 실제 현재 잔액 (개설 시 이월금 + 이후 입출금)
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
@@ -6675,7 +6692,7 @@ function renderMaturitySheet(targets, today, email) {
                 <div style="font-weight:700;font-size:14px;color:var(--text-1);">${escapeHTML(a.name)}</div>
                 <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${a.maturityDate} · ${tag}</div>
               </div>
-              <div style="text-align:right;font-weight:700;font-size:13.5px;color:var(--text-1);white-space:nowrap;">${fmtMoney(a.carryover || 0)}원</div>
+              <div style="text-align:right;font-weight:700;font-size:13.5px;color:var(--text-1);white-space:nowrap;">${fmtMoney(acctBalanceMap[a.name] !== undefined ? acctBalanceMap[a.name] : (a.carryover || 0))}원</div>
             </div>`;
           }).join('')}
         </div>
