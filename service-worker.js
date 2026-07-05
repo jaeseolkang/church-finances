@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2054 (명부 현황 카드 추가, 만기알림 금액 0원 버그 수정)
+// 2026-07-05 KST | CACHE_NAME v2055 (계정 탭 일반계정 연도별 표 구조 개편)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2054';
+const CACHE_NAME = 'gaegyebu-v2055';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

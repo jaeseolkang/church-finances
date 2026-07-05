@@ -1,6 +1,6 @@
-// v3.42 | 2026-07-05 KST | 추가: 교인명부 하단에 전체교인/정교인/숨김교인 현황 카드 추가 | 수정: 만기 알림(수동 미리보기+메일)에서 금액이 계좌 개설시 이월금(carryover)만 표시되어 0원으로 나오던 버그 — 실제 현재 잔액(calcAcctBalanceMap)으로 계산하도록 수정, 이메일 문구도 "계좌:/만기일:/잔액:"으로 명확히 표기 | cache:v246
+// v3.43 | 2026-07-05 KST | 개선: 계정 탭의 "일반계정" 표를 이월금-연도별(수입/지출)-지난달-합계 구조로 재구성 (정기계정은 기존 구조 그대로 유지). 연도가 늘어나면 컬럼도 자동으로 늘어남 | cache:v247
 'use strict';
-const APP_VERSION = 'v3.42 (cache v246)';
+const APP_VERSION = 'v3.43 (cache v247)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4734,7 +4734,50 @@ function calcAcctTotals(year) {
   return result;
 }
 
-// 계정 탭에서 연도 필터 선택지로 사용할 연도 목록 (오름차순, 올해 포함)
+// calcAcctTotals의 월 단위 버전 (특정 YYYY-MM 한 달의 수입/지출만 집계, carryIn 없음)
+function calcAcctMonthTotals(yyyyMM) {
+  const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
+  const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
+  const incomeMap  = {};
+  const expenseMap = {};
+  for (const si of (State.subItems || [])) {
+    if (expCat  && si.categoryId === expCat.id)  incomeMap[si.name]  = si.id;
+    if (tongCat && si.categoryId === tongCat.id) expenseMap[si.name] = si.id;
+  }
+  const idToName = {};
+  for (const a of (State.linkedAccounts || [])) idToName[a.id] = a.name;
+
+  const result = {};
+  const ensure = name => { if (!result[name]) result[name] = {income:0, expense:0}; };
+  const applyOne = (name, date, type, amt) => {
+    if ((date || '').slice(0, 7) !== yyyyMM) return;
+    ensure(name);
+    if (type === 'income') result[name].income += amt; else result[name].expense += amt;
+  };
+
+  for (const t of (State.transactions || [])) {
+    let taggedName = null;
+    if (t.accountId && idToName[t.accountId]) {
+      const name = idToName[t.accountId];
+      const acct = (State.linkedAccounts||[]).find(a => a.id === t.accountId);
+      if (acct && !acct.isDefault) {
+        taggedName = name;
+        applyOne(name, t.date, t.type, t.amount);
+      }
+    }
+    for (const line of (t.lines || [])) {
+      const sid = line.subItemId;
+      const amt = line.amount || 0;
+      for (const [name, id] of Object.entries(incomeMap)) {
+        if (sid === id && name !== taggedName) applyOne(name, t.date, 'income', amt);
+      }
+      for (const [name, id] of Object.entries(expenseMap)) {
+        if (sid === id && name !== taggedName) applyOne(name, t.date, 'expense', amt);
+      }
+    }
+  }
+  return result;
+}
 function allAccountsYears() {
   const years = new Set();
   years.add(new Date().getFullYear());
@@ -4823,26 +4866,65 @@ async function renderAccounts() {
     ? '등록된 정기계정 계좌가 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>'
     : '등록된 계정이 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>';
 
+  // ── 일반계정 전용: 연도별(수입/지출) + 지난달 칼럼 준비 ──
+  const multiYears = sub === 'normal' ? allAccountsYears() : [];
+  const yearTotalsByYear = {};
+  for (const y of multiYears) yearTotalsByYear[y] = calcAcctTotals(y);
+  let lastMonthYM = '', lastMonthLabel = '';
+  if (sub === 'normal') {
+    const d = new Date();
+    d.setDate(1); d.setMonth(d.getMonth() - 1);
+    lastMonthYM = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    lastMonthLabel = `${d.getMonth()+1}월(지난달)`;
+  }
+  const lastMonthTotals = sub === 'normal' ? calcAcctMonthTotals(lastMonthYM) : {};
+
   const rowsHTML = accounts.length === 0
-    ? `<tr><td colspan="${sub==='deposit'?6:5}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
+    ? `<tr><td colspan="${sub==='deposit'?6:(multiYears.length+5)}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
+    : sub === 'normal'
+    ? accounts.map(a => {
+        const carry = a.carryover || 0;
+        const lifetime = totals[a.name] || {income:0, expense:0};
+        const net = carry + lifetime.income - lifetime.expense;
+        const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
+        const yearIncomeCells = multiYears.map(y => {
+          const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
+          return `<td class="acct-tbl-num income">${fmt(t.income)}</td>`;
+        }).join('');
+        const yearExpenseCells = multiYears.map(y => {
+          const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
+          return `<td class="acct-tbl-num expense">${fmt(t.expense)}</td>`;
+        }).join('');
+        const lm = lastMonthTotals[a.name] || {income:0, expense:0};
+        return `
+        <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;border-top:2px solid var(--border);">
+          <td class="acct-tbl-name" rowspan="2">${escapeHTML(shortName(a.name))}</td>
+          <td class="acct-tbl-num" rowspan="2">${fmt(carry)}</td>
+          <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">수입</td>
+          ${yearIncomeCells}
+          <td class="acct-tbl-num income">${fmt(lm.income)}</td>
+          <td class="acct-tbl-num" rowspan="2" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
+        </tr>
+        <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;">
+          <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">지출</td>
+          ${yearExpenseCells}
+          <td class="acct-tbl-num expense">${fmt(lm.expense)}</td>
+        </tr>`;
+      }).join('')
     : accounts.map(a => {
         const t = yearTotals[a.name] || {income:0, expense:0, carryIn:0};
         const carry = (a.carryover || 0) + (t.carryIn || 0);
         const net   = carry + t.income - t.expense;
         const netColor = net >= 0 ? 'var(--primary)' : 'var(--expense)';
         // 만기일 표시 (정기계정 탭)
-        let maturityTd = '';
-        if (sub === 'deposit') {
-          const md = a.maturityDate || '';
-          const matLabel = md ? md.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1.$2.$3') : '-';
-          // 만기 경과 여부
-          let matColor = 'var(--text-3)';
-          if (md) {
-            const today = todayStr();
-            matColor = md < today ? 'var(--expense)' : 'var(--primary)';
-          }
-          maturityTd = `<td class="acct-tbl-num" style="color:${matColor};font-size:12px;">${matLabel}</td>`;
+        const md = a.maturityDate || '';
+        const matLabel = md ? md.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1.$2.$3') : '-';
+        let matColor = 'var(--text-3)';
+        if (md) {
+          const today = todayStr();
+          matColor = md < today ? 'var(--expense)' : 'var(--primary)';
         }
+        const maturityTd = `<td class="acct-tbl-num" style="color:${matColor};font-size:12px;">${matLabel}</td>`;
         return `<tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;">
           <td class="acct-tbl-name">${escapeHTML(shortName(a.name))}</td>
           <td class="acct-tbl-num">${fmt(carry)}</td>
@@ -4908,15 +4990,16 @@ async function renderAccounts() {
     </div>
 
     <div class="acct-tbl-wrap">
-      <table class="acct-tbl" style="min-width:${sub==='deposit'?'580px':'460px'};">
+      <table class="acct-tbl" style="min-width:${sub==='deposit'?'580px':(360+multiYears.length*80)+'px'};">
         <thead>
           <tr>
-            <th class="acct-tbl-name acct-th-sort" data-sort="name">
+            <th class="acct-tbl-name acct-th-sort" data-sort="name" ${sub==='normal'?'rowspan="1"':''}>
               계좌이름<span class="acct-sort-icon">${(sub==='deposit' ? State.depositSortKey : State.normalSortKey)==='name' ? ((sub==='deposit' ? State.depositSortDir : State.normalSortDir)==='asc'?'↑':'↓') : '↕'}</span>
             </th>
             <th class="acct-tbl-num">이월금</th>
-            <th class="acct-tbl-num">수입금</th>
-            <th class="acct-tbl-num">지출금</th>
+            ${sub==='normal'
+              ? `<th class="acct-tbl-num" style="width:40px;"></th>${multiYears.map(y => `<th class="acct-tbl-num">${y}년</th>`).join('')}<th class="acct-tbl-num">${lastMonthLabel}</th>`
+              : `<th class="acct-tbl-num">수입금</th><th class="acct-tbl-num">지출금</th>`}
             <th class="acct-tbl-num">합계</th>
             ${sub==='deposit' ? `<th class="acct-tbl-num acct-th-sort" data-sort="maturity">만기일<span class="acct-sort-icon">${State.depositSortKey==='maturity' ? (State.depositSortDir==='asc'?'↑':'↓') : '↕'}</span></th>` : ''}
           </tr>
