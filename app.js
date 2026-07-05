@@ -1,6 +1,6 @@
-// v3.45 | 2026-07-05 KST | 추가: 계정 탭 일반계정 표 맨 위에 대표계정(재정계정)을 📌 표시와 함께 추가 — 이월금/연도별 수입·지출·합계/지난달/전체합계 동일한 구조로 표시됨(상세보기는 지원 안 해서 클릭은 비활성) | cache:v249
+// v3.46 | 2026-07-05 KST | 추가: 홈>추가>수입>헌금>이름 선택 화면 제일 위에 초성 찾기(ㄱㄴㄷ...) 버튼 추가 — 눌러서 해당 초성으로 시작하는 헌금자만 골라볼 수 있음 | cache:v250
 'use strict';
-const APP_VERSION = 'v3.45 (cache v249)';
+const APP_VERSION = 'v3.46 (cache v250)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4526,6 +4526,18 @@ function shadeColor(hex, percent) {
   return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
 }
 
+// 한글 초성 추출 (이름 검색용)
+const CHOSUNG_TABLE = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const CHOSUNG_DOUBLE_MAP = { 'ㄲ':'ㄱ', 'ㄸ':'ㄷ', 'ㅃ':'ㅂ', 'ㅆ':'ㅅ', 'ㅉ':'ㅈ' };
+const CHOSUNG_BASIC_LIST = ['ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+function getChosung(str) {
+  if (!str) return null;
+  const code = str.charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return null; // 한글 완성형 음절이 아님(숫자/영문 등)
+  const c = CHOSUNG_TABLE[Math.floor(code / 588)];
+  return CHOSUNG_DOUBLE_MAP[c] || c;
+}
+
 function openItemStructureSheet() {
   const sheet = document.getElementById('itemStructureSheet');
   const cats = [...State.categories].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
@@ -8082,6 +8094,7 @@ function renderTxStepPick(sheet) {
 
 /* ---- STEP 2: 중분류 선택 (subGroup이 있는 대분류) ---- */
 let txPickGroupManageHidden = false; // 이름선택 화면: "숨김 관리" 모드 on/off
+let txPickGroupChosungFilter = null; // 이름선택 화면: 초성 찾기 선택값(null=전체)
 
 function renderTxStepPickGroup(sheet) {
   const cat = catById(State.formCategoryId);
@@ -8090,12 +8103,16 @@ function renderTxStepPickGroup(sheet) {
   // 명부에서 "가리기" 처리된 교인은 헌금 입력 시 이름 선택 목록에 나오지 않게 제외
   // (subGroup은 교인 등록 시 person과 동일한 id로 생성되므로 id로 매칭)
   const allGroupsRaw = subGroupsOfCategory(State.formCategoryId);
-  const groups = allGroupsRaw.filter(g => {
+  const groupsAll = allGroupsRaw.filter(g => {
     const person = (State.persons || []).find(p => p.id === g.id);
     return !person || !person.hidden;
   });
+  // 초성 찾기 필터 적용
+  const groups = txPickGroupChosungFilter
+    ? groupsAll.filter(g => getChosung(g.name) === txPickGroupChosungFilter)
+    : groupsAll;
   // subGroups(사람)가 있는 카테고리(예: 헌금)는 ungroupedItems 표시 안 함 — 공통 소분류이므로
-  const ungroupedItems = groups.length > 0 ? [] : State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
+  const ungroupedItems = groupsAll.length > 0 ? [] : State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
 
   // 숨김 관리 모드: 헌금 중분류(=사람) 전부 대상. 명부에 아직 등록 안 된 이름도
   // (예: 데이터 가져오기로 생긴 이름) 안 보이게 놓치지 않도록 전부 포함시킨다.
@@ -8129,6 +8146,14 @@ function renderTxStepPickGroup(sheet) {
       ` : `
       <div class="formrow">
         <label>이름 선택</label>
+        ${groupsAll.length > 0 ? `
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+          <button class="chosung-btn" data-chosung="" style="padding:5px 9px;border-radius:7px;font-size:12px;font-weight:700;border:1px solid var(--border);${!txPickGroupChosungFilter?'background:var(--primary);color:#fff;border-color:var(--primary);':'background:#fff;color:var(--text-2);'}">전체</button>
+          ${CHOSUNG_BASIC_LIST.map(c => `
+            <button class="chosung-btn" data-chosung="${c}" style="min-width:28px;padding:5px 7px;border-radius:7px;font-size:12px;font-weight:700;border:1px solid var(--border);${txPickGroupChosungFilter===c?'background:var(--primary);color:#fff;border-color:var(--primary);':'background:#fff;color:var(--text-2);'}">${c}</button>
+          `).join('')}
+        </div>
+        ` : ''}
         <div class="catgrid">
           ${groups.map(g => `
             <button class="catchip" data-pick-group="${g.id}">
@@ -8142,6 +8167,7 @@ function renderTxStepPickGroup(sheet) {
               <span>${escapeHTML(s.name)}</span>
             </button>
           `).join('')}
+          ${groupsAll.length > 0 && groups.length === 0 ? `<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12.5px;width:100%;">"${txPickGroupChosungFilter}"으로 시작하는 이름이 없어요</div>` : ''}
         </div>
       </div>
       <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
@@ -8163,6 +8189,12 @@ function renderTxStepPickGroup(sheet) {
     txPickGroupManageHidden = !txPickGroupManageHidden;
     renderTxStepPickGroup(sheet);
   });
+  sheet.querySelectorAll('.chosung-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      txPickGroupChosungFilter = btn.dataset.chosung || null;
+      renderTxStepPickGroup(sheet);
+    });
+  });
   sheet.querySelectorAll('.pickgroup-hide-toggle').forEach(cb => {
     cb.addEventListener('change', async () => {
       const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
@@ -8183,12 +8215,14 @@ function renderTxStepPickGroup(sheet) {
   });
   sheet.querySelector('#txBack').addEventListener('click', () => {
     txPickGroupManageHidden = false;
+    txPickGroupChosungFilter = null;
     State.formStep = 'pick';
     State.formCategoryId = null;
     renderTxSheet();
   });
   sheet.querySelector('#txClose').addEventListener('click', () => {
     txPickGroupManageHidden = false;
+    txPickGroupChosungFilter = null;
     if (State.editingTx) {
       // 수정 모드에서 중분류 변경 중 취소 → items로 복귀
       State.formSubGroupId = State.editingTx.subGroupId || State.editingTx.personId || null;

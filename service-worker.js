@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2057 (계정 탭에 대표계정 행 추가)
+// 2026-07-05 KST | CACHE_NAME v2058 (헌금 이름선택 화면 초성 찾기 추가)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2057';
+const CACHE_NAME = 'gaegyebu-v2058';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
