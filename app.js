@@ -1,6 +1,6 @@
-// v3.37 | 2026-07-05 KST | 수정: 홈>추가>수입>헌금 화면에서 "+중분류 추가"로 새 이름 등록 시 명부(persons)에도 자동 등록되도록 수정 — 지금까지는 거래입력용 중분류만 생기고 명부엔 안 나타나던 버그 | cache:v241
+// v3.38 | 2026-07-05 KST | 추가: 홈>추가>수입>헌금>이름 선택 화면에 "안 쓰는 이름 숨기기 관리" 버튼 추가 — 명부 탭까지 안 가도 이 화면에서 바로 헌금자 이름을 숨기고 켤 수 있음(명부의 숨김 설정과 동일하게 연동) | cache:v242
 'use strict';
-const APP_VERSION = 'v3.37 (cache v241)';
+const APP_VERSION = 'v3.38 (cache v242)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -7932,16 +7932,28 @@ function renderTxStepPick(sheet) {
 }
 
 /* ---- STEP 2: 중분류 선택 (subGroup이 있는 대분류) ---- */
+let txPickGroupManageHidden = false; // 이름선택 화면: "숨김 관리" 모드 on/off
+
 function renderTxStepPickGroup(sheet) {
   const cat = catById(State.formCategoryId);
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+  const isHeonCat = heongCat && State.formCategoryId === heongCat.id;
   // 명부에서 "가리기" 처리된 교인은 헌금 입력 시 이름 선택 목록에 나오지 않게 제외
   // (subGroup은 교인 등록 시 person과 동일한 id로 생성되므로 id로 매칭)
-  const groups = subGroupsOfCategory(State.formCategoryId).filter(g => {
+  const allGroupsRaw = subGroupsOfCategory(State.formCategoryId);
+  const groups = allGroupsRaw.filter(g => {
     const person = (State.persons || []).find(p => p.id === g.id);
     return !person || !person.hidden;
   });
   // subGroups(사람)가 있는 카테고리(예: 헌금)는 ungroupedItems 표시 안 함 — 공통 소분류이므로
   const ungroupedItems = groups.length > 0 ? [] : State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
+
+  // 숨김 관리 모드: 명부에 연결된(=사람인) 중분류만 대상으로, 숨김 여부와 상관없이 전부 보여줌
+  const manageList = isHeonCat ? allGroupsRaw
+    .map(g => ({ g, person: (State.persons||[]).find(p => p.id === g.id) }))
+    .filter(x => x.person)
+    .sort((a,b) => a.g.name.localeCompare(b.g.name,'ko'))
+    : [];
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -7951,6 +7963,21 @@ function renderTxStepPickGroup(sheet) {
       <button id="txClose" class="sheet-close-btn">${ICONS.close}취소</button>
     </div>
     <div class="sheet-body">
+      ${txPickGroupManageHidden ? `
+      <div class="formrow">
+        <label>이름 숨김 관리</label>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">체크하면 이 이름은 헌금 입력 시 목록에서 안 보여요. 명부에서 "숨김"과 같은 설정이에요.</div>
+        <div style="border:1px solid var(--border);border-radius:10px;max-height:280px;overflow-y:auto;">
+          ${manageList.map(({g, person}) => `
+            <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;">
+              <input type="checkbox" class="pickgroup-hide-toggle" data-person-id="${person.id}" ${person.hidden?'checked':''} style="accent-color:var(--primary);width:16px;height:16px;">
+              <span style="flex:1;${person.hidden?'color:var(--text-3);':''}">${person.hidden?'🚫 ':''}${escapeHTML(g.name)}</span>
+            </label>
+          `).join('') || `<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12.5px;">관리할 이름이 없어요</div>`}
+        </div>
+      </div>
+      <button id="txManageHiddenBtn" style="margin-top:10px;font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">← 이름 선택으로 돌아가기</button>
+      ` : `
       <div class="formrow">
         <label>이름 선택</label>
         <div class="catgrid">
@@ -7969,8 +7996,9 @@ function renderTxStepPickGroup(sheet) {
         </div>
       </div>
       <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
           <button id="txAddGroupBtn" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 0;">+ 중분류 추가</button>
+          ${isHeonCat ? `<button id="txManageHiddenBtn" style="font-size:13px;color:var(--text-2);font-weight:700;padding:6px 0;">🚫 안 쓰는 이름 숨기기 관리</button>` : ''}
         </div>
         <div id="txAddGroupForm" style="display:none;margin-top:2px;">
           <div style="display:flex;gap:6px;">
@@ -7979,14 +8007,31 @@ function renderTxStepPickGroup(sheet) {
           </div>
         </div>
       </div>
+      `}
     </div>
   `;
+  sheet.querySelector('#txManageHiddenBtn')?.addEventListener('click', () => {
+    txPickGroupManageHidden = !txPickGroupManageHidden;
+    renderTxStepPickGroup(sheet);
+  });
+  sheet.querySelectorAll('.pickgroup-hide-toggle').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const p = await DB.get('persons', cb.dataset.personId);
+      if (!p) return;
+      p.hidden = cb.checked;
+      await DB.put('persons', p);
+      await reloadData();
+      renderTxStepPickGroup(sheet);
+    });
+  });
   sheet.querySelector('#txBack').addEventListener('click', () => {
+    txPickGroupManageHidden = false;
     State.formStep = 'pick';
     State.formCategoryId = null;
     renderTxSheet();
   });
   sheet.querySelector('#txClose').addEventListener('click', () => {
+    txPickGroupManageHidden = false;
     if (State.editingTx) {
       // 수정 모드에서 중분류 변경 중 취소 → items로 복귀
       State.formSubGroupId = State.editingTx.subGroupId || State.editingTx.personId || null;
@@ -8000,7 +8045,7 @@ function renderTxStepPickGroup(sheet) {
   });
 
   // 중분류 추가 인라인 폼
-  sheet.querySelector('#txAddGroupBtn').addEventListener('click', () => {
+  sheet.querySelector('#txAddGroupBtn')?.addEventListener('click', () => {
     const form = sheet.querySelector('#txAddGroupForm');
     const visible = form.style.display !== 'none';
     form.style.display = visible ? 'none' : 'block';
@@ -8035,8 +8080,8 @@ function renderTxStepPickGroup(sheet) {
     showToast(`"${name}" 추가됐어요`);
     renderTxStepPickGroup(sheet);
   };
-  sheet.querySelector('#txAddGroupSave').addEventListener('click', doAddGroup);
-  sheet.querySelector('#txAddGroupName').addEventListener('keydown', (e) => {
+  sheet.querySelector('#txAddGroupSave')?.addEventListener('click', doAddGroup);
+  sheet.querySelector('#txAddGroupName')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') doAddGroup();
   });
 

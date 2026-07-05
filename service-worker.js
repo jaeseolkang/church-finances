@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2049 (헌금 새이름 추가 시 명부 자동등록 버그 수정)
+// 2026-07-05 KST | CACHE_NAME v2050 (헌금 이름선택 화면에 숨김 관리 기능 추가)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2049';
+const CACHE_NAME = 'gaegyebu-v2050';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
