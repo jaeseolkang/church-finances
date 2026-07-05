@@ -1,6 +1,6 @@
-// v3.43 | 2026-07-05 KST | 개선: 계정 탭의 "일반계정" 표를 이월금-연도별(수입/지출)-지난달-합계 구조로 재구성 (정기계정은 기존 구조 그대로 유지). 연도가 늘어나면 컬럼도 자동으로 늘어남 | cache:v247
+// v3.44 | 2026-07-05 KST | 개선: 계정 탭 일반계정 표에 4번째 줄("합계") 추가 — 연도별/지난달 칸마다 그 기간의 수입-지출 순액을 보여줌. 맨 끝 전체 합계 칸은 기존과 동일하게 유지 | cache:v248
 'use strict';
-const APP_VERSION = 'v3.43 (cache v247)';
+const APP_VERSION = 'v3.44 (cache v248)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4895,20 +4895,31 @@ async function renderAccounts() {
           const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
           return `<td class="acct-tbl-num expense">${fmt(t.expense)}</td>`;
         }).join('');
+        const yearNetCells = multiYears.map(y => {
+          const t = yearTotalsByYear[y][a.name] || {income:0, expense:0};
+          const yNet = t.income - t.expense;
+          return `<td class="acct-tbl-num" style="font-weight:700;color:${yNet>=0?'var(--primary)':'var(--expense)'};">${yNet.toLocaleString('ko-KR')}</td>`;
+        }).join('');
         const lm = lastMonthTotals[a.name] || {income:0, expense:0};
+        const lmNet = lm.income - lm.expense;
         return `
         <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;border-top:2px solid var(--border);">
-          <td class="acct-tbl-name" rowspan="2">${escapeHTML(shortName(a.name))}</td>
-          <td class="acct-tbl-num" rowspan="2">${fmt(carry)}</td>
+          <td class="acct-tbl-name" rowspan="3">${escapeHTML(shortName(a.name))}</td>
+          <td class="acct-tbl-num" rowspan="3">${fmt(carry)}</td>
           <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">수입</td>
           ${yearIncomeCells}
           <td class="acct-tbl-num income">${fmt(lm.income)}</td>
-          <td class="acct-tbl-num" rowspan="2" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
+          <td class="acct-tbl-num" rowspan="3" style="color:${netColor};font-weight:700;">${net.toLocaleString('ko-KR')}</td>
         </tr>
         <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;">
           <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">지출</td>
           ${yearExpenseCells}
           <td class="acct-tbl-num expense">${fmt(lm.expense)}</td>
+        </tr>
+        <tr class="acct-tbl-row" data-acct-id="${a.id}" style="cursor:pointer;background:rgba(0,0,0,0.02);">
+          <td style="font-size:11px;color:var(--text-2);font-weight:700;text-align:center;padding:4px 2px;">합계</td>
+          ${yearNetCells}
+          <td class="acct-tbl-num" style="font-weight:700;color:${lmNet>=0?'var(--primary)':'var(--expense)'};">${lmNet.toLocaleString('ko-KR')}</td>
         </tr>`;
       }).join('')
     : accounts.map(a => {
