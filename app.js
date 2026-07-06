@@ -1,6 +1,6 @@
-// v3.50 | 2026-07-05 KST | 수정(진짜 원인): index.html의 인쇄 CSS에 .print-page{page-break-inside:avoid} 규칙이 있어서, 일반계정 표가 길어져 한 페이지를 넘어가면 오히려 페이지 분할 자체가 깨져서 1장으로 뭉개지던 문제 — 해당 규칙 제거(행 단위 tr{page-break-inside:avoid}는 유지되어 있어 한 줄이 잘리진 않음) | cache:v254
+// v3.51 | 2026-07-05 KST | 수정: 계정현황 인쇄에서 미리보기는 정상인데 실제 인쇄만 잘리는 문제 — 표의 계좌이름/이월금/합계 칸에 쓰던 rowspan(셀 병합)이 브라우저의 인쇄 페이지분할과 충돌하는 것으로 보여 제거(값은 3줄에 반복 표시하는 방식으로 대체) | cache:v255
 'use strict';
-const APP_VERSION = 'v3.50 (cache v254)';
+const APP_VERSION = 'v3.51 (cache v255)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3894,6 +3894,9 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
     const rowBlock = (label, carry, perYear, lastMonth, netOverall, pinned) => {
       const netColor = netOverall >= 0 ? '#1F497D' : '#CC0000';
       const bg = pinned ? 'background:#EBF3FB;' : '';
+      const nameCell = `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:600;">${escapeHTML(label)}${pinned?' 📌':''}</td>`;
+      const carryCell = `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;">${fmt(carry)}</td>`;
+      const netCell = `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${netColor};">${netOverall.toLocaleString('ko-KR')}</td>`;
       const yInc = years.map(y => `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#1F497D;">${fmt(perYear(y).income)}</td>`).join('');
       const yExp = years.map(y => `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#CC0000;">${fmt(perYear(y).expense)}</td>`).join('');
       const yNet = years.map(y => {
@@ -3901,24 +3904,31 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         return `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${n>=0?'#1F497D':'#CC0000'};">${n.toLocaleString('ko-KR')}</td>`;
       }).join('');
       const lmNet = lastMonth.income - lastMonth.expense;
+      // rowspan(셀 병합)은 브라우저 인쇄 페이지분할과 충돌해 내용이 잘리는 버그를 일으킬 수 있어
+      // 계좌이름/이월금/합계 값은 3줄 모두에 반복 표시하는 방식으로 대체(병합 없음)
       return `
-      <tr style="${bg}">
-        <td rowspan="3" style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:600;vertical-align:middle;">${escapeHTML(label)}${pinned?' 📌':''}</td>
-        <td rowspan="3" style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;vertical-align:middle;">${fmt(carry)}</td>
+      <tr style="${bg}border-top:1pt solid #888;">
+        ${nameCell}${carryCell}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7pt;text-align:center;color:#666;">수입</td>
         ${yInc}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#1F497D;">${fmt(lastMonth.income)}</td>
-        <td rowspan="3" style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${netColor};vertical-align:middle;">${netOverall.toLocaleString('ko-KR')}</td>
+        ${netCell}
       </tr>
       <tr style="${bg}">
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;color:#ccc;">〃</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;"></td>
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7pt;text-align:center;color:#666;">지출</td>
         ${yExp}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#CC0000;">${fmt(lastMonth.expense)}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;"></td>
       </tr>
       <tr style="${bg}">
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;color:#ccc;">〃</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;"></td>
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7pt;text-align:center;color:#444;font-weight:700;">합계</td>
         ${yNet}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${lmNet>=0?'#1F497D':'#CC0000'};">${lmNet.toLocaleString('ko-KR')}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;"></td>
       </tr>`;
     };
 
