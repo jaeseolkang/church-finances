@@ -1,6 +1,6 @@
-// v3.52 | 2026-07-05 KST | 수정(PC 인쇄 진짜 원인): body가 앱 화면 고정을 위해 position:fixed;inset:0로 되어있어서, PC에서 인쇄할 때(현재 페이지 안에서 #print-area만 보이게 하는 방식) 뷰포트 높이를 넘는 내용이 잘려나가던 문제 — 인쇄 시엔 position:static/height:auto/overflow:visible로 풀어서 문서가 자연스럽게 늘어나도록 수정. 모바일(별도 창)은 이 제약이 없어서 원래도 정상이었음 | cache:v256
+// v3.53 | 2026-07-05 KST | 추가: 통계 화면 기간선택에 "일일" 추가(제일 앞) — 특정 하루를 이전/다음 화살표로 넘겨가며 그날의 수입/지출/합계를 확인 가능 | cache:v257
 'use strict';
-const APP_VERSION = 'v3.52 (cache v256)';
+const APP_VERSION = 'v3.53 (cache v257)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -441,6 +441,7 @@ const State = {
   statsPeriod: 'month',      // 'week' | 'month' | 'year' | 'custom'
   statsCustomStart: null,    // 'YYYY-MM-DD'
   statsCustomEnd: null,      // 'YYYY-MM-DD'
+  statsDayOffset: 0,         // 일일 모드에서 오늘 기준 오프셋
   statsWeekOffset: 0,        // 주간 모드에서 현재 주 기준 오프셋
   statsYearOffset: 0,        // 연간 모드에서 현재 연도 기준 오프셋
   editingTx: null, // 편집 중인 거래 (null이면 신규)
@@ -2225,6 +2226,15 @@ function statsPeriodRange() {
   const today = new Date();
   const todayStr = dateToStr(today);
 
+  if (State.statsPeriod === 'day') {
+    const d = new Date(today);
+    d.setDate(d.getDate() + State.statsDayOffset);
+    const dstr = dateToStr(d);
+    const dow = ['일','월','화','수','목','금','토'][d.getDay()];
+    const label = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
+    return { start: dstr, end: dstr, label };
+  }
+
   if (State.statsPeriod === 'week') {
     const d = new Date(today);
     d.setDate(d.getDate() + State.statsWeekOffset * 7);
@@ -3468,7 +3478,7 @@ function renderStats() {
   // 기간별 내역 (날짜순)
   const detailTx = list.slice().sort((a,b) => a.date.localeCompare(b.date) || b.createdAt - a.createdAt);
 
-  const PERIOD_LABELS = { week:'주간', month:'월간', year:'연간', custom:'기간설정' };
+  const PERIOD_LABELS = { day:'일일', week:'주간', month:'월간', year:'연간', custom:'기간설정' };
 
   // 이전/다음 버튼 표시 여부
   const canNav = State.statsPeriod !== 'custom';
@@ -3516,7 +3526,7 @@ function renderStats() {
 
     <!-- 기간 모드 선택 -->
     <div style="display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:2px;">
-      ${['week','month','year','custom'].map(p => `
+      ${['day','week','month','year','custom'].map(p => `
         <button class="period-chip ${State.statsPeriod===p?'active':''}" data-period="${p}">
           ${PERIOD_LABELS[p]}
         </button>
@@ -3653,12 +3663,14 @@ function renderStats() {
 
   if (canNav) {
     page.querySelector('#statsPrev').addEventListener('click', () => {
+      if (State.statsPeriod === 'day')   State.statsDayOffset--;
       if (State.statsPeriod === 'week')  State.statsWeekOffset--;
       if (State.statsPeriod === 'month') changeMonth(-1);
       if (State.statsPeriod === 'year')  State.statsYearOffset--;
       renderStats();
     });
     page.querySelector('#statsNext').addEventListener('click', () => {
+      if (State.statsPeriod === 'day')   State.statsDayOffset++;
       if (State.statsPeriod === 'week')  State.statsWeekOffset++;
       if (State.statsPeriod === 'month') changeMonth(1);
       if (State.statsPeriod === 'year')  State.statsYearOffset++;

@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2064 (PC 인쇄 시 body position:fixed 잘림 문제 수정)
+// 2026-07-05 KST | CACHE_NAME v2065 (통계 화면에 일일 기간 추가)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2064';
+const CACHE_NAME = 'gaegyebu-v2065';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
