@@ -1,6 +1,6 @@
-// v3.53 | 2026-07-05 KST | 추가: 통계 화면 기간선택에 "일일" 추가(제일 앞) — 특정 하루를 이전/다음 화살표로 넘겨가며 그날의 수입/지출/합계를 확인 가능 | cache:v257
+// v3.54 | 2026-07-05 KST | 수정: 항목구조표에서 헌금 항목이 이름별로 안 나오고 전부 "(그룹없음)"으로만 보이던 문제 — 예전 방식 데이터(소분류가 사람마다 복사되지 않고 공유되며, 실제 연결은 거래 기록에만 있는 구조)를 못 읽던 것을 실제 거래 기록에서 역추적해서 이름별로 표시하도록 수정 | cache:v258
 'use strict';
-const APP_VERSION = 'v3.53 (cache v257)';
+const APP_VERSION = 'v3.54 (cache v258)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4757,6 +4757,33 @@ function openItemStructureSheet() {
           sgMap.get(s.subGroupId).items.push(s);
         } else {
           direct.push(s);
+        }
+      }
+      // 예전 방식 데이터 대응: 소분류 자체엔 subGroupId가 없지만(공유 항목),
+      // 이 카테고리에 subGroups(이름)가 등록되어 있는 경우 — 실제 거래 기록에서
+      // "이 이름이 이 소분류를 실제로 썼는지"를 역추적해서 그룹을 만든다
+      const catSubGroups = (State.subGroups||[]).filter(g => g.categoryId === cat.id);
+      if (sgMap.size === 0 && catSubGroups.length > 0 && direct.length > 0) {
+        const usedPairs = new Set(); // "subGroupId|subItemId" 형태로 실제 사용된 조합만 표시
+        for (const t of (State.transactions||[])) {
+          if (t.categoryId !== cat.id || !t.subGroupId) continue;
+          for (const line of (t.lines||[])) usedPairs.add(`${t.subGroupId}|${line.subItemId}`);
+        }
+        if (usedPairs.size > 0) {
+          const stillDirect = [];
+          for (const s of direct) {
+            let usedByAny = false;
+            for (const sg of catSubGroups) {
+              if (usedPairs.has(`${sg.id}|${s.id}`)) {
+                usedByAny = true;
+                if (!sgMap.has(sg.id)) sgMap.set(sg.id, {name: sg.name, items: []});
+                sgMap.get(sg.id).items.push(s);
+              }
+            }
+            if (!usedByAny) stillDirect.push(s);
+          }
+          direct.length = 0;
+          direct.push(...stillDirect);
         }
       }
       if (sgMap.size === 0 && direct.length === 0) continue;
