@@ -1,6 +1,6 @@
-// v3.54 | 2026-07-05 KST | 수정: 항목구조표에서 헌금 항목이 이름별로 안 나오고 전부 "(그룹없음)"으로만 보이던 문제 — 예전 방식 데이터(소분류가 사람마다 복사되지 않고 공유되며, 실제 연결은 거래 기록에만 있는 구조)를 못 읽던 것을 실제 거래 기록에서 역추적해서 이름별로 표시하도록 수정 | cache:v258
+// v3.55 | 2026-07-05 KST | 변경: 항목구조표에서 헌금처럼 "중분류 자리에 사람이 들어가는" 카테고리는 교인 수가 많아지면(예: 500명) 표가 감당 안 되므로, 사람별로 안 쪼개고 헌금종류(소분류)만 중복없이 모아서 보여주도록 되돌림 — 명부 자동등록/개인별 헌금 입력/통계 등 실제 데이터 관리 로직은 전혀 안 건드림, 순전히 이 화면 표시 방식만 변경 | cache:v259
 'use strict';
-const APP_VERSION = 'v3.54 (cache v258)';
+const APP_VERSION = 'v3.55 (cache v259)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4746,44 +4746,32 @@ function openItemStructureSheet() {
       const allSubs = (State.subItems||[])
         .filter(s => s.categoryId === cat.id)
         .sort((a,b) => a.name.localeCompare(b.name,'ko'));
-      // subGroup별 그룹핑
+      // 이 카테고리가 "이름별" 구조(헌금처럼 중분류 자리에 사람이 들어가는 카테고리)인지 확인.
+      // 교인이 수백 명이면 항목구조표에 다 펼쳐 보이는 게 오히려 안 보기 힘드니,
+      // 이런 카테고리는 사람별로 안 쪼개고 헌금종류(소분류)만 이름 중복 없이 모아서 보여준다.
+      // (명부 등록·개인별 헌금 입력·통계는 이 화면과 무관하게 그대로 정상 작동함)
+      const catSubGroups = (State.subGroups||[]).filter(g => g.categoryId === cat.id);
       const sgMap = new Map();
-      const direct = [];
-      for (const s of allSubs) {
-        if (s.subGroupId) {
-          const sg = (State.subGroups||[]).find(g => g.id === s.subGroupId);
-          const sgName = sg ? sg.name : s.name;
-          if (!sgMap.has(s.subGroupId)) sgMap.set(s.subGroupId, {name:sgName, items:[]});
-          sgMap.get(s.subGroupId).items.push(s);
-        } else {
+      let direct = [];
+      if (catSubGroups.length > 0) {
+        // 사람 기반 카테고리 → 소분류 이름만 중복 제거해서 나열
+        const seenNames = new Set();
+        for (const s of allSubs) {
+          if (seenNames.has(s.name)) continue;
+          seenNames.add(s.name);
           direct.push(s);
         }
-      }
-      // 예전 방식 데이터 대응: 소분류 자체엔 subGroupId가 없지만(공유 항목),
-      // 이 카테고리에 subGroups(이름)가 등록되어 있는 경우 — 실제 거래 기록에서
-      // "이 이름이 이 소분류를 실제로 썼는지"를 역추적해서 그룹을 만든다
-      const catSubGroups = (State.subGroups||[]).filter(g => g.categoryId === cat.id);
-      if (sgMap.size === 0 && catSubGroups.length > 0 && direct.length > 0) {
-        const usedPairs = new Set(); // "subGroupId|subItemId" 형태로 실제 사용된 조합만 표시
-        for (const t of (State.transactions||[])) {
-          if (t.categoryId !== cat.id || !t.subGroupId) continue;
-          for (const line of (t.lines||[])) usedPairs.add(`${t.subGroupId}|${line.subItemId}`);
-        }
-        if (usedPairs.size > 0) {
-          const stillDirect = [];
-          for (const s of direct) {
-            let usedByAny = false;
-            for (const sg of catSubGroups) {
-              if (usedPairs.has(`${sg.id}|${s.id}`)) {
-                usedByAny = true;
-                if (!sgMap.has(sg.id)) sgMap.set(sg.id, {name: sg.name, items: []});
-                sgMap.get(sg.id).items.push(s);
-              }
-            }
-            if (!usedByAny) stillDirect.push(s);
+      } else {
+        // 일반 카테고리 → 기존처럼 subGroup별로 그룹핑
+        for (const s of allSubs) {
+          if (s.subGroupId) {
+            const sg = (State.subGroups||[]).find(g => g.id === s.subGroupId);
+            const sgName = sg ? sg.name : s.name;
+            if (!sgMap.has(s.subGroupId)) sgMap.set(s.subGroupId, {name:sgName, items:[]});
+            sgMap.get(s.subGroupId).items.push(s);
+          } else {
+            direct.push(s);
           }
-          direct.length = 0;
-          direct.push(...stillDirect);
         }
       }
       if (sgMap.size === 0 && direct.length === 0) continue;
