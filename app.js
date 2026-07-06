@@ -1,6 +1,6 @@
-// v3.48 | 2026-07-05 KST | 수정: 계정현황 엑셀 내보내기(일반계정 시트)도 인쇄/화면과 동일한 구조로 변경 — 대표계정 포함, 계좌당 3행(수입/지출/합계) 병합 셀, 연도별+지난달+전체합계 컬럼. 정기계정 시트는 기존 그대로 유지 | cache:v252
+// v3.49 | 2026-07-05 KST | 수정: 계정현황 인쇄에서 일반계정 표가 길어지면서 정기계정과 한 페이지에 같이 우겨넣어져 잘리던 문제 — 일반계정/정기계정을 각각 별도 페이지로 분리해서 항상 깔끔하게 나뉘어 인쇄되도록 수정 | cache:v253
 'use strict';
-const APP_VERSION = 'v3.48 (cache v252)';
+const APP_VERSION = 'v3.49 (cache v253)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3986,9 +3986,15 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <!-- 일반계정 -->
         <div class="print-section-title">일반계정 합계 (전체 연도, 대표계정 포함) · ${(mainNet + normalAccts.reduce((s,a)=>{ const lt = lifetimeTotals[a.name]||{income:0,expense:0}; return s + (a.carryover||0) + lt.income - lt.expense; }, 0)).toLocaleString('ko-KR')}원</div>
         ${makeNormalMultiYearTable(normalAccts)}
+      </div>
+    </div>
+    <div class="print-page" style="display:block;">
+      <div class="page-inner">
+        <div class="print-title">🏦 계정 현황 — 정기계정</div>
+        <div class="print-period">${new Date().toLocaleDateString('ko-KR')} · ${yLabel}</div>
 
         <!-- 정기계정 -->
-        <div class="print-section-title" style="margin-top:10pt;">정기계정 합계 (${yLabel}) · ${depositNetDisp.toLocaleString('ko-KR')}원</div>
+        <div class="print-section-title">정기계정 합계 (${yLabel}) · ${depositNetDisp.toLocaleString('ko-KR')}원</div>
         ${makeTable(depositAccts, true)}
       </div>
     </div>`;
