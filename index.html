@@ -941,6 +941,16 @@ input,textarea,select{font-family:inherit; color:inherit;}
   @page { size: A4 portrait; margin: 15mm 25mm; }
   /* 앱 UI 전체 숨김 — print-area는 예외 */
   body > *:not(#print-area) { display: none !important; }
+  /* body가 position:fixed;inset:0으로 뷰포트 크기에 고정되어 있어서,
+     그대로 두면 #print-area 내용이 화면 높이를 넘는 순간 잘려나감(PC 인쇄에서만 발생).
+     인쇄 시에는 고정을 풀고 문서가 자연스러운 높이로 늘어나도록 함 */
+  html, body {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
   #print-area {
     display: block !important;
     font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
