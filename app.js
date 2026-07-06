@@ -1,6 +1,6 @@
-// v3.56 | 2026-07-05 KST | 수정: "이름 추가 시 명부 자동등록"이 한 곳(거래입력 이름선택 화면)에만 적용되어 있었음 — 대분류 선택화면의 통합추가, 설정>카테고리 관리의 중분류추가, 카테고리별 관리(persons 모드) 총 3곳에 누락되어 있던 걸 전부 찾아서 명부↔거래입력 목록이 항상 같이 생성/일치하도록 수정 | cache:v260
+// v3.58 | 2026-07-05 KST | 변경: "모든 데이터 초기화" 후 기본 항목(카테고리)이 자동으로 다시 채워지던 것을 제거 — 이제 초기화하면 항목구조표가 완전히 빈 상태(대표계정만 있음)로 남음. seedDone 플래그를 추가해서 앱을 다시 켜도 기본 항목이 재생성되지 않도록 함(최초 설치 때만 1회 채워짐) | cache:v262
 'use strict';
-const APP_VERSION = 'v3.56 (cache v260)';
+const APP_VERSION = 'v3.58 (cache v262)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -361,7 +361,11 @@ function allBudgetYears() {
 
 async function seedIfEmpty() {
   const cats = await DB.getAll('categories');
-  if (cats.length === 0) {
+  const seedFlag = await DB.get('settings', 'seedDone');
+  if (cats.length === 0 && !seedFlag) {
+    // 앱을 처음 켰을 때(최초 1회)만 기본 항목을 채워넣는다.
+    // 이후 사용자가 "모든 데이터 초기화"로 항목을 일부러 비워도, 여기서 다시 채워지지 않도록
+    // seedDone 플래그를 남겨서 최초 1회로 제한한다.
     for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
       const def = DEFAULT_CATEGORIES[i];
       const catId = uid();
@@ -371,7 +375,8 @@ async function seedIfEmpty() {
         await DB.put('subItems', { id: uid(), categoryId: catId, name: subItems[j], order: j });
       }
     }
-  } else {
+    await DB.put('settings', { key: 'seedDone', value: '1' });
+  } else if (cats.length > 0) {
     // 마이그레이션: 기존 사용자에게 '예금' 지출 대분류가 없으면 추가
     const hasDeposit = cats.some(c => c.type === 'expense' && c.name === '예금');
     if (!hasDeposit) {
@@ -8007,9 +8012,8 @@ async function resetAllData() {
     for (const x of all) await DB.del(store, x.id || x.key);
   }
 
-  // 기본 항목 재생성
-  await seedIfEmpty();
-  // 대표계정 강제 생성 (seedIfEmpty 이후에도 없으면)
+  // 기본 항목(카테고리)은 재생성하지 않음 — 초기화 후 항목구조표가 완전히 빈 상태로 시작되도록 함
+  // (앱이 최소한으로 동작하려면 계좌는 하나 있어야 하므로 대표계정만 생성)
   const accts = await DB.getAll('linkedAccounts');
   if (accts.length === 0) {
     await DB.put('linkedAccounts', {
@@ -10701,18 +10705,9 @@ function openCatEditSheet(catId) {
       if (isNew) { draft.id = uid(); draft.order = State.categories.length; }
       else await ensureYearSnapshot(new Date().getFullYear()); // 수정 전 이름/아이콘/색상을 올해 스냅샷에 남겨둠
       await DB.put('categories', draft);
-
-      // 새 대분류 추가 시: 중분류·소분류가 없으면 동일 이름으로 자동 생성
-      if (isNew) {
-        const existingGroups = (await DB.getAll('subGroups')).filter(g => g.categoryId === draft.id);
-        const existingItems  = (await DB.getAll('subItems')).filter(s => s.categoryId === draft.id);
-        if (existingGroups.length === 0 && existingItems.length === 0) {
-          const groupId  = uid();
-          const subItemId = uid();
-          await DB.put('subGroups', { id: groupId,  categoryId: draft.id, name: draft.name, order: 0 });
-          await DB.put('subItems',  { id: subItemId, categoryId: draft.id, subGroupId: groupId, name: draft.name, order: 0, budget: 0 });
-        }
-      }
+      // (이전엔 새 대분류 추가 시 동일 이름의 중분류/소분류를 자동으로 만들어줬으나,
+      //  불필요하고 오히려 혼란을 줄 수 있어 제거함 — 이제 새 대분류는 빈 상태로 시작하고,
+      //  필요한 세부항목/이름은 사용자가 직접 추가함)
 
       await reloadData();
       closeAllSheets();

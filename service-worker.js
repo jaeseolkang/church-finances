@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2068 (이름 추가 시 명부 자동등록 누락 3곳 수정)
+// 2026-07-05 KST | CACHE_NAME v2070 (초기화 후 기본항목 재생성 안되게 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2068';
+const CACHE_NAME = 'gaegyebu-v2070';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
