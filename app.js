@@ -1,6 +1,6 @@
-// v3.55 | 2026-07-05 KST | 변경: 항목구조표에서 헌금처럼 "중분류 자리에 사람이 들어가는" 카테고리는 교인 수가 많아지면(예: 500명) 표가 감당 안 되므로, 사람별로 안 쪼개고 헌금종류(소분류)만 중복없이 모아서 보여주도록 되돌림 — 명부 자동등록/개인별 헌금 입력/통계 등 실제 데이터 관리 로직은 전혀 안 건드림, 순전히 이 화면 표시 방식만 변경 | cache:v259
+// v3.56 | 2026-07-05 KST | 수정: "이름 추가 시 명부 자동등록"이 한 곳(거래입력 이름선택 화면)에만 적용되어 있었음 — 대분류 선택화면의 통합추가, 설정>카테고리 관리의 중분류추가, 카테고리별 관리(persons 모드) 총 3곳에 누락되어 있던 걸 전부 찾아서 명부↔거래입력 목록이 항상 같이 생성/일치하도록 수정 | cache:v260
 'use strict';
-const APP_VERSION = 'v3.55 (cache v259)';
+const APP_VERSION = 'v3.56 (cache v260)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -8248,7 +8248,22 @@ function renderTxStepPick(sheet) {
         // 중분류(이름) 추가
         const list = subGroupsOfCategory(catId);
         if (list.find(g => g.name === name)) { showToast('이미 있는 이름이에요'); return; }
-        await DB.put('subGroups', { id: uid(), categoryId: catId, name, order: list.length });
+        const newGroup = { id: uid(), categoryId: catId, name, order: list.length };
+        await DB.put('subGroups', newGroup);
+        // 기존 공통 소분류(헌금종류)를 새 중분류에도 자동 생성
+        await seedDefaultSubItemsForGroup(newGroup.id, catId);
+        // 헌금 카테고리에서 새 이름을 추가한 경우, 명부(persons)에도 자동 등록
+        const heongCat2 = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+        if (heongCat2 && catId === heongCat2.id) {
+          const existingPerson = (State.persons || []).find(p => p.id === newGroup.id);
+          if (!existingPerson) {
+            await DB.put('persons', {
+              id: newGroup.id, categoryId: catId, name,
+              position: '성도', residentId: '', phone: '', address: '', memo: '',
+              hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '',
+            });
+          }
+        }
       } else {
         const list = subItemsOfCategory(catId);
         if (list.find(s => s.name === name)) { showToast('이미 있는 항목이에요'); return; }
@@ -10045,6 +10060,18 @@ function renderCatTree(sheet) {
       const newGroupId = uid();
       await DB.put('subGroups', { id: newGroupId, categoryId: catId, name, order: groups.length });
       await seedDefaultSubItemsForGroup(newGroupId, catId);
+      // 헌금 카테고리에서 새 이름을 추가한 경우, 명부(persons)에도 자동 등록
+      const heongCat3 = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+      if (heongCat3 && catId === heongCat3.id) {
+        const existingPerson = (State.persons || []).find(p => p.id === newGroupId);
+        if (!existingPerson) {
+          await DB.put('persons', {
+            id: newGroupId, categoryId: catId, name,
+            position: '성도', residentId: '', phone: '', address: '', memo: '',
+            hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '',
+          });
+        }
+      }
       catManageExpanded.add(catId);
       catManageExpanded.add(newGroupId);
       await reloadData(); renderCatManageSheet();
@@ -10855,10 +10882,24 @@ async function addSubOrPerson(sheet, categoryId, mode) {
   const input = sheet.querySelector('#newSubName');
   const name = input.value.trim();
   if (!name) { showToast('이름을 입력해주세요'); return; }
-  const store = isItems ? 'subItems' : 'persons';
   const list = isItems ? subItemsOfCategory(categoryId) : personsOfCategory(categoryId);
   if (list.find(x => x.name === name)) { showToast('이미 있는 항목이에요'); return; }
-  await DB.put(store, { id: uid(), categoryId, name, order: list.length });
+  if (isItems) {
+    await DB.put('subItems', { id: uid(), categoryId, name, order: list.length });
+  } else {
+    // 사람(명부) 추가 — 명부(persons)와 거래입력용 중분류(subGroups)를 같은 id로 함께 만들어서
+    // "명부에는 있는데 헌금 입력 목록엔 안 뜨는" 불일치가 생기지 않도록 함
+    const newId = uid();
+    await DB.put('persons', { id: newId, categoryId, name, order: list.length,
+      position: '성도', residentId: '', phone: '', address: '', memo: '',
+      hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '',
+    });
+    const groups = subGroupsOfCategory(categoryId);
+    if (!groups.find(g => g.name === name)) {
+      await DB.put('subGroups', { id: newId, categoryId, name, order: groups.length });
+      await seedDefaultSubItemsForGroup(newId, categoryId);
+    }
+  }
   await reloadData();
   renderCatSubSheet(categoryId, mode);
 }
