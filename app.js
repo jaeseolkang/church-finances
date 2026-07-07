@@ -1,6 +1,6 @@
-// v3.75 | 2026-07-05 KST | 안전장치 추가: totalAssets()에서 "전년이월" 거래와 연결계좌관리의 대표계정 이월금 필드가 둘 다 채워져 있으면 이중으로 합산될 수 있던 위험 제거 — 실제 전년이월 거래가 있으면 그걸 우선하고 필드값은 무시(totalAssetsForYearSync는 원래부터 안전했음, 이번에 totalAssets()도 동일하게 맞춤) | cache:v279
+// v3.76 | 2026-07-05 KST | 수정: 통계에서 수입 집계할 때 "통장이동"(다른 계좌에서 온 내부이체, 진짜 새 수입 아님)이 같이 잡히던 문제 — 통계/내용 탭의 카테고리별·내용별 집계(화면+인쇄)와 월간/기간설정 요약카드의 "총수입"에서 제외. (연간 요약카드는 계정 탭 잔액계산과 공유하는 함수라 이번엔 그대로 둠 — 필요하시면 별도로 분리해드릴 수 있음) | cache:v280
 'use strict';
-const APP_VERSION = 'v3.75 (cache v279)';
+const APP_VERSION = 'v3.76 (cache v280)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3458,11 +3458,15 @@ function printStats() {
   const netTotal = incTotal - expTotal;
 
   // ── 통계 탭: 막대 데이터 ──
-  // "전년이월"은 실제 그 기간에 발생한 수입이 아니라 이전 잔액을 옮겨온 것이므로,
-  // 통계/내용 탭의 세부 집계에서는 제외한다. (맨 위 요약카드의 "이월잔액"은 별도 계산이라 이미 정상)
-  const carryoverCatForStats = State.categories.find(c => c.name === '전년이월');
-  const listForBreakdown = carryoverCatForStats
-    ? list.filter(t => t.categoryId !== carryoverCatForStats.id)
+  // "전년이월"은 실제 그 기간에 발생한 수입이 아니라 이전 잔액을 옮겨온 것이고,
+  // "통장이동"(수입)은 다른 계좌에서 옮겨온 내부 이체일 뿐 진짜 새로 생긴 수입이 아니므로,
+  // 둘 다 통계/내용 탭의 세부 집계에서는 제외한다. (맨 위 요약카드는 별도 계산이라 이미 정상)
+  const excludedCatNamesForStats = ['전년이월', '통장이동'];
+  const excludedCatIdsForStats = new Set(
+    State.categories.filter(c => excludedCatNamesForStats.includes(c.name) && c.type === 'income').map(c => c.id)
+  );
+  const listForBreakdown = excludedCatIdsForStats.size > 0
+    ? list.filter(t => !excludedCatIdsForStats.has(t.categoryId))
     : list;
   const byCat = {};
   let statTotal = 0;
@@ -3809,10 +3813,12 @@ function renderStats() {
   } else if (!isInterest && (State.statsPeriod === 'month' || State.statsPeriod === 'custom')) {
     const depositCat = State.categories.find(c => c.name === '예금');
     const carryoverCat = State.categories.find(c => c.name === '전년이월');
+    const tongCatForSummary = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
     let totalIncome = 0, totalExpense = 0, depositExp = 0;
     for (const t of allTx) {
       if (t.type === 'income') {
         if (carryoverCat && t.categoryId === carryoverCat.id) continue;
+        if (tongCatForSummary && t.categoryId === tongCatForSummary.id) continue; // 통장이동(내부이체)은 새 수입이 아니므로 제외
         totalIncome += t.amount;
       } else {
         if (depositCat && t.categoryId === depositCat.id) depositExp += t.amount;
@@ -3827,11 +3833,15 @@ function renderStats() {
   const carryLabel = State.statsPeriod === 'year' ? '전년이월' : '이월잔액';
 
   // 기간별 내역 (날짜순)
-  // "전년이월"은 실제 그 기간에 발생한 수입이 아니라 이전 잔액을 옮겨온 것이므로,
-  // 통계/내용 탭의 세부 집계에서는 제외한다. (맨 위 요약카드의 "이월잔액"은 별도 계산이라 이미 정상)
-  const carryoverCatForStats2 = State.categories.find(c => c.name === '전년이월');
-  const listForBreakdown2 = carryoverCatForStats2
-    ? list.filter(t => t.categoryId !== carryoverCatForStats2.id)
+  // "전년이월"은 실제 그 기간에 발생한 수입이 아니라 이전 잔액을 옮겨온 것이고,
+  // "통장이동"(수입)은 다른 계좌에서 옮겨온 내부 이체일 뿐 진짜 새로 생긴 수입이 아니므로,
+  // 둘 다 통계/내용 탭의 세부 집계에서는 제외한다. (맨 위 요약카드는 별도 계산이라 이미 정상)
+  const excludedCatNamesForStats2 = ['전년이월', '통장이동'];
+  const excludedCatIdsForStats2 = new Set(
+    State.categories.filter(c => excludedCatNamesForStats2.includes(c.name) && c.type === 'income').map(c => c.id)
+  );
+  const listForBreakdown2 = excludedCatIdsForStats2.size > 0
+    ? list.filter(t => !excludedCatIdsForStats2.has(t.categoryId))
     : list;
   const detailTx = listForBreakdown2.slice().sort((a,b) => a.date.localeCompare(b.date) || b.createdAt - a.createdAt);
 
