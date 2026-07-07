@@ -1,6 +1,6 @@
-// v3.61 | 2026-07-05 KST | 변경: 설정>항목관리>예전 항목 보기에서, 삭제된 항목이라도 실제 거래(수입/지출) 기록이 한 번도 없었으면 목록에서 제외 — 거래 기록이 있는(과거에 실제로 쓰인) 삭제 항목만 표시 | cache:v265
+// v3.62 | 2026-07-05 KST | 추가: 계정 탭 일반계정 표에 "지난달" 옆에 "이번달" 컬럼 추가 — 화면/인쇄/엑셀 세 곳 전부 반영. 오늘 날짜 기준으로 이번달이 자동 계산됨 | cache:v266
 'use strict';
-const APP_VERSION = 'v3.61 (cache v265)';
+const APP_VERSION = 'v3.62 (cache v266)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3825,6 +3825,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
   normalCarry, normalIncome, normalExpense,
   depositCarry, depositIncome, depositExpense, nonDefaultAccts, selectedYear, yearLabel,
   lifetimeTotals, multiYears, yearTotalsByYear, lastMonthTotals, lastMonthLabel, lastMonthYM,
+  thisMonthTotals, thisMonthLabel, thisMonthYM,
   defaultAcct, mainCarry}) {
 
   const fmt = n => n ? n.toLocaleString('ko-KR') : '-';
@@ -3904,11 +3905,11 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
     </table>`;
   };
 
-  // ── 일반계정 전용 인쇄 표: 이월금/연도별(수입·지출·합계)/지난달/전체합계 (화면과 동일 구조) ──
+  // ── 일반계정 전용 인쇄 표: 이월금/연도별(수입·지출·합계)/지난달/이번달/전체합계 (화면과 동일 구조) ──
   const makeNormalMultiYearTable = (acctList) => {
     const years = multiYears || [];
-    const nCols = 3 + years.length + 2; // 계좌이름 + 이월금 + [구분] + years + 지난달 + 합계
-    const rowBlock = (label, carry, perYear, lastMonth, netOverall, pinned) => {
+    const nCols = 3 + years.length + 3; // 계좌이름 + 이월금 + [구분] + years + 지난달 + 이번달 + 합계
+    const rowBlock = (label, carry, perYear, lastMonth, thisMonth, netOverall, pinned) => {
       const netColor = netOverall >= 0 ? '#1F497D' : '#CC0000';
       const bg = pinned ? 'background:#EBF3FB;' : '';
       const nameCell = `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;font-weight:600;">${escapeHTML(label)}${pinned?' 📌':''}</td>`;
@@ -3921,6 +3922,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         return `<td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${n>=0?'#1F497D':'#CC0000'};">${n.toLocaleString('ko-KR')}</td>`;
       }).join('');
       const lmNet = lastMonth.income - lastMonth.expense;
+      const tmNet = thisMonth.income - thisMonth.expense;
       // rowspan(셀 병합)은 브라우저 인쇄 페이지분할과 충돌해 내용이 잘리는 버그를 일으킬 수 있어
       // 계좌이름/이월금/합계 값은 3줄 모두에 반복 표시하는 방식으로 대체(병합 없음)
       return `
@@ -3929,6 +3931,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7pt;text-align:center;color:#666;">수입</td>
         ${yInc}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#1F497D;">${fmt(lastMonth.income)}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#1F497D;">${fmt(thisMonth.income)}</td>
         ${netCell}
       </tr>
       <tr style="${bg}">
@@ -3937,6 +3940,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7pt;text-align:center;color:#666;">지출</td>
         ${yExp}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#CC0000;">${fmt(lastMonth.expense)}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;color:#CC0000;">${fmt(thisMonth.expense)}</td>
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;"></td>
       </tr>
       <tr style="${bg}">
@@ -3945,6 +3949,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7pt;text-align:center;color:#444;font-weight:700;">합계</td>
         ${yNet}
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${lmNet>=0?'#1F497D':'#CC0000'};">${lmNet.toLocaleString('ko-KR')}</td>
+        <td style="padding:2pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;text-align:right;font-weight:700;color:${tmNet>=0?'#1F497D':'#CC0000'};">${tmNet.toLocaleString('ko-KR')}</td>
         <td style="padding:2pt 4pt;border:0.5pt solid #aaa;"></td>
       </tr>`;
     };
@@ -3953,6 +3958,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
       mainLabel, mainCarry,
       (y) => { const r = totalAssetsForYearSync(y); return { income: r.totalIncome, expense: r.totalExpense }; },
       mainAcctMonthTotals(lastMonthYM),
+      mainAcctMonthTotals(thisMonthYM),
       mainNet, true
     ) : '';
 
@@ -3964,6 +3970,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         shortName(a.name), carry,
         (y) => (yearTotalsByYear[y] && yearTotalsByYear[y][a.name]) || {income:0, expense:0},
         lastMonthTotals[a.name] || {income:0, expense:0},
+        thisMonthTotals[a.name] || {income:0, expense:0},
         net, false
       );
     }).join('');
@@ -3978,6 +3985,7 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
         <th style="${thStyle}text-align:center;width:24pt;"></th>
         ${years.map(y => `<th style="${thStyle}text-align:right;">${y}년</th>`).join('')}
         <th style="${thStyle}text-align:right;">${lastMonthLabel}</th>
+        <th style="${thStyle}text-align:right;">${thisMonthLabel}</th>
         <th style="${thStyle}text-align:right;">합계</th>
       </tr></thead>
       <tbody>${bodyRows}</tbody>
@@ -4031,7 +4039,8 @@ function printAccounts({sub, accounts, totals, grandNet, grandNetColor, mainNet,
 
 // ── 계정 현황 엑셀 내보내기 (일반계정/정기계정 각각 시트로) ──
 function exportAccountsToExcel({totals, mainNet, normalNet, depositNet, mainLabel, grandNet, nonDefaultAccts, selectedYear, yearLabel,
-  lifetimeTotals, multiYears, yearTotalsByYear, lastMonthTotals, lastMonthLabel, lastMonthYM, defaultAcct, mainCarry}) {
+  lifetimeTotals, multiYears, yearTotalsByYear, lastMonthTotals, lastMonthLabel, lastMonthYM,
+  thisMonthTotals, thisMonthLabel, thisMonthYM, defaultAcct, mainCarry}) {
   const wb = XLSX.utils.book_new();
   const numFmt = '#,##0';
   const gBdr = {style:'thin', color:{rgb:'CCCCCC'}};
@@ -4046,25 +4055,26 @@ function exportAccountsToExcel({totals, mainNet, normalNet, depositNet, mainLabe
   const today = todayStr();
   const yLabel = yearLabel || (selectedYear && selectedYear !== 'all' ? `${selectedYear}년` : '전체 연도');
 
-  // ── 일반계정 시트: 이월금/연도별(수입·지출·합계)/지난달/전체합계 — 화면·인쇄와 동일 구조 ──
+  // ── 일반계정 시트: 이월금/연도별(수입·지출·합계)/지난달/이번달/전체합계 — 화면·인쇄와 동일 구조 ──
   const buildNormalSheet = (acctList) => {
     const years = multiYears || [];
-    const header = ['계좌이름','이월금','구분', ...years.map(y=>`${y}년`), lastMonthLabel, '합계'];
+    const header = ['계좌이름','이월금','구분', ...years.map(y=>`${y}년`), lastMonthLabel, thisMonthLabel, '합계'];
     const nCols = header.length;
     const aoa = [header];
     const merges = [];
     const centerCols = new Set(); // 수입/지출/합계 라벨 색칠용 행 인덱스 기록 안 함, 서식은 아래서 직접 처리
     const rowMeta = []; // {kind:'label'|'income'|'expense'|'net'|'main', isMain}
 
-    const pushBlock = (label, carry, perYear, lastMonth, netOverall, isMain) => {
+    const pushBlock = (label, carry, perYear, lastMonth, thisMonth, netOverall, isMain) => {
       const r0 = aoa.length;
       const yInc = years.map(y => perYear(y).income);
       const yExp = years.map(y => perYear(y).expense);
       const yNet = years.map(y => perYear(y).income - perYear(y).expense);
       const lmNet = lastMonth.income - lastMonth.expense;
-      aoa.push([label, carry, '수입', ...yInc, lastMonth.income, netOverall]);
-      aoa.push(['', '', '지출', ...yExp, lastMonth.expense, '']);
-      aoa.push(['', '', '합계', ...yNet, lmNet, '']);
+      const tmNet = thisMonth.income - thisMonth.expense;
+      aoa.push([label, carry, '수입', ...yInc, lastMonth.income, thisMonth.income, netOverall]);
+      aoa.push(['', '', '지출', ...yExp, lastMonth.expense, thisMonth.expense, '']);
+      aoa.push(['', '', '합계', ...yNet, lmNet, tmNet, '']);
       merges.push({s:{r:r0,c:0}, e:{r:r0+2,c:0}}); // 계좌이름
       merges.push({s:{r:r0,c:1}, e:{r:r0+2,c:1}}); // 이월금
       merges.push({s:{r:r0,c:nCols-1}, e:{r:r0+2,c:nCols-1}}); // 합계
@@ -4076,6 +4086,7 @@ function exportAccountsToExcel({totals, mainNet, normalNet, depositNet, mainLabe
         mainLabel, mainCarry,
         (y) => { const r = totalAssetsForYearSync(y); return { income: r.totalIncome, expense: r.totalExpense }; },
         mainAcctMonthTotals(lastMonthYM),
+        mainAcctMonthTotals(thisMonthYM),
         mainNet, true
       );
     }
@@ -4087,11 +4098,12 @@ function exportAccountsToExcel({totals, mainNet, normalNet, depositNet, mainLabe
         shortName(a.name), carry,
         (y) => (yearTotalsByYear[y] && yearTotalsByYear[y][a.name]) || {income:0, expense:0},
         lastMonthTotals[a.name] || {income:0, expense:0},
+        thisMonthTotals[a.name] || {income:0, expense:0},
         net, false
       );
     }
 
-    // 전체 총합계 행 (연도별 순액 합, 지난달 순액 합, 전체 합계)
+    // 전체 총합계 행 (연도별 순액 합, 지난달/이번달 순액 합, 전체 합계)
     const grandCarry = (defaultAcct?mainCarry:0) + acctList.reduce((s,a)=>s+(a.carryover||0),0);
     const grandYearNet = years.map(y => {
       let s = 0;
@@ -4102,13 +4114,16 @@ function exportAccountsToExcel({totals, mainNet, normalNet, depositNet, mainLabe
     let grandLastMonthNet = 0;
     if (defaultAcct) { const m = mainAcctMonthTotals(lastMonthYM); grandLastMonthNet += m.income - m.expense; }
     for (const a of acctList) { const m = lastMonthTotals[a.name]||{income:0,expense:0}; grandLastMonthNet += m.income - m.expense; }
+    let grandThisMonthNet = 0;
+    if (defaultAcct) { const m = mainAcctMonthTotals(thisMonthYM); grandThisMonthNet += m.income - m.expense; }
+    for (const a of acctList) { const m = thisMonthTotals[a.name]||{income:0,expense:0}; grandThisMonthNet += m.income - m.expense; }
     const grandNetVal = (defaultAcct?mainNet:0) + acctList.reduce((s,a)=>{ const lt=lifetimeTotals[a.name]||{income:0,expense:0}; return s+(a.carryover||0)+lt.income-lt.expense; }, 0);
     const totalR = aoa.length;
-    aoa.push(['총합계', grandCarry, '', ...grandYearNet, grandLastMonthNet, grandNetVal]);
+    aoa.push(['총합계', grandCarry, '', ...grandYearNet, grandLastMonthNet, grandThisMonthNet, grandNetVal]);
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!merges'] = merges;
-    ws['!cols'] = [{wch:14},{wch:12},{wch:8}, ...years.map(()=>({wch:12})), {wch:12}, {wch:14}];
+    ws['!cols'] = [{wch:14},{wch:12},{wch:8}, ...years.map(()=>({wch:12})), {wch:12}, {wch:12}, {wch:14}];
 
     const sc = (r,c,s) => {
       const addr = XLSX.utils.encode_cell({r,c});
@@ -5111,7 +5126,7 @@ async function renderAccounts() {
     ? '등록된 정기계정 계좌가 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>'
     : '등록된 계정이 없어요<br><span style="font-size:12px;">설정 → 연결계좌 관리에서 추가하세요</span>';
 
-  // ── 일반계정 전용: 연도별(수입/지출) + 지난달 칼럼 준비 (인쇄/엑셀에서도 쓰이므로 탭과 무관하게 항상 계산) ──
+  // ── 일반계정 전용: 연도별(수입/지출) + 지난달/이번달 칼럼 준비 (인쇄/엑셀에서도 쓰이므로 탭과 무관하게 항상 계산) ──
   const multiYears = allAccountsYears();
   const yearTotalsByYear = {};
   for (const y of multiYears) yearTotalsByYear[y] = calcAcctTotals(y);
@@ -5120,9 +5135,13 @@ async function renderAccounts() {
   const lastMonthYM = `${lastMonthDateObj.getFullYear()}-${String(lastMonthDateObj.getMonth()+1).padStart(2,'0')}`;
   const lastMonthLabel = `${lastMonthDateObj.getMonth()+1}월(지난달)`;
   const lastMonthTotals = calcAcctMonthTotals(lastMonthYM);
+  const thisMonthDateObj = new Date();
+  const thisMonthYM = `${thisMonthDateObj.getFullYear()}-${String(thisMonthDateObj.getMonth()+1).padStart(2,'0')}`;
+  const thisMonthLabel = `${thisMonthDateObj.getMonth()+1}월(이번달)`;
+  const thisMonthTotals = calcAcctMonthTotals(thisMonthYM);
 
   // 일반계정 표의 계좌 1개당 3줄(수입/지출/합계) 블록을 만드는 공용 함수
-  const buildNormalRow = (rowAttr, label, carry, perYear, lastMonth, netOverall, pinned = false) => {
+  const buildNormalRow = (rowAttr, label, carry, perYear, lastMonth, thisMonth, netOverall, pinned = false) => {
     const netColor = netOverall >= 0 ? 'var(--primary)' : 'var(--expense)';
     const bg = pinned ? 'background:var(--primary-light,#eef2ff);' : '';
     const yearIncomeCells = multiYears.map(y => `<td class="acct-tbl-num income">${fmt(perYear(y).income)}</td>`).join('');
@@ -5132,6 +5151,7 @@ async function renderAccounts() {
       return `<td class="acct-tbl-num" style="font-weight:700;color:${n>=0?'var(--primary)':'var(--expense)'};">${n.toLocaleString('ko-KR')}</td>`;
     }).join('');
     const lmNet = lastMonth.income - lastMonth.expense;
+    const tmNet = thisMonth.income - thisMonth.expense;
     return `
     <tr class="acct-tbl-row" ${rowAttr} style="cursor:pointer;border-top:2px solid var(--border);${bg}">
       <td class="acct-tbl-name" rowspan="3">${escapeHTML(label)}${pinned?' 📌':''}</td>
@@ -5139,17 +5159,20 @@ async function renderAccounts() {
       <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">수입</td>
       ${yearIncomeCells}
       <td class="acct-tbl-num income">${fmt(lastMonth.income)}</td>
+      <td class="acct-tbl-num income">${fmt(thisMonth.income)}</td>
       <td class="acct-tbl-num" rowspan="3" style="color:${netColor};font-weight:700;">${netOverall.toLocaleString('ko-KR')}</td>
     </tr>
     <tr class="acct-tbl-row" ${rowAttr} style="cursor:pointer;${bg}">
       <td style="font-size:11px;color:var(--text-3);text-align:center;padding:4px 2px;">지출</td>
       ${yearExpenseCells}
       <td class="acct-tbl-num expense">${fmt(lastMonth.expense)}</td>
+      <td class="acct-tbl-num expense">${fmt(thisMonth.expense)}</td>
     </tr>
     <tr class="acct-tbl-row" ${rowAttr} style="cursor:pointer;background:${pinned?'var(--primary-light,#eef2ff)':'rgba(0,0,0,0.02)'};">
       <td style="font-size:11px;color:var(--text-2);font-weight:700;text-align:center;padding:4px 2px;">합계</td>
       ${yearNetCells}
       <td class="acct-tbl-num" style="font-weight:700;color:${lmNet>=0?'var(--primary)':'var(--expense)'};">${lmNet.toLocaleString('ko-KR')}</td>
+      <td class="acct-tbl-num" style="font-weight:700;color:${tmNet>=0?'var(--primary)':'var(--expense)'};">${tmNet.toLocaleString('ko-KR')}</td>
     </tr>`;
   };
 
@@ -5160,12 +5183,13 @@ async function renderAccounts() {
         mainLabel, mainCarry,
         (y) => { const r = totalAssetsForYearSync(y); return { income: r.totalIncome, expense: r.totalExpense }; },
         mainAcctMonthTotals(lastMonthYM),
+        mainAcctMonthTotals(thisMonthYM),
         mainNet, true
       ).replace(/cursor:pointer;/g, 'cursor:default;')
     : '';
 
   const rowsHTML = accounts.length === 0
-    ? `${mainRowHTML}<tr><td colspan="${sub==='deposit'?6:(multiYears.length+5)}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
+    ? `${mainRowHTML}<tr><td colspan="${sub==='deposit'?6:(multiYears.length+6)}" style="text-align:center;color:var(--text-3);padding:24px;">${emptyMsg}</td></tr>`
     : sub === 'normal'
     ? mainRowHTML + accounts.map(a => {
         const carry = a.carryover || 0;
@@ -5176,6 +5200,7 @@ async function renderAccounts() {
           shortName(a.name), carry,
           (y) => yearTotalsByYear[y][a.name] || {income:0, expense:0},
           lastMonthTotals[a.name] || {income:0, expense:0},
+          thisMonthTotals[a.name] || {income:0, expense:0},
           net
         );
       }).join('')
@@ -5258,7 +5283,7 @@ async function renderAccounts() {
     </div>
 
     <div class="acct-tbl-wrap">
-      <table class="acct-tbl" style="min-width:${sub==='deposit'?'580px':(360+multiYears.length*80)+'px'};">
+      <table class="acct-tbl" style="min-width:${sub==='deposit'?'580px':(440+multiYears.length*80)+'px'};">
         <thead>
           <tr>
             <th class="acct-tbl-name acct-th-sort" data-sort="name" ${sub==='normal'?'rowspan="1"':''}>
@@ -5266,7 +5291,7 @@ async function renderAccounts() {
             </th>
             <th class="acct-tbl-num">이월금</th>
             ${sub==='normal'
-              ? `<th class="acct-tbl-num" style="width:40px;"></th>${multiYears.map(y => `<th class="acct-tbl-num">${y}년</th>`).join('')}<th class="acct-tbl-num">${lastMonthLabel}</th>`
+              ? `<th class="acct-tbl-num" style="width:40px;"></th>${multiYears.map(y => `<th class="acct-tbl-num">${y}년</th>`).join('')}<th class="acct-tbl-num">${lastMonthLabel}</th><th class="acct-tbl-num">${thisMonthLabel}</th>`
               : `<th class="acct-tbl-num">수입금</th><th class="acct-tbl-num">지출금</th>`}
             <th class="acct-tbl-num">합계</th>
             ${sub==='deposit' ? `<th class="acct-tbl-num acct-th-sort" data-sort="maturity">만기일<span class="acct-sort-icon">${State.depositSortKey==='maturity' ? (State.depositSortDir==='asc'?'↑':'↓') : '↕'}</span></th>` : ''}
@@ -5293,6 +5318,7 @@ async function renderAccounts() {
     depositCarry, depositIncome, depositExpense,
     nonDefaultAccts, selectedYear, yearLabel,
     lifetimeTotals: totals, multiYears, yearTotalsByYear, lastMonthTotals, lastMonthLabel, lastMonthYM,
+    thisMonthTotals, thisMonthLabel, thisMonthYM,
     defaultAcct, mainCarry
   };
 
