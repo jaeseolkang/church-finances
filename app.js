@@ -1,6 +1,6 @@
-// v3.64 | 2026-07-05 KST | 수정: 통계>수입>내용 탭에 보이는 "헌금 종류별 합계/건수" 목록이 인쇄와 엑셀에서 통째로 빠져있던 버그 — 인쇄는 화면에 없던 "개인별 명세"만 나오고, 엑셀도 개인별헌금 시트만 있었음. 이제 인쇄 맨 위와 엑셀 첫 시트("내용별집계")에 화면과 동일한 내용별 건수/금액이 포함됨 | cache:v268
+// v3.65 | 2026-07-05 KST | 수정: 모바일에서 인쇄 버튼을 눌러도 아무 반응 없던 문제 — window.open()이 팝업 차단으로 조용히 실패(null 반환, 에러 없음)하는 경우를 대비한 방어 코드가 없었음. 이제 팝업이 막히면 현재 탭에서 바로 인쇄 화면으로 이동하는 대체 경로 추가 | cache:v269
 'use strict';
-const APP_VERSION = 'v3.64 (cache v268)';
+const APP_VERSION = 'v3.65 (cache v269)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1288,8 +1288,14 @@ function _doPrintBlob(html) {
 
   const blob = new Blob([fullHTML], {type:'text/html'});
   const url  = URL.createObjectURL(blob);
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  const opened = window.open(url, '_blank');
+  if (!opened || opened.closed) {
+    // 팝업이 차단되면 window.open()이 null을 반환(에러 없이 조용히 실패)하므로,
+    // 이 경우 현재 탭에서 바로 인쇄 화면으로 이동시켜 최소한 인쇄는 되도록 함
+    window.location.href = url;
+  } else {
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
 }
 
 /* =========================================================
