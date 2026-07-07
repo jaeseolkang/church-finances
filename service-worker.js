@@ -1,6 +1,6 @@
-// 2026-07-05 KST | CACHE_NAME v2083 (항목구조표 중분류 사라짐 긴급수정)
+// 2026-07-05 KST | CACHE_NAME v2084 (예산 양식에 중분류 추가, 자동합산 수식)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2083';
+const CACHE_NAME = 'gaegyebu-v2084';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

@@ -1,6 +1,6 @@
-// v3.71 | 2026-07-05 KST | 긴급수정: 항목구조표에서 관리유지/선교비처럼 진짜 중분류(자동차,통신 등)를 쓰는 일반 카테고리까지 "사람 기반 카테고리"로 잘못 판단되어 중분류가 통째로 사라지던 버그(v3.55에서 발생) — "중분류가 실제로 명부(persons)의 사람인지"까지 확인하도록 조건을 정확히 좁혀서 수정 | cache:v275
+// v3.72 | 2026-07-05 KST | 개선: 예산 편성 엑셀 양식에 중분류 열 추가 — 지출처럼 중분류(자동차/통신 등)를 쓰는 카테고리도 중분류·소분류까지 다 보여주고, 소분류에 값을 넣으면 중분류가·중분류 값이 모이면 대분류가 엑셀 SUM 수식으로 자동 합산됨(대분류/중분류 칸은 직접 입력 안 해도 됨). 헌금처럼 사람 기반 카테고리는 기존처럼 단순 목록 유지 | cache:v276
 'use strict';
-const APP_VERSION = 'v3.71 (cache v275)';
+const APP_VERSION = 'v3.72 (cache v276)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1936,19 +1936,20 @@ async function importBudgetPlanFromExcel(e) {
     if (aoa.length < 4) { alert('양식을 인식할 수 없습니다. 예산 탭에서 내려받은 파일이 맞는지 확인해주세요.'); return; }
 
     // 헤더 행(3번째, index 2)에서 "OOOO년예산" 형태로 목표 연도를 읽어온다
+    // 열 구성: 0구분 1대분류 2중분류 3소분류 4올해예산 5올해집행액 6집행률 7다음해예산(수식 포함) 8메타(숨김)
     const headerRow = aoa[2] || [];
-    const yearHeaderCell = String(headerRow[6] || '');
+    const yearHeaderCell = String(headerRow[7] || '');
     const yearMatch = yearHeaderCell.match(/(\d{4})년/);
     const targetYear = yearMatch ? parseInt(yearMatch[1], 10) : (new Date().getFullYear() + 1);
 
-    if (!confirm(`"${targetYear}년" 예산으로 반영할까요?\n엑셀에 값이 채워진 항목만 업데이트되고, 나머지는 그대로 유지됩니다.`)) return;
+    if (!confirm(`"${targetYear}년" 예산으로 반영할까요?\n엑셀에 값이 채워진(대분류·중분류는 자동합계 포함) 항목만 업데이트되고, 나머지는 그대로 유지됩니다.`)) return;
 
     let updatedCount = 0;
     for (let r = 3; r < aoa.length; r++) {
       const row = aoa[r];
       if (!row) continue;
-      const nextBudgetRaw = row[6];
-      const metaRaw = row[7];
+      const nextBudgetRaw = row[7];
+      const metaRaw = row[8];
       if (nextBudgetRaw === '' || nextBudgetRaw == null) continue; // 빈 칸은 건드리지 않음
       const amount = Number(String(nextBudgetRaw).replace(/[^0-9.-]/g, ''));
       if (!isFinite(amount) || amount < 0) continue;
@@ -1959,6 +1960,12 @@ async function importBudgetPlanFromExcel(e) {
         if (!cat) continue;
         setBudget(cat, targetYear, amount);
         await DB.put('categories', cat);
+        updatedCount++;
+      } else if (kind === 'subGroup') {
+        const sg = (State.subGroups || []).find(g => g.id === id);
+        if (!sg) continue;
+        setBudget(sg, targetYear, amount);
+        await DB.put('subGroups', sg);
         updatedCount++;
       } else if (kind === 'subItem') {
         const si = (State.subItems || []).find(s => s.id === id);
@@ -1982,78 +1989,171 @@ async function importBudgetPlanFromExcel(e) {
 function exportBudgetPlanTemplate(year) {
   const nextYear = year + 1;
   const yearTxs = State.transactions.filter(t => t.date.startsWith(String(year)));
-  const spentByCat = {}, spentBySub = {};
+  const spentByCat = {}, spentByGroup = {}, spentBySub = {};
   for (const t of yearTxs) {
     spentByCat[t.categoryId] = (spentByCat[t.categoryId] || 0) + t.amount;
+    if (t.subGroupId) spentByGroup[t.subGroupId] = (spentByGroup[t.subGroupId] || 0) + t.amount;
     for (const l of (t.lines || [])) spentBySub[l.subItemId] = (spentBySub[l.subItemId] || 0) + l.amount;
   }
 
   const aoa = [];
   aoa.push([`예산 편성 양식 — ${year}년 참고 / ${nextYear}년 편성`]);
-  aoa.push(['※ "다음해예산" 칸에 금액만 입력한 뒤, 설정 > 예산 데이터 가져오기로 이 파일을 그대로 올려주세요. (구분/대분류/소분류 열은 지우거나 순서를 바꾸지 마세요)']);
-  aoa.push(['구분','대분류','소분류',`${year}년예산`,`${year}년집행액`,'집행률(%)',`${nextYear}년예산`]);
+  aoa.push(['※ 노란 칸(중분류·소분류의 "다음해예산")에만 금액을 입력하세요. 대분류/중분류 합계 칸은 엑셀 수식으로 자동 계산되니 직접 입력하지 마세요. 다 채운 뒤 설정 > 예산 데이터 가져오기로 이 파일을 그대로 올려주세요. (구분/대분류/중분류/소분류 열은 지우거나 순서를 바꾸지 마세요)']);
+  aoa.push(['구분','대분류','중분류','소분류',`${year}년예산`,`${year}년집행액`,'집행률(%)',`${nextYear}년예산`]);
+  const BUDCOL = 7; // 다음해예산 컬럼 index (0-based)
+  const META_COL = 8;
 
   const typeOrder = ['income','expense'];
-  const rowMeta = []; // 각 행이 category인지 subItem인지, 실제 대상 id
+  const rowMeta = []; // 각 행: kind(category/subGroup/subItem), id, formula 여부
+  const HDR = 3; // 데이터 시작 행(0-based) = aoa.length at this point
+
   for (const type of typeOrder) {
     const typeLabel = type === 'income' ? '수입' : '지출';
     const cats = State.categories.filter(c => c.type === type).sort((a,b)=>a.order-b.order);
     for (const cat of cats) {
+      const catSubGroups = (State.subGroups||[]).filter(g => g.categoryId === cat.id);
+      const isPersonBasedCat = catSubGroups.length > 0 &&
+        catSubGroups.some(g => (State.persons||[]).some(p => p.id === g.id));
+
       const catBud = getBudget(cat, year);
       const catSpent = spentByCat[cat.id] || 0;
       const catPct = catBud > 0 ? Math.round(catSpent/catBud*100) : '';
-      aoa.push([typeLabel, cat.name, '', catBud||'', catSpent||'', catPct, '']);
-      rowMeta.push({ kind:'category', id: cat.id });
+      const catRowIdx = aoa.length;
+      aoa.push([typeLabel, cat.name, '', '', catBud||'', catSpent||'', catPct, '']); // 내년예산은 아래서 수식으로 채움
+      rowMeta.push({ kind:'category', id: cat.id, row: catRowIdx });
 
-      const subs = (State.subItems||[]).filter(s => s.categoryId === cat.id && !s.subGroupId)
+      if (isPersonBasedCat) {
+        // 사람 기반 카테고리(예: 헌금) → 중분류 없이 소분류(헌금종류)만 이름 중복 없이 나열, 대분류는 직접 입력 가능
+        aoa[catRowIdx][BUDCOL] = ''; // 사람 기반은 자동합산 대상이 애매하므로 직접 입력 가능하게 둠(수식 없음)
+        rowMeta[rowMeta.length-1].isFormula = false;
+        const seen = new Set();
+        const subs = (State.subItems||[]).filter(s => s.categoryId === cat.id)
+          .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+        for (const s of subs) {
+          if (seen.has(s.name)) continue;
+          seen.add(s.name);
+          const sBud = getBudget(s, year);
+          const sSpent = spentBySub[s.id] || 0;
+          const sPct = sBud > 0 ? Math.round(sSpent/sBud*100) : '';
+          aoa.push([typeLabel, '', '', s.name, sBud||'', sSpent||'', sPct, '']);
+          rowMeta.push({ kind:'subItem', id: s.id, isFormula:false });
+        }
+        continue;
+      }
+
+      // 일반 카테고리: 중분류(subGroup)별로 묶어서 표시, 각 대분류/중분류는 자식 합계를 수식으로 자동 계산
+      const directSubs = (State.subItems||[]).filter(s => s.categoryId === cat.id && !s.subGroupId)
         .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-      for (const s of subs) {
+      const groups = catSubGroups.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+      const childRowIdxs = []; // 이 대분류 바로 아래(중분류 또는 직속 소분류) 행 index들
+
+      for (const grp of groups) {
+        const grpSubs = (State.subItems||[]).filter(s => s.subGroupId === grp.id)
+          .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+        if (grpSubs.length === 0) continue; // 소분류 없는 빈 중분류는 건너뜀
+        const grpBud = getBudget(grp, year);
+        const grpSpent = spentByGroup[grp.id] || 0;
+        const grpPct = grpBud > 0 ? Math.round(grpSpent/grpBud*100) : '';
+        const grpRowIdx = aoa.length;
+        aoa.push([typeLabel, '', grp.name, '', grpBud||'', grpSpent||'', grpPct, '']);
+        rowMeta.push({ kind:'subGroup', id: grp.id, row: grpRowIdx });
+        childRowIdxs.push(grpRowIdx);
+
+        const subRowIdxs = [];
+        for (const s of grpSubs) {
+          const sBud = getBudget(s, year);
+          const sSpent = spentBySub[s.id] || 0;
+          const sPct = sBud > 0 ? Math.round(sSpent/sBud*100) : '';
+          const sRowIdx = aoa.length;
+          aoa.push([typeLabel, '', '', s.name, sBud||'', sSpent||'', sPct, '']);
+          rowMeta.push({ kind:'subItem', id: s.id, isFormula:false });
+          subRowIdxs.push(sRowIdx);
+        }
+        // 중분류 합계 = 그 아래 소분류들의 합 (엑셀 SUM 수식)
+        rowMeta[rowMeta.length - 1 - grpSubs.length].isFormula = true;
+        rowMeta[rowMeta.length - 1 - grpSubs.length].sumRange = [subRowIdxs[0], subRowIdxs[subRowIdxs.length-1]];
+      }
+      for (const s of directSubs) {
         const sBud = getBudget(s, year);
         const sSpent = spentBySub[s.id] || 0;
         const sPct = sBud > 0 ? Math.round(sSpent/sBud*100) : '';
-        aoa.push([typeLabel, cat.name, s.name, sBud||'', sSpent||'', sPct, '']);
-        rowMeta.push({ kind:'subItem', id: s.id, categoryId: cat.id });
+        const sRowIdx = aoa.length;
+        aoa.push([typeLabel, '', '', s.name, sBud||'', sSpent||'', sPct, '']);
+        rowMeta.push({ kind:'subItem', id: s.id, isFormula:false });
+        childRowIdxs.push(sRowIdx);
+      }
+
+      // 대분류 합계 = 중분류들 + 직속 소분류들의 합 (엑셀 SUM 수식, 행이 떨어져 있을 수 있어 개별 셀 합)
+      const catMetaIdx = rowMeta.findIndex(m => m.kind === 'category' && m.id === cat.id);
+      if (childRowIdxs.length > 0) {
+        rowMeta[catMetaIdx].isFormula = true;
+        rowMeta[catMetaIdx].sumCells = childRowIdxs;
+      } else {
+        rowMeta[catMetaIdx].isFormula = false; // 하위 항목이 아예 없으면 대분류에 직접 입력 가능
       }
     }
   }
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{wch:8},{wch:16},{wch:16},{wch:13},{wch:13},{wch:10},{wch:14}];
-  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:6} }, { s:{r:1,c:0}, e:{r:1,c:6} }];
+  ws['!cols'] = [{wch:7},{wch:14},{wch:14},{wch:16},{wch:12},{wch:12},{wch:9},{wch:13}];
+  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:7} }, { s:{r:1,c:0}, e:{r:1,c:7} }];
 
   const gBdr = {style:'thin', color:{rgb:'CCCCCC'}};
   const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
   const headerFill = {patternType:'solid', fgColor:{rgb:'1F4E79'}};
   const whiteFont = {bold:true, color:{rgb:'FFFFFF'}};
   const inputFill = {patternType:'solid', fgColor:{rgb:'FFF9DB'}};
+  const formulaFill = {patternType:'solid', fgColor:{rgb:'EAEFF5'}};
   const noteFont = {italic:true, color:{rgb:'888888'}, sz:9};
 
   const addr = (r,c) => XLSX.utils.encode_cell({r,c});
+  const colLetter = (c) => XLSX.utils.encode_col(c);
+
   if (ws[addr(1,0)]) ws[addr(1,0)].s = { font: noteFont };
-  for (let c=0;c<7;c++) {
+  for (let c=0;c<8;c++) {
     const a = addr(2,c);
     if (ws[a]) ws[a].s = { fill:headerFill, font:whiteFont, border:allGray, alignment:{horizontal:'center'} };
   }
   const numFmt = '#,##0';
+
+  // 다음해예산 열: 수식이 필요한 행(대분류/중분류)에는 SUM 수식을 실제로 써 넣는다
+  for (const m of rowMeta) {
+    if (m.row == null) continue; // subItem은 수식 대상 아님
+    const cell = addr(m.row, BUDCOL);
+    if (m.isFormula) {
+      let formula;
+      if (m.sumRange) {
+        formula = `SUM(${colLetter(BUDCOL)}${m.sumRange[0]+1}:${colLetter(BUDCOL)}${m.sumRange[1]+1})`;
+      } else if (m.sumCells) {
+        formula = `SUM(${m.sumCells.map(r => colLetter(BUDCOL)+(r+1)).join(',')})`;
+      }
+      if (formula) ws[cell] = { t:'n', f: formula, v: 0 };
+    }
+  }
+
   for (let r=3;r<aoa.length;r++) {
-    for (let c=0;c<7;c++) {
+    const meta = rowMeta[r-3];
+    const isFormulaRow = meta && meta.isFormula;
+    for (let c=0;c<8;c++) {
       const a = addr(r,c);
       if (!ws[a]) ws[a] = { t:'s', v:'' };
-      const isInputCol = (c===6);
-      ws[a].s = { border: allGray, ...(isInputCol?{fill:inputFill}:{}) };
-      if ((c===3||c===4||c===6) && typeof ws[a].v === 'number') ws[a].z = numFmt;
+      const isInputCol = (c===7);
+      let cellFill = {};
+      if (isInputCol) cellFill = { fill: isFormulaRow ? formulaFill : inputFill };
+      ws[a].s = { border: allGray, ...cellFill, ...(isFormulaRow && isInputCol ? {font:{italic:true,color:{rgb:'555555'}}} : {}) };
+      if ((c===4||c===5||c===7) && (typeof ws[a].v === 'number' || ws[a].f)) ws[a].z = numFmt;
     }
   }
   ws['!pageSetup'] = { paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
 
-  // 가져오기에서 행 매칭에 쓸 메타데이터를 시트에 숨겨서 저장 (H열, 화면엔 안 보이게 매우 좁게)
+  // 가져오기에서 행 매칭에 쓸 메타데이터를 시트에 숨겨서 저장 (I열, 화면엔 안 보이게 매우 좁게)
   for (let i=0;i<rowMeta.length;i++) {
     const r = i + 3;
     const meta = rowMeta[i];
-    ws[addr(r,7)] = { t:'s', v: `${meta.kind}:${meta.id}` };
+    ws[addr(r,META_COL)] = { t:'s', v: `${meta.kind}:${meta.id}` };
   }
-  ws['!cols'][7] = { wch: 1, hidden: true };
+  ws['!cols'][META_COL] = { wch: 1, hidden: true };
 
   XLSX.utils.book_append_sheet(wb, ws, '예산편성');
   XLSX.writeFile(wb, `예산편성_${year}참고_${nextYear}편성.xlsx`);
