@@ -1,6 +1,6 @@
-// v3.67 | 2026-07-05 KST | 수정(원인 재파악): iOS 홈화면 설치 앱(독립실행모드)은 window.print() 자체가 아예 작동 안 함 — 지난번에 이걸 놓치고 PC와 통일했다가 오히려 더 안 되게 만듦. 새 탭 여는 방식으로 되돌리되, window.open() 대신 <a> 링크 클릭 방식으로 바꿔서 팝업 차단에 덜 걸리도록 함 | cache:v271
+// v3.68 | 2026-07-05 KST | 수정(진짜 원인): iOS 홈화면 설치 앱(독립실행모드)은 자바스크립트가 자동으로 클릭시키는 링크는 새 창이 안 열리고, 사용자가 손가락으로 직접 누른 링크만 열림(일반 사파리 탭에선 정상 작동하는 것으로 확인됨). 이제 인쇄 누르면 "인쇄 화면 열기" 버튼이 뜨고, 사용자가 직접 눌러야 새 탭이 열리는 방식으로 변경 | cache:v272
 'use strict';
-const APP_VERSION = 'v3.67 (cache v271)';
+const APP_VERSION = 'v3.68 (cache v272)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1290,17 +1290,33 @@ function _doPrintBlob(html) {
 
   const blob = new Blob([fullHTML], {type:'text/html'});
   const url  = URL.createObjectURL(blob);
-  // window.open()은 iOS 사파리에서 팝업 차단에 걸려 조용히 실패하는 경우가 있어,
-  // 대신 <a target="_blank"> 링크를 만들어 직접 클릭시키는 방식을 쓴다.
-  // (실제 사용자 탭과 더 밀접하게 연결된 동작이라 차단될 확률이 낮음)
-  const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  // iOS 홈 화면 설치 앱(독립 실행 모드)에서는 자바스크립트가 자동으로 클릭시키는 링크는
+  // 새 창으로 안 열리고, 사용자가 손가락으로 직접 누른 링크만 열린다.
+  // 그래서 자동 클릭 대신, 화면에 진짜 링크 버튼을 띄워서 사용자가 직접 누르게 한다.
+  showManualPrintLink(url);
+}
+
+// 사용자가 직접 눌러야 새 탭이 열리는 인쇄용 링크 오버레이
+// (iOS 홈 화면 설치 앱은 자동 클릭으로는 새 창이 안 열려서 진짜 탭이 필요함)
+function showManualPrintLink(url) {
+  const old = document.getElementById('printLinkOverlay');
+  if (old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'printLinkOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:24px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px 20px;max-width:320px;width:100%;text-align:center;">
+      <div style="font-size:32px;margin-bottom:10px;">🖨️</div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px;">인쇄 준비가 됐어요</div>
+      <div style="font-size:13px;color:#666;margin-bottom:18px;line-height:1.5;">아래 버튼을 눌러 인쇄 화면을 열어주세요</div>
+      <a href="${url}" target="_blank" rel="noopener" id="printLinkBtn" style="display:block;background:#1d4ed8;color:#fff;font-size:15px;font-weight:800;padding:14px;border-radius:12px;text-decoration:none;margin-bottom:10px;">인쇄 화면 열기</a>
+      <button id="printLinkCancel" style="font-size:13px;color:#888;font-weight:600;padding:8px;">닫기</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const closeOverlay = () => { overlay.remove(); URL.revokeObjectURL(url); };
+  overlay.querySelector('#printLinkBtn').addEventListener('click', () => setTimeout(closeOverlay, 300));
+  overlay.querySelector('#printLinkCancel').addEventListener('click', closeOverlay);
 }
 
 /* =========================================================
