@@ -1,6 +1,6 @@
-// v3.69 | 2026-07-05 KST | 추가: 교인명부에 🖨️인쇄/📥엑셀 버튼 추가 — 이름순 정렬로 이름/직분/가족/세대/전화번호/주민번호/주소/숨김여부 전부 포함해서 내보냄 | cache:v273
+// v3.70 | 2026-07-05 KST | 추가: 예산 탭에 "📥 예산양식" 버튼 추가 — 올해 예산/집행액/집행률을 참고자료로 보여주고 "다음해예산" 칸을 채워서 저장하면, 설정 > "예산 데이터 가져오기"로 그 파일을 그대로 올려서 한 번에 다음해 예산을 반영할 수 있음 | cache:v274
 'use strict';
-const APP_VERSION = 'v3.69 (cache v273)';
+const APP_VERSION = 'v3.70 (cache v274)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1918,6 +1918,148 @@ function dateGroupLabel(dateStr) {
 /* =========================================================
    RENDER: BUDGET (예산)
    ========================================================= */
+// ── 예산 편성 엑셀 양식 가져오기 ──
+// exportBudgetPlanTemplate으로 내려받은 파일의 "다음해예산" 칸을 읽어서
+// 해당 카테고리/소분류의 그 연도 예산으로 반영한다.
+async function importBudgetPlanFromExcel(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const sheetName = wb.SheetNames.includes('예산편성') ? '예산편성' : wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    if (aoa.length < 4) { alert('양식을 인식할 수 없습니다. 예산 탭에서 내려받은 파일이 맞는지 확인해주세요.'); return; }
+
+    // 헤더 행(3번째, index 2)에서 "OOOO년예산" 형태로 목표 연도를 읽어온다
+    const headerRow = aoa[2] || [];
+    const yearHeaderCell = String(headerRow[6] || '');
+    const yearMatch = yearHeaderCell.match(/(\d{4})년/);
+    const targetYear = yearMatch ? parseInt(yearMatch[1], 10) : (new Date().getFullYear() + 1);
+
+    if (!confirm(`"${targetYear}년" 예산으로 반영할까요?\n엑셀에 값이 채워진 항목만 업데이트되고, 나머지는 그대로 유지됩니다.`)) return;
+
+    let updatedCount = 0;
+    for (let r = 3; r < aoa.length; r++) {
+      const row = aoa[r];
+      if (!row) continue;
+      const nextBudgetRaw = row[6];
+      const metaRaw = row[7];
+      if (nextBudgetRaw === '' || nextBudgetRaw == null) continue; // 빈 칸은 건드리지 않음
+      const amount = Number(String(nextBudgetRaw).replace(/[^0-9.-]/g, ''));
+      if (!isFinite(amount) || amount < 0) continue;
+      if (!metaRaw) continue;
+      const [kind, id] = String(metaRaw).split(':');
+      if (kind === 'category') {
+        const cat = State.categories.find(c => c.id === id);
+        if (!cat) continue;
+        setBudget(cat, targetYear, amount);
+        await DB.put('categories', cat);
+        updatedCount++;
+      } else if (kind === 'subItem') {
+        const si = (State.subItems || []).find(s => s.id === id);
+        if (!si) continue;
+        setBudget(si, targetYear, amount);
+        await DB.put('subItems', si);
+        updatedCount++;
+      }
+    }
+
+    await reloadData();
+    renderCurrentPage();
+    showToast(`✅ ${targetYear}년 예산 ${updatedCount}건 반영됐어요`);
+  } catch (err) {
+    console.error(err);
+    alert('파일을 읽는 중 문제가 발생했습니다. 예산 탭에서 내려받은 엑셀 양식이 맞는지 확인해주세요.');
+  }
+}
+// 올해 예산/집행액/집행률을 참고자료로 보여주고, "내년예산" 칸을 비워둬서
+// 그 자리에 값을 채운 뒤 "예산 데이터 가져오기"로 한 번에 반영할 수 있게 만든 양식.
+function exportBudgetPlanTemplate(year) {
+  const nextYear = year + 1;
+  const yearTxs = State.transactions.filter(t => t.date.startsWith(String(year)));
+  const spentByCat = {}, spentBySub = {};
+  for (const t of yearTxs) {
+    spentByCat[t.categoryId] = (spentByCat[t.categoryId] || 0) + t.amount;
+    for (const l of (t.lines || [])) spentBySub[l.subItemId] = (spentBySub[l.subItemId] || 0) + l.amount;
+  }
+
+  const aoa = [];
+  aoa.push([`예산 편성 양식 — ${year}년 참고 / ${nextYear}년 편성`]);
+  aoa.push(['※ "다음해예산" 칸에 금액만 입력한 뒤, 설정 > 예산 데이터 가져오기로 이 파일을 그대로 올려주세요. (구분/대분류/소분류 열은 지우거나 순서를 바꾸지 마세요)']);
+  aoa.push(['구분','대분류','소분류',`${year}년예산`,`${year}년집행액`,'집행률(%)',`${nextYear}년예산`]);
+
+  const typeOrder = ['income','expense'];
+  const rowMeta = []; // 각 행이 category인지 subItem인지, 실제 대상 id
+  for (const type of typeOrder) {
+    const typeLabel = type === 'income' ? '수입' : '지출';
+    const cats = State.categories.filter(c => c.type === type).sort((a,b)=>a.order-b.order);
+    for (const cat of cats) {
+      const catBud = getBudget(cat, year);
+      const catSpent = spentByCat[cat.id] || 0;
+      const catPct = catBud > 0 ? Math.round(catSpent/catBud*100) : '';
+      aoa.push([typeLabel, cat.name, '', catBud||'', catSpent||'', catPct, '']);
+      rowMeta.push({ kind:'category', id: cat.id });
+
+      const subs = (State.subItems||[]).filter(s => s.categoryId === cat.id && !s.subGroupId)
+        .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+      for (const s of subs) {
+        const sBud = getBudget(s, year);
+        const sSpent = spentBySub[s.id] || 0;
+        const sPct = sBud > 0 ? Math.round(sSpent/sBud*100) : '';
+        aoa.push([typeLabel, cat.name, s.name, sBud||'', sSpent||'', sPct, '']);
+        rowMeta.push({ kind:'subItem', id: s.id, categoryId: cat.id });
+      }
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:8},{wch:16},{wch:16},{wch:13},{wch:13},{wch:10},{wch:14}];
+  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:6} }, { s:{r:1,c:0}, e:{r:1,c:6} }];
+
+  const gBdr = {style:'thin', color:{rgb:'CCCCCC'}};
+  const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
+  const headerFill = {patternType:'solid', fgColor:{rgb:'1F4E79'}};
+  const whiteFont = {bold:true, color:{rgb:'FFFFFF'}};
+  const inputFill = {patternType:'solid', fgColor:{rgb:'FFF9DB'}};
+  const noteFont = {italic:true, color:{rgb:'888888'}, sz:9};
+
+  const addr = (r,c) => XLSX.utils.encode_cell({r,c});
+  if (ws[addr(1,0)]) ws[addr(1,0)].s = { font: noteFont };
+  for (let c=0;c<7;c++) {
+    const a = addr(2,c);
+    if (ws[a]) ws[a].s = { fill:headerFill, font:whiteFont, border:allGray, alignment:{horizontal:'center'} };
+  }
+  const numFmt = '#,##0';
+  for (let r=3;r<aoa.length;r++) {
+    for (let c=0;c<7;c++) {
+      const a = addr(r,c);
+      if (!ws[a]) ws[a] = { t:'s', v:'' };
+      const isInputCol = (c===6);
+      ws[a].s = { border: allGray, ...(isInputCol?{fill:inputFill}:{}) };
+      if ((c===3||c===4||c===6) && typeof ws[a].v === 'number') ws[a].z = numFmt;
+    }
+  }
+  ws['!pageSetup'] = { paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
+
+  // 가져오기에서 행 매칭에 쓸 메타데이터를 시트에 숨겨서 저장 (H열, 화면엔 안 보이게 매우 좁게)
+  for (let i=0;i<rowMeta.length;i++) {
+    const r = i + 3;
+    const meta = rowMeta[i];
+    ws[addr(r,7)] = { t:'s', v: `${meta.kind}:${meta.id}` };
+  }
+  ws['!cols'][7] = { wch: 1, hidden: true };
+
+  XLSX.utils.book_append_sheet(wb, ws, '예산편성');
+  XLSX.writeFile(wb, `예산편성_${year}참고_${nextYear}편성.xlsx`);
+  showToast('📥 예산 편성 양식을 내려받았어요');
+}
+
 function renderBudget() {
   const page = document.getElementById('page-budget');
   const year = State.cursorDate.getFullYear();
@@ -2125,7 +2267,10 @@ function renderBudget() {
   page.innerHTML = `
     <div class="appbar" style="padding-left:0;padding-right:0;">
       <h1>예산</h1>
-      <button class="icon-btn" id="manageCatsBtn" style="width:auto;padding:0 14px;font-size:13px;font-weight:700;color:var(--primary);">항목 관리</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="icon-btn" id="budgetExcelBtn" style="width:auto;padding:0 12px;font-size:12.5px;font-weight:700;color:#217346;background:#E8F5E9;border-radius:8px;">📥 예산양식</button>
+        <button class="icon-btn" id="manageCatsBtn" style="width:auto;padding:0 14px;font-size:13px;font-weight:700;color:var(--primary);">항목 관리</button>
+      </div>
     </div>
     <div class="summary-month" style="justify-content:center; background:var(--card); border-radius:var(--radius-sm); padding:10px; box-shadow:var(--shadow); color:var(--text-1); margin-bottom:14px;">
       <button id="prevYear" style="flex-shrink:0;color:var(--text-2);">${ICONS.chevLeft}</button>
@@ -2183,6 +2328,7 @@ function renderBudget() {
   page.querySelector('#prevYear').addEventListener('click', () => changeMonth(-12));
   page.querySelector('#nextYear').addEventListener('click', () => changeMonth(12));
   page.querySelector('#manageCatsBtn').addEventListener('click', () => openCatManageSheet(year));
+  page.querySelector('#budgetExcelBtn').addEventListener('click', () => exportBudgetPlanTemplate(year));
 
   // 연도 레이블 클릭 → 연도 리스트 팝업
   page.querySelector('#budgetYearLabel').addEventListener('click', () => {
@@ -5909,9 +6055,17 @@ function renderSettings() {
         </div>
         ${ICONS.upload}
       </div>
+      <div class="settings-row" id="rowBudgetImport">
+        <div>
+          <div class="settings-label">예산 데이터 가져오기${getIsAdmin()?'':' 🔒'}</div>
+          <div class="settings-sub">예산 탭에서 내려받은 엑셀 양식(다음해예산 입력분)에서 반영</div>
+        </div>
+        ${ICONS.upload}
+      </div>
 
 
       <input type="file" id="importFile" accept="application/json" style="display:none;">
+      <input type="file" id="budgetImportFile" accept=".xlsx,.xls" style="display:none;">
     </div>
 
       <div class="settings-group">
@@ -6138,6 +6292,8 @@ function renderSettings() {
   }
   page.querySelector('#rowImport').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } page.querySelector('#importFile').click(); });
   page.querySelector('#importFile').addEventListener('change', importData);
+  page.querySelector('#rowBudgetImport').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } page.querySelector('#budgetImportFile').click(); });
+  page.querySelector('#budgetImportFile').addEventListener('change', importBudgetPlanFromExcel);
   page.querySelector('#rowUpdate').addEventListener('click', async () => {
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
