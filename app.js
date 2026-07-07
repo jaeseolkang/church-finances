@@ -1,6 +1,6 @@
-// v3.68 | 2026-07-05 KST | 수정(진짜 원인): iOS 홈화면 설치 앱(독립실행모드)은 자바스크립트가 자동으로 클릭시키는 링크는 새 창이 안 열리고, 사용자가 손가락으로 직접 누른 링크만 열림(일반 사파리 탭에선 정상 작동하는 것으로 확인됨). 이제 인쇄 누르면 "인쇄 화면 열기" 버튼이 뜨고, 사용자가 직접 눌러야 새 탭이 열리는 방식으로 변경 | cache:v272
+// v3.69 | 2026-07-05 KST | 추가: 교인명부에 🖨️인쇄/📥엑셀 버튼 추가 — 이름순 정렬로 이름/직분/가족/세대/전화번호/주민번호/주소/숨김여부 전부 포함해서 내보냄 | cache:v273
 'use strict';
-const APP_VERSION = 'v3.68 (cache v272)';
+const APP_VERSION = 'v3.69 (cache v273)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6819,6 +6819,8 @@ function renderMembers() {
           <button id="viewName" style="font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;${viewMode==='name'?'background:#fff;color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,0.1);':'color:var(--text-3);'}">이름순</button>
         </div>
         <button id="memberAdd" style="color:var(--primary);font-weight:800;font-size:14px;${viewMode==='donation'?'display:none;':''}">+ 추가</button>
+        <button id="memberExcel" style="font-size:13px;color:#217346;font-weight:700;padding:6px 8px;border-radius:8px;background:#E8F5E9;${viewMode==='donation'?'display:none;':''}">📥</button>
+        <button id="memberPrint" style="font-size:13px;color:var(--primary);font-weight:700;padding:6px 8px;border-radius:8px;background:var(--primary-light);${viewMode==='donation'?'display:none;':''}">🖨️</button>
       </div>
     </div>
     <div style="padding:0 0 120px;">
@@ -6865,6 +6867,8 @@ function renderMembers() {
   page.querySelector('#viewFamily').addEventListener('click', () => { State.memberView = 'family'; renderMembers(); });
   page.querySelector('#viewName').addEventListener('click', () => { State.memberView = 'name'; renderMembers(); });
   page.querySelector('#memberAdd').addEventListener('click', () => openMemberEditSheet(null, heongCat));
+  page.querySelector('#memberPrint')?.addEventListener('click', () => printMembers(members));
+  page.querySelector('#memberExcel')?.addEventListener('click', () => exportMembersToExcel(members));
   page.querySelectorAll('.member-hidden-toggle').forEach(cb => {
     cb.addEventListener('change', async () => {
       const p = await DB.get('persons', cb.dataset.id);
@@ -6895,6 +6899,85 @@ async function deleteMemberById(id, name, onDone) {
   await reloadData();
   showToast('삭제됐어요');
   if (onDone) onDone();
+}
+
+// ── 교인명부 인쇄 ──
+function printMembers(members) {
+  const rows = [...members].sort((a,b) => a.name.localeCompare(b.name,'ko'));
+  const total = rows.length;
+  const activeCount = rows.filter(m=>!m.hidden).length;
+  const hiddenCount = rows.filter(m=>m.hidden).length;
+
+  const pageHeader = `
+    <div class="print-title">🙏 교인 명부</div>
+    <div class="print-period">${new Date().toLocaleDateString('ko-KR')}</div>
+    <div class="print-summary">
+      <div class="print-summary-item"><div class="print-summary-label">전체교인</div><div class="print-summary-value">${total}명</div></div>
+      <div class="print-summary-item"><div class="print-summary-label">정교인</div><div class="print-summary-value income">${activeCount}명</div></div>
+      <div class="print-summary-item"><div class="print-summary-label">숨김교인</div><div class="print-summary-value">${hiddenCount}명</div></div>
+    </div>`;
+
+  const TH = (txt, w='') => `<th style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;text-align:left;font-size:7.5pt;${w?'width:'+w+';':''}-webkit-print-color-adjust:exact;print-color-adjust:exact;">${txt}</th>`;
+  const TD = (txt) => `<td style="padding:2.5pt 4pt;border:0.5pt solid #aaa;font-size:7.5pt;">${txt}</td>`;
+
+  const headerRow = `<tr>${TH('이름','12%')}${TH('직분','10%')}${TH('가족','10%')}${TH('세대','8%')}${TH('전화번호','15%')}${TH('주민번호','13%')}${TH('주소','22%')}${TH('숨김','6%')}</tr>`;
+  const bodyRows = rows.map(m => `<tr>
+    ${TD(escapeHTML(m.name))}
+    ${TD(escapeHTML(m.position||''))}
+    ${TD(escapeHTML(m.family||''))}
+    ${TD(escapeHTML(m.generation||''))}
+    ${TD(escapeHTML(m.phone||''))}
+    ${TD(escapeHTML(m.residentId||''))}
+    ${TD(escapeHTML(m.address||''))}
+    ${TD(m.hidden?'숨김':'')}
+  </tr>`).join('');
+
+  const html = `
+    <div class="print-page" style="display:block;">
+      <div class="page-inner">
+        ${pageHeader}
+        <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.5pt;">
+          <thead>${headerRow}</thead>
+          <tbody>${rows.length ? bodyRows : `<tr><td colspan="8" style="text-align:center;padding:12pt;color:#888;">등록된 교인이 없습니다</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+  doPrint(html);
+}
+
+// ── 교인명부 엑셀 내보내기 ──
+function exportMembersToExcel(members) {
+  const rows = [...members].sort((a,b) => a.name.localeCompare(b.name,'ko'));
+  const aoa = [];
+  aoa.push([`교인 명부 — ${todayStr()}`]);
+  aoa.push(['이름','직분','가족','세대','전화번호','주민번호','주소','메모','숨김여부']);
+  for (const m of rows) {
+    aoa.push([m.name, m.position||'', m.family||'', m.generation||'', m.phone||'', m.residentId||'', m.address||'', m.memo||'', m.hidden?'숨김':'']);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:8},{wch:15},{wch:16},{wch:24},{wch:20},{wch:8}];
+  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:8} }];
+
+  const gBdr = {style:'thin', color:{rgb:'CCCCCC'}};
+  const allGray = {top:gBdr,bottom:gBdr,left:gBdr,right:gBdr};
+  const headerFill = {patternType:'solid', fgColor:{rgb:'1F4E79'}};
+  const whiteFont = {bold:true, color:{rgb:'FFFFFF'}};
+  for (let c=0;c<9;c++) {
+    const addr = XLSX.utils.encode_cell({r:1,c});
+    if (ws[addr]) ws[addr].s = { fill:headerFill, font:whiteFont, border:allGray, alignment:{horizontal:'center'} };
+  }
+  for (let r=2;r<aoa.length;r++) {
+    for (let c=0;c<9;c++) {
+      const addr = XLSX.utils.encode_cell({r,c});
+      if (ws[addr]) ws[addr].s = { border: allGray };
+    }
+  }
+  ws['!pageSetup'] = { paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
+
+  XLSX.utils.book_append_sheet(wb, ws, '교인명부');
+  XLSX.writeFile(wb, `교인명부_${todayStr()}.xlsx`);
 }
 
 function openMemberEditSheet(member, heongCat) {
