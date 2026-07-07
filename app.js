@@ -1,6 +1,6 @@
-// v3.72 | 2026-07-05 KST | 개선: 예산 편성 엑셀 양식에 중분류 열 추가 — 지출처럼 중분류(자동차/통신 등)를 쓰는 카테고리도 중분류·소분류까지 다 보여주고, 소분류에 값을 넣으면 중분류가·중분류 값이 모이면 대분류가 엑셀 SUM 수식으로 자동 합산됨(대분류/중분류 칸은 직접 입력 안 해도 됨). 헌금처럼 사람 기반 카테고리는 기존처럼 단순 목록 유지 | cache:v276
+// v3.73 | 2026-07-05 KST | 긴급수정: 설정>연결계좌관리>대표계정(재정계정)의 "이월금"을 입력해도 실제 계산(홈/통계/계정)에 전혀 반영 안 되던 문제 — 대표계정은 이 필드 대신 완전히 별도의 저장소(연도별 yearCarryover, 또는 "전년이월" 카테고리 거래)를 보게 되어있던 구조적 결함. ①연결계좌관리 화면에서 저장 시 실제 사용되는 값에도 같이 반영되도록 수정 ②이미 입력해둔 값도 자동으로 인식되도록 totalAssets/totalAssetsForYearSync에 대표계정 이월금 폴백 추가 | cache:v277
 'use strict';
-const APP_VERSION = 'v3.72 (cache v276)';
+const APP_VERSION = 'v3.73 (cache v277)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1040,9 +1040,16 @@ async function totalAssets() {
     }
   }
   const years = new Set(mainAcctTxs().map(t => Number(t.date.slice(0, 4))));
+  const earliestYear = years.size > 0 ? Math.min(...years) : null;
   let carryoverSetting = 0;
   for (const y of years) {
-    const amt = await getYearCarryover(y);
+    let amt = await getYearCarryover(y);
+    if (amt === null && y === earliestYear) {
+      // 연도별 이월금이 한 번도 설정된 적 없으면, 대표계정에 직접 입력해둔 이월금액을
+      // 가장 이른 연도의 이월금으로 대신 사용한다(연결계좌 관리에서 입력한 값이 그냥 묻히지 않도록).
+      const defAcct = (State.linkedAccounts || []).find(a => a.isDefault);
+      amt = defAcct ? (defAcct.carryover || 0) : 0;
+    }
     if (amt !== null) carryoverSetting += amt;
   }
   const carryover  = carryoverSetting + carryoverTx;
@@ -1091,6 +1098,12 @@ function totalAssetsForYearSync(year) {
     let result;
     if (yr <= firstYear) {
       result = summarizeYear(yr).carryoverTx; // 최초 연도: 명시된 전년이월 그대로 사용
+      if (!result) {
+        // "전년이월" 카테고리 거래를 한 번도 안 넣었다면, 연결계좌 관리에서 대표계정에
+        // 직접 입력해둔 이월금액을 대신 사용한다(입력한 값이 아무 데도 안 쓰이지 않도록).
+        const defAcct = (State.linkedAccounts || []).find(a => a.isDefault);
+        if (defAcct && defAcct.carryover) result = defAcct.carryover;
+      }
     } else {
       const prev = summarizeYear(yr - 1);
       result = carryoverFor(yr - 1) + prev.income - prev.expense; // 전년도 년말 순자산을 그대로 이월
@@ -10017,7 +10030,7 @@ function laItemHTML(a) {
 }
 
 // 계좌 추가/편집 시트
-function openLinkedAccountEditSheet(acct, kind) {
+async function openLinkedAccountEditSheet(acct, kind) {
   const isNew = !acct;
   const accountKind = isNew ? (kind || 'normal') : (acct.accountKind || 'normal');
   const sheet = document.getElementById('linkedAccountsSheet');
@@ -10027,6 +10040,21 @@ function openLinkedAccountEditSheet(acct, kind) {
   const newIsDefault = isNew && accountKind === 'normal' && !existingDefault;
   const isDefault = isNew ? newIsDefault : !!acct.isDefault;
   const defaultName = isNew && accountKind === 'normal' && !existingDefault ? '대표계정' : '';
+
+  // 대표계정은 이월금이 linkedAccounts.carryover가 아니라 별도의 "연도별 이월금"(yearCarryover)으로
+  // 실제 계산에 쓰인다. 여기서 그 값을 안 보여주면 사용자가 입력해도 반영 안 되는 것처럼 보이므로
+  // 대표계정일 때는 그 실제 사용되는 값을 미리 불러와서 보여준다.
+  const earliestYear = (() => {
+    if (!State.transactions || State.transactions.length === 0) return new Date().getFullYear();
+    return Math.min(...State.transactions.map(t => Number(t.date.slice(0,4))));
+  })();
+  // 대표계정 편집 시: 실제로 계산에 쓰이는 연도별 이월금 값을 미리 불러와 보여준다
+  // (linkedAccounts.carryover 필드가 아니라 이 값이 실제로 쓰이므로, 여기 표시가 곧 실제 반영값이 되도록 함)
+  let displayCarryover = isNew ? '' : (acct.carryover || 0);
+  if (!isNew && isDefault) {
+    const yc = await getYearCarryover(earliestYear);
+    if (yc !== null) displayCarryover = yc;
+  }
 
   // 정기계정 프리셋 이름
   const depositPresets = ['정기선교', '정기건축', '정기후대', '정기퇴직'];
@@ -10058,8 +10086,8 @@ function openLinkedAccountEditSheet(acct, kind) {
       <div class="form-field" style="margin-top:16px;">
         <label class="form-label">이월금액 (원)</label>
         <input id="laeCarryInput" class="form-input" type="number" placeholder="0" min="0"
-          value="${isNew ? '' : (acct.carryover||0)}">
-        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">이 계좌의 이전기간 이월금액을 입력하세요</div>
+          value="${isNew ? '' : displayCarryover}">
+        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">${isDefault ? `이 계좌는 대표계정이라, 여기 입력한 금액이 ${earliestYear}년(가장 이른 거래연도) 시작 시점의 전년이월 금액으로 사용됩니다.` : '이 계좌의 이전기간 이월금액을 입력하세요'}</div>
       </div>
       ${accountKind === 'deposit' ? `
       <div class="form-field" style="margin-top:16px;">
@@ -10123,6 +10151,11 @@ function openLinkedAccountEditSheet(acct, kind) {
       createdAt: isNew ? Date.now() : acct.createdAt
     };
     await DB.put('linkedAccounts', record);
+    // 대표계정이면, 실제 계산에 쓰이는 연도별 이월금(yearCarryover)에도 같이 반영해야
+    // 이 화면에서 입력한 값이 실제로 통계/계정 화면에 반영된다.
+    if (isDefaultChk) {
+      await setYearCarryover(earliestYear, carryover);
+    }
     await reloadData();
     // 대표계정이면 selectedAccountId도 업데이트
     if (isDefaultChk) State.selectedAccountId = record.id;
