@@ -1,6 +1,6 @@
-// v3.63 | 2026-07-05 KST | 수정: "월지출" 엑셀 내보내기의 결재란이 반쪽짜리였던 문제 — 예전엔 없는 이미지(approval_stamp.png)를 수동으로 넣으라는 안내 문구만 있고 실제 결재란이 없었음. 이미지 없이 셀 테두리로 직접 그린 결재란(담당/회계/담임목사 서명칸)으로 완전히 대체 | cache:v267
+// v3.64 | 2026-07-05 KST | 수정: 통계>수입>내용 탭에 보이는 "헌금 종류별 합계/건수" 목록이 인쇄와 엑셀에서 통째로 빠져있던 버그 — 인쇄는 화면에 없던 "개인별 명세"만 나오고, 엑셀도 개인별헌금 시트만 있었음. 이제 인쇄 맨 위와 엑셀 첫 시트("내용별집계")에 화면과 동일한 내용별 건수/금액이 포함됨 | cache:v268
 'use strict';
-const APP_VERSION = 'v3.63 (cache v267)';
+const APP_VERSION = 'v3.64 (cache v268)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -2408,6 +2408,28 @@ function exportPivotToExcel() {
   const colTotals = orderedCols.map(col => rows.reduce((s,r)=>s+(pivot[r][col]||0),0));
   const grandTotal = colTotals.reduce((s,v)=>s+v,0);
 
+  const wb = XLSX.utils.book_new();
+  const numFmt = '#,##0';
+
+  // ── 시트 1: 내용별집계 (화면 "내용" 탭과 동일한 유형별 건수/금액 — 지금까지 엑셀에서 빠져있던 부분) ──
+  const contentAggMap = buildStatsAggMap(heongList, true);
+  const contentRows = Object.values(contentAggMap).sort((a,b) => b.amount - a.amount);
+  if (contentRows.length > 0) {
+    const aoaContent = [];
+    aoaContent.push([`헌금 내용별 집계 — ${range.label}`]);
+    aoaContent.push(['내용', '건수', '금액']);
+    for (const r of contentRows) aoaContent.push([r.label, r.count, r.amount]);
+    aoaContent.push(['합계', contentRows.reduce((s,r)=>s+r.count,0), contentRows.reduce((s,r)=>s+r.amount,0)]);
+    const wsContent = XLSX.utils.aoa_to_sheet(aoaContent);
+    for (let r = 2; r < aoaContent.length; r++) {
+      const addr = XLSX.utils.encode_cell({r, c:2});
+      if (wsContent[addr] && typeof wsContent[addr].v === 'number') wsContent[addr].z = numFmt;
+    }
+    wsContent['!cols'] = [{wch:18},{wch:10},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsContent, '내용별집계');
+  }
+
+  // ── 시트 2: 개인별헌금 (기존 그대로) ──
   const aoa = [];
   aoa.push([`헌금 개인별 명세 — ${range.label}`]);
   aoa.push(['이름', ...orderedCols, '합계']);
@@ -2417,10 +2439,8 @@ function exportPivotToExcel() {
   }
   aoa.push(['합계', ...colTotals, grandTotal]);
 
-  const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   // 숫자 열 서식
-  const numFmt = '#,##0';
   for (let r = 2; r < aoa.length; r++) {
     for (let c = 1; c < aoa[r].length; c++) {
       const addr = XLSX.utils.encode_cell({r, c});
@@ -3441,9 +3461,38 @@ function printStats() {
       </script>`;
   }
 
+  // ── 내용 탭 데이터(유형별 합계, 건수) — 화면에 보이는 "내용" 리스트를 그대로 인쇄에 포함 ──
+  let contentListHTML = '';
+  if (aggRows.length > 0) {
+    const contentTitle = isIncome ? '내용별 집계 (헌금 종류별)' : '내용별 집계';
+    contentListHTML = `
+      <div style="margin-top:6pt;">
+        <div style="font-size:10pt;font-weight:800;margin-bottom:4pt;border-bottom:0.5pt solid #000;padding-bottom:2pt;">${isIncome?'🙏':'📦'} ${contentTitle}</div>
+        <table style="border-collapse:collapse;width:100%;font-size:8pt;">
+          <thead><tr>
+            <th style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact;">내용</th>
+            <th style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;text-align:right;width:15%;-webkit-print-color-adjust:exact;print-color-adjust:exact;">건수</th>
+            <th style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#1F4E79;color:#fff;text-align:right;width:22%;-webkit-print-color-adjust:exact;print-color-adjust:exact;">금액</th>
+          </tr></thead>
+          <tbody>
+            ${aggRows.map(r => `<tr>
+              <td style="padding:2.5pt 4pt;border:0.5pt solid #aaa;">${escapeHTML(r.label)}</td>
+              <td style="padding:2.5pt 4pt;border:0.5pt solid #aaa;text-align:right;">${r.count}건</td>
+              <td style="padding:2.5pt 4pt;border:0.5pt solid #aaa;text-align:right;font-weight:700;">${fmtMoney(r.amount)}원</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot><tr>
+            <td style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">합계</td>
+            <td style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${aggRows.reduce((s,r)=>s+r.count,0)}건</td>
+            <td style="padding:3pt 4pt;border:0.5pt solid #3a6fa0;background:#2E74B5;color:#fff;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${fmtMoney(aggRows.reduce((s,r)=>s+r.amount,0))}원</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  }
+
   // 현재 보이는 페이지만 인쇄
   const html = isIncome
-    ? (pivotHTML ? `<div class="print-page"><div class="page-inner">${pageHeader}${pivotHTML}</div></div>` : '')
+    ? `<div class="print-page"><div class="page-inner">${pageHeader}${contentListHTML}${pivotHTML}</div></div>`
     : page1 + page2;
   doPrint(html);
 }
