@@ -1,6 +1,6 @@
-// v3.59 | 2026-07-05 KST | 개선: 항목관리/세부항목·이름관리 화면에서 항목을 추가할 때마다 화면이 맨 위로 튀던 문제 수정 — 다시 그리기 전후로 스크롤 위치를 기억해서 그대로 유지. 우측 하단에 "▲ 맨 위로" 버튼도 추가 | cache:v263
+// v3.61 | 2026-07-05 KST | 변경: 설정>항목관리>예전 항목 보기에서, 삭제된 항목이라도 실제 거래(수입/지출) 기록이 한 번도 없었으면 목록에서 제외 — 거래 기록이 있는(과거에 실제로 쓰인) 삭제 항목만 표시 | cache:v265
 'use strict';
-const APP_VERSION = 'v3.59 (cache v263)';
+const APP_VERSION = 'v3.61 (cache v265)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -9729,12 +9729,25 @@ function renderOldItemsSheet() {
   const currentGroupIds = new Set((State.subGroups || []).map(g => g.id));
   const currentSubIds   = new Set(State.subItems.map(s => s.id));
 
+  // 실제 거래 기록에서 쓰인 적 있는 카테고리/중분류/소분류 id만 모은다.
+  // (거래 한 번도 없이 만들었다 지운 항목은 "예전 항목"에 안 보이게 하기 위함)
+  const usedCatIds = new Set();
+  const usedGroupIds = new Set();
+  const usedSubIds = new Set();
+  for (const t of (State.transactions || [])) {
+    if (t.categoryId) usedCatIds.add(t.categoryId);
+    if (t.subGroupId) usedGroupIds.add(t.subGroupId);
+    for (const line of (t.lines || [])) {
+      if (line.subItemId) usedSubIds.add(line.subItemId);
+    }
+  }
+
   const snaps = (State.categorySnapshots || []).slice().sort((a,b) => b.year - a.year);
 
   const yearBlocks = snaps.map(snap => {
-    const goneCats   = (snap.categories || []).filter(c => !currentCatIds.has(c.id));
-    const goneGroups = (snap.subGroups  || []).filter(g => !currentGroupIds.has(g.id));
-    const goneSubs   = (snap.subItems   || []).filter(s => !currentSubIds.has(s.id));
+    const goneCats   = (snap.categories || []).filter(c => !currentCatIds.has(c.id) && usedCatIds.has(c.id));
+    const goneGroups = (snap.subGroups  || []).filter(g => !currentGroupIds.has(g.id) && usedGroupIds.has(g.id));
+    const goneSubs   = (snap.subItems   || []).filter(s => !currentSubIds.has(s.id) && usedSubIds.has(s.id));
 
     if (goneCats.length === 0 && goneGroups.length === 0 && goneSubs.length === 0) return '';
 
@@ -9769,7 +9782,7 @@ function renderOldItemsSheet() {
     </div>
     <div class="sheet-body">
       <div style="font-size:12.5px;color:var(--text-3);margin-bottom:12px;">
-        지금은 삭제되었거나 이름이 바뀐 항목들이에요. 예전 거래 기록에는 그때 이름 그대로 남아있어요.
+        지금은 삭제되었거나 이름이 바뀐 항목 중, 실제 거래 기록이 있었던 것만 보여줘요. 거래 없이 만들었다 지운 항목은 표시되지 않아요.
       </div>
       ${yearBlocks || emptyStateHTML('아직 기록된 예전 항목이 없어요', '항목을 삭제하거나 이름을 바꾸면 여기 자동으로 남아요')}
     </div>
@@ -9918,15 +9931,12 @@ function renderCatTree(sheet) {
       <button class="btn-secondary" id="catAddNew" style="color:var(--primary);font-weight:800;">+ 새 대분류 추가</button>
       <button class="btn-secondary" id="oldItemsBtn" style="color:var(--text-2);font-weight:700;margin-top:6px;">🕘 예전 항목 보기</button>
     </div>
-    <button id="catMScrollTop" style="position:fixed;bottom:90px;right:20px;z-index:50;width:44px;height:44px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:18px;font-weight:800;">▲</button>
   `;
 
   // 다시 그리기 전에 저장해둔 스크롤 위치를 새로 그려진 화면에 그대로 복원(맨 위로 튀지 않게)
+  // (맨 위로 가기는 앱 전역의 fabScrollTopSheet 버튼이 이미 지원하므로 별도 버튼은 만들지 않음)
   const newBody = sheet.querySelector('.sheet-body');
   if (newBody) newBody.scrollTop = savedScrollTop;
-  sheet.querySelector('#catMScrollTop').addEventListener('click', () => {
-    if (newBody) newBody.scrollTo({ top: 0, behavior: 'smooth' });
-  });
 
   sheet.querySelector('#catMClose').addEventListener('click', closeAllSheets);
   sheet.querySelectorAll('.segctrl button').forEach(b => {
@@ -10802,15 +10812,12 @@ function renderCatSubSheet(categoryId, mode) {
         <button class="btn-primary" id="addSubBtn" style="width:auto; padding:0 18px; margin-top:0;">추가</button>
       </div>
     </div>
-    <button id="subScrollTop" style="position:fixed;bottom:90px;right:20px;z-index:50;width:44px;height:44px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:18px;font-weight:800;">▲</button>
   `;
 
   // 다시 그리기 전 스크롤 위치를 새로 그려진 화면에 복원(맨 위로 튀지 않게)
+  // (맨 위로 가기는 앱 전역의 fabScrollTopSheet 버튼이 이미 지원하므로 별도 버튼은 만들지 않음)
   const newBody = sheet.querySelector('.sheet-body');
   if (newBody) newBody.scrollTop = savedScrollTop;
-  sheet.querySelector('#subScrollTop').addEventListener('click', () => {
-    if (newBody) newBody.scrollTo({ top: 0, behavior: 'smooth' });
-  });
 
   sheet.querySelector('#subClose').addEventListener('click', closeAllSheets);
 
