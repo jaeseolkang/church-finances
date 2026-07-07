@@ -1,6 +1,6 @@
-// v3.65 | 2026-07-05 KST | 수정: 모바일에서 인쇄 버튼을 눌러도 아무 반응 없던 문제 — window.open()이 팝업 차단으로 조용히 실패(null 반환, 에러 없음)하는 경우를 대비한 방어 코드가 없었음. 이제 팝업이 막히면 현재 탭에서 바로 인쇄 화면으로 이동하는 대체 경로 추가 | cache:v269
+// v3.67 | 2026-07-05 KST | 수정(원인 재파악): iOS 홈화면 설치 앱(독립실행모드)은 window.print() 자체가 아예 작동 안 함 — 지난번에 이걸 놓치고 PC와 통일했다가 오히려 더 안 되게 만듦. 새 탭 여는 방식으로 되돌리되, window.open() 대신 <a> 링크 클릭 방식으로 바꿔서 팝업 차단에 덜 걸리도록 함 | cache:v271
 'use strict';
-const APP_VERSION = 'v3.65 (cache v269)';
+const APP_VERSION = 'v3.67 (cache v271)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1167,13 +1167,15 @@ const TABS = [
 
 /* ── 공통 인쇄 헬퍼 ── */
 function doPrint(html) {
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  // iOS에서 홈 화면에 설치한 앱(독립 실행 모드, standalone)은 window.print() 자체가 작동하지 않는다.
+  // 그래서 모바일은 반드시 "새 사파리 탭"으로 열어야 인쇄가 된다 — PC와 통일했다가 이 제약을
+  // 놓쳐서 원래대로 되돌린다. 다만 window.open()은 팝업 차단에 걸리기 쉬워서, 그 대신
+  // <a> 링크를 만들어 직접 클릭시키는 방식을 쓴다(사용자 탭과 더 확실하게 연결되어 차단될 확률이 낮음).
+  const isMobile = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  if (isIOS) {
-    // iOS: 새 탭(Blob)으로 열어야 인쇄 가능
+  if (isMobile) {
     _doPrintBlob(html);
   } else {
-    // PC/Android: print-area 방식
     const area = document.getElementById('print-area');
     area.innerHTML = html;
     area.style.display = 'block';
@@ -1288,14 +1290,17 @@ function _doPrintBlob(html) {
 
   const blob = new Blob([fullHTML], {type:'text/html'});
   const url  = URL.createObjectURL(blob);
-  const opened = window.open(url, '_blank');
-  if (!opened || opened.closed) {
-    // 팝업이 차단되면 window.open()이 null을 반환(에러 없이 조용히 실패)하므로,
-    // 이 경우 현재 탭에서 바로 인쇄 화면으로 이동시켜 최소한 인쇄는 되도록 함
-    window.location.href = url;
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
+  // window.open()은 iOS 사파리에서 팝업 차단에 걸려 조용히 실패하는 경우가 있어,
+  // 대신 <a target="_blank"> 링크를 만들어 직접 클릭시키는 방식을 쓴다.
+  // (실제 사용자 탭과 더 밀접하게 연결된 동작이라 차단될 확률이 낮음)
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 /* =========================================================
