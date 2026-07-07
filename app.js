@@ -1,6 +1,6 @@
-// v3.58 | 2026-07-05 KST | 변경: "모든 데이터 초기화" 후 기본 항목(카테고리)이 자동으로 다시 채워지던 것을 제거 — 이제 초기화하면 항목구조표가 완전히 빈 상태(대표계정만 있음)로 남음. seedDone 플래그를 추가해서 앱을 다시 켜도 기본 항목이 재생성되지 않도록 함(최초 설치 때만 1회 채워짐) | cache:v262
+// v3.59 | 2026-07-05 KST | 개선: 항목관리/세부항목·이름관리 화면에서 항목을 추가할 때마다 화면이 맨 위로 튀던 문제 수정 — 다시 그리기 전후로 스크롤 위치를 기억해서 그대로 유지. 우측 하단에 "▲ 맨 위로" 버튼도 추가 | cache:v263
 'use strict';
-const APP_VERSION = 'v3.58 (cache v262)';
+const APP_VERSION = 'v3.59 (cache v263)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -9781,6 +9781,11 @@ function renderOldItemsSheet() {
 
 // ── 항목 관리 트리 ──
 function renderCatTree(sheet) {
+  // 항목 추가/수정 후 다시 그릴 때 스크롤 위치가 맨 위로 튀지 않도록,
+  // 다시 그리기 전에 현재 스크롤 위치를 기억해뒀다가 그린 뒤 복원한다.
+  const prevBody = sheet.querySelector('.sheet-body');
+  const savedScrollTop = prevBody ? prevBody.scrollTop : 0;
+
   const cats = State.categories.filter(c => c.type === catManageType);
   const year = catManageYear;
   const totalBudget = cats.reduce((s, c) => s + getBudget(c, year), 0);
@@ -9913,7 +9918,15 @@ function renderCatTree(sheet) {
       <button class="btn-secondary" id="catAddNew" style="color:var(--primary);font-weight:800;">+ 새 대분류 추가</button>
       <button class="btn-secondary" id="oldItemsBtn" style="color:var(--text-2);font-weight:700;margin-top:6px;">🕘 예전 항목 보기</button>
     </div>
+    <button id="catMScrollTop" style="position:fixed;bottom:90px;right:20px;z-index:50;width:44px;height:44px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:18px;font-weight:800;">▲</button>
   `;
+
+  // 다시 그리기 전에 저장해둔 스크롤 위치를 새로 그려진 화면에 그대로 복원(맨 위로 튀지 않게)
+  const newBody = sheet.querySelector('.sheet-body');
+  if (newBody) newBody.scrollTop = savedScrollTop;
+  sheet.querySelector('#catMScrollTop').addEventListener('click', () => {
+    if (newBody) newBody.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   sheet.querySelector('#catMClose').addEventListener('click', closeAllSheets);
   sheet.querySelectorAll('.segctrl button').forEach(b => {
@@ -10748,6 +10761,8 @@ function openCatSubSheet(categoryId, mode) {
 
 function renderCatSubSheet(categoryId, mode) {
   const sheet = document.getElementById('catSubSheet');
+  const prevBody = sheet.querySelector('.sheet-body');
+  const savedScrollTop = prevBody ? prevBody.scrollTop : 0;
   const cat = catById(categoryId);
   const isItems = mode === 'items';
   const list = isItems ? subItemsOfCategory(categoryId) : personsOfCategory(categoryId);
@@ -10787,7 +10802,15 @@ function renderCatSubSheet(categoryId, mode) {
         <button class="btn-primary" id="addSubBtn" style="width:auto; padding:0 18px; margin-top:0;">추가</button>
       </div>
     </div>
+    <button id="subScrollTop" style="position:fixed;bottom:90px;right:20px;z-index:50;width:44px;height:44px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:18px;font-weight:800;">▲</button>
   `;
+
+  // 다시 그리기 전 스크롤 위치를 새로 그려진 화면에 복원(맨 위로 튀지 않게)
+  const newBody = sheet.querySelector('.sheet-body');
+  if (newBody) newBody.scrollTop = savedScrollTop;
+  sheet.querySelector('#subScrollTop').addEventListener('click', () => {
+    if (newBody) newBody.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   sheet.querySelector('#subClose').addEventListener('click', closeAllSheets);
 
