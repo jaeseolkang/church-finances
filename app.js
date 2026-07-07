@@ -1,6 +1,6 @@
-// v3.73 | 2026-07-05 KST | 긴급수정: 설정>연결계좌관리>대표계정(재정계정)의 "이월금"을 입력해도 실제 계산(홈/통계/계정)에 전혀 반영 안 되던 문제 — 대표계정은 이 필드 대신 완전히 별도의 저장소(연도별 yearCarryover, 또는 "전년이월" 카테고리 거래)를 보게 되어있던 구조적 결함. ①연결계좌관리 화면에서 저장 시 실제 사용되는 값에도 같이 반영되도록 수정 ②이미 입력해둔 값도 자동으로 인식되도록 totalAssets/totalAssetsForYearSync에 대표계정 이월금 폴백 추가 | cache:v277
+// v3.75 | 2026-07-05 KST | 안전장치 추가: totalAssets()에서 "전년이월" 거래와 연결계좌관리의 대표계정 이월금 필드가 둘 다 채워져 있으면 이중으로 합산될 수 있던 위험 제거 — 실제 전년이월 거래가 있으면 그걸 우선하고 필드값은 무시(totalAssetsForYearSync는 원래부터 안전했음, 이번에 totalAssets()도 동일하게 맞춤) | cache:v279
 'use strict';
-const APP_VERSION = 'v3.73 (cache v277)';
+const APP_VERSION = 'v3.75 (cache v279)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1043,6 +1043,9 @@ async function totalAssets() {
   const earliestYear = years.size > 0 ? Math.min(...years) : null;
   let carryoverSetting = 0;
   for (const y of years) {
+    // earliestYear에 "전년이월" 거래가 이미 있으면(carryoverTx) 그게 그 해의 시작 잔액이므로,
+    // 연도별 이월금 설정/대표계정 필드는 (혹시 둘 다 입력되어 있어도) 중복으로 더해지지 않게 무시한다.
+    if (y === earliestYear && carryoverTx) continue;
     let amt = await getYearCarryover(y);
     if (amt === null && y === earliestYear) {
       // 연도별 이월금이 한 번도 설정된 적 없으면, 대표계정에 직접 입력해둔 이월금액을
@@ -3455,9 +3458,15 @@ function printStats() {
   const netTotal = incTotal - expTotal;
 
   // ── 통계 탭: 막대 데이터 ──
+  // "전년이월"은 실제 그 기간에 발생한 수입이 아니라 이전 잔액을 옮겨온 것이므로,
+  // 통계/내용 탭의 세부 집계에서는 제외한다. (맨 위 요약카드의 "이월잔액"은 별도 계산이라 이미 정상)
+  const carryoverCatForStats = State.categories.find(c => c.name === '전년이월');
+  const listForBreakdown = carryoverCatForStats
+    ? list.filter(t => t.categoryId !== carryoverCatForStats.id)
+    : list;
   const byCat = {};
   let statTotal = 0;
-  for (const t of list) {
+  for (const t of listForBreakdown) {
     byCat[t.categoryId] = (byCat[t.categoryId] || 0) + t.amount;
     statTotal += t.amount;
   }
@@ -3469,7 +3478,7 @@ function printStats() {
     .sort((a,b) => b.amt - a.amt);
 
   // ── 내용 탭: 집계 데이터 ──
-  const detailTx = list.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const detailTx = listForBreakdown.slice().sort((a,b) => a.date.localeCompare(b.date));
   const aggMap = buildStatsAggMap(detailTx, isIncome);
   const aggRows = Object.entries(aggMap)
     .map(([key,r]) => ({key,...r}))
@@ -3818,7 +3827,13 @@ function renderStats() {
   const carryLabel = State.statsPeriod === 'year' ? '전년이월' : '이월잔액';
 
   // 기간별 내역 (날짜순)
-  const detailTx = list.slice().sort((a,b) => a.date.localeCompare(b.date) || b.createdAt - a.createdAt);
+  // "전년이월"은 실제 그 기간에 발생한 수입이 아니라 이전 잔액을 옮겨온 것이므로,
+  // 통계/내용 탭의 세부 집계에서는 제외한다. (맨 위 요약카드의 "이월잔액"은 별도 계산이라 이미 정상)
+  const carryoverCatForStats2 = State.categories.find(c => c.name === '전년이월');
+  const listForBreakdown2 = carryoverCatForStats2
+    ? list.filter(t => t.categoryId !== carryoverCatForStats2.id)
+    : list;
+  const detailTx = listForBreakdown2.slice().sort((a,b) => a.date.localeCompare(b.date) || b.createdAt - a.createdAt);
 
   const PERIOD_LABELS = { day:'일일', week:'주간', month:'월간', year:'연간', custom:'기간설정' };
 
@@ -3832,7 +3847,7 @@ function renderStats() {
   let statTotal = 0;
   if (!isInterest) {
     const byCat = {};
-    for (const t of list) {
+    for (const t of listForBreakdown2) {
       byCat[t.categoryId] = (byCat[t.categoryId] || 0) + t.amount;
       statTotal += t.amount;
     }
