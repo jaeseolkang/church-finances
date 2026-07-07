@@ -1,6 +1,6 @@
-// v3.62 | 2026-07-05 KST | 추가: 계정 탭 일반계정 표에 "지난달" 옆에 "이번달" 컬럼 추가 — 화면/인쇄/엑셀 세 곳 전부 반영. 오늘 날짜 기준으로 이번달이 자동 계산됨 | cache:v266
+// v3.63 | 2026-07-05 KST | 수정: "월지출" 엑셀 내보내기의 결재란이 반쪽짜리였던 문제 — 예전엔 없는 이미지(approval_stamp.png)를 수동으로 넣으라는 안내 문구만 있고 실제 결재란이 없었음. 이미지 없이 셀 테두리로 직접 그린 결재란(담당/회계/담임목사 서명칸)으로 완전히 대체 | cache:v267
 'use strict';
-const APP_VERSION = 'v3.62 (cache v266)';
+const APP_VERSION = 'v3.63 (cache v267)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -2586,39 +2586,41 @@ function exportExpenseToExcel() {
   };
   ws['!sheetPr'] = { pageSetup: { fitToPage: true } };
 
-  // ── 결재란 이미지 삽입 ──
-  const approvalB64 = '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';
-
-  if (wb.Workbook) wb.Workbook.Sheets = wb.Workbook.Sheets || [];
-  // 이미지 삽입 (xlsx-js-style 또는 SheetJS Pro 전용이므로 대체: 이미지 데이터를 별도 시트 메타로 저장)
-  // SheetJS community edition은 이미지 직접 삽입 미지원 → 결재란을 마지막 행 아래 텍스트로 처리
-  // 단, 이미지를 별도 PNG 파일로 함께 제공하고 결재란 위치 안내 주석 삽입
+  // ── 결재란: 이미지 없이 셀 테두리로 직접 그린 결재 서명란 ──
+  // (예전엔 "approval_stamp.png를 수동으로 넣으세요"라는 안내 문구만 있고 실제로 쓸 수 있는
+  //  결재란이 엑셀 안에 없었음 — 이제 이미지 없이도 바로 인쇄/사용 가능한 표로 대체)
   const lastDataRow = aoa.length; // 0-indexed 마지막 데이터행 다음
-  // 결재란 안내 텍스트 (이미지는 엑셀에서 수동 삽입 필요 시 참고)
-  const approvalRow = lastDataRow + 2; // 2행 띄움
-  const apAddr = XLSX.utils.encode_cell({r: approvalRow, c: 3});
-  ws[apAddr] = { t: 's', v: '※ 결재란 이미지는 파일과 함께 제공된 approval_stamp.png 를 삽입하세요', s: { font: { color: { rgb: '888888' }, italic: true }, alignment: { horizontal: 'left' } } };
+  const apTitleRow = lastDataRow + 2; // 2행 띄움
+  const apLabelRow = apTitleRow + 1;
+  const apBoxRow    = apLabelRow + 1;
+
+  const apAddr = (r, c) => XLSX.utils.encode_cell({r, c});
+  ws[apAddr(apTitleRow, 3)] = { t:'s', v:'결', s:{ font:{bold:true}, alignment:{horizontal:'center', vertical:'center'}, border: allBorder } };
+  ws[apAddr(apTitleRow, 4)] = { t:'s', v:'재', s:{ font:{bold:true}, alignment:{horizontal:'center', vertical:'center'}, border: allBorder } };
+  const roleLabels = ['담당', '회계', '담임목사'];
+  const roleCols = [0, 1, 2]; // A, B, C열에 각각 배치, D~E열은 '결재' 세로 병합
+  roleLabels.forEach((label, i) => {
+    ws[apAddr(apLabelRow, roleCols[i])] = { t:'s', v:label, s:{ font:{bold:true}, alignment:{horizontal:'center', vertical:'center'}, border: allBorder, fill: catFill } };
+    ws[apAddr(apBoxRow, roleCols[i])]   = { t:'s', v:'', s:{ border: allBorder } }; // 서명/도장용 빈 칸
+  });
+  // '결재' 두 글자를 라벨행+박스행에 걸쳐 세로로 보이도록 병합
+  ws['!merges'] = ws['!merges'] || [];
+  ws['!merges'].push({ s:{r:apTitleRow,c:3}, e:{r:apBoxRow,c:3} });
+  ws['!merges'].push({ s:{r:apTitleRow,c:4}, e:{r:apBoxRow,c:4} });
+  ws[apAddr(apTitleRow, 3)].s.fill = headerFill;
+  ws[apAddr(apTitleRow, 3)].s.font = whiteFont;
+  ws[apAddr(apTitleRow, 4)].s.fill = headerFill;
+  ws[apAddr(apTitleRow, 4)].s.font = whiteFont;
+  // 서명란 박스 높이를 넘낙하게
+  ws['!rows'] = ws['!rows'] || [];
+  ws['!rows'][apBoxRow] = { hpt: 40 };
 
   if (!ws['!ref']) ws['!ref'] = 'A1:E1';
   const ref = XLSX.utils.decode_range(ws['!ref']);
-  ref.e.r = Math.max(ref.e.r, approvalRow);
+  ref.e.r = Math.max(ref.e.r, apBoxRow);
   ws['!ref'] = XLSX.utils.encode_range(ref);
 
   XLSX.utils.book_append_sheet(wb, ws, '월지출');
-
-  // 결재란 이미지를 별도 PNG로도 저장 (Blob URL 다운로드)
-  try {
-    const byteChars = atob(approvalB64);
-    const byteArr = new Uint8Array(byteChars.length);
-    for (let i=0; i<byteChars.length; i++) byteArr[i]=byteChars.charCodeAt(i);
-    const blob = new Blob([byteArr], {type:'image/png'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'approval_stamp.png';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  } catch(e) {}
-
   XLSX.writeFile(wb, `월지출_${range.label}.xlsx`);
 }
 
