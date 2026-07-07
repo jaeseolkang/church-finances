@@ -1,6 +1,6 @@
-// v3.70 | 2026-07-05 KST | 추가: 예산 탭에 "📥 예산양식" 버튼 추가 — 올해 예산/집행액/집행률을 참고자료로 보여주고 "다음해예산" 칸을 채워서 저장하면, 설정 > "예산 데이터 가져오기"로 그 파일을 그대로 올려서 한 번에 다음해 예산을 반영할 수 있음 | cache:v274
+// v3.71 | 2026-07-05 KST | 긴급수정: 항목구조표에서 관리유지/선교비처럼 진짜 중분류(자동차,통신 등)를 쓰는 일반 카테고리까지 "사람 기반 카테고리"로 잘못 판단되어 중분류가 통째로 사라지던 버그(v3.55에서 발생) — "중분류가 실제로 명부(persons)의 사람인지"까지 확인하도록 조건을 정확히 좁혀서 수정 | cache:v275
 'use strict';
-const APP_VERSION = 'v3.70 (cache v274)';
+const APP_VERSION = 'v3.71 (cache v275)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4994,11 +4994,16 @@ function openItemStructureSheet() {
       // 교인이 수백 명이면 항목구조표에 다 펼쳐 보이는 게 오히려 안 보기 힘드니,
       // 이런 카테고리는 사람별로 안 쪼개고 헌금종류(소분류)만 이름 중복 없이 모아서 보여준다.
       // (명부 등록·개인별 헌금 입력·통계는 이 화면과 무관하게 그대로 정상 작동함)
+      // ※ 주의: "중분류가 있다"는 것만으로 판단하면 관리유지(자동차/통신 등)·선교비처럼
+      //   진짜 중분류를 쓰는 일반 카테고리까지 잘못 걸려서 중분류가 통째로 사라지는 버그가
+      //   있었음(v3.55). 반드시 "그 중분류가 실제로 명부(persons)의 사람인지"까지 확인해야 함.
       const catSubGroups = (State.subGroups||[]).filter(g => g.categoryId === cat.id);
+      const isPersonBasedCat = catSubGroups.length > 0 &&
+        catSubGroups.some(g => (State.persons||[]).some(p => p.id === g.id));
       const sgMap = new Map();
       let direct = [];
-      if (catSubGroups.length > 0) {
-        // 사람 기반 카테고리 → 소분류 이름만 중복 제거해서 나열
+      if (isPersonBasedCat) {
+        // 사람 기반 카테고리(예: 헌금) → 소분류 이름만 중복 제거해서 나열
         const seenNames = new Set();
         for (const s of allSubs) {
           if (seenNames.has(s.name)) continue;
@@ -5006,7 +5011,7 @@ function openItemStructureSheet() {
           direct.push(s);
         }
       } else {
-        // 일반 카테고리 → 기존처럼 subGroup별로 그룹핑
+        // 일반 카테고리(예: 관리유지, 선교비 등) → 기존처럼 subGroup(중분류)별로 그룹핑
         for (const s of allSubs) {
           if (s.subGroupId) {
             const sg = (State.subGroups||[]).find(g => g.id === s.subGroupId);
