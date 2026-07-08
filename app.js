@@ -1,6 +1,6 @@
-// v3.81 | 2026-07-08 KST | 긴급수정: 홈 화면 날짜 클릭 시 뜨는 "일별 상세보기"에서, 서브계좌↔재정계정 이체의 가상 반영 거래가 안 보이던 문제 — 캘린더 합계에는 이미 포함되어 있었는데(mainAcctTxs 사용) 상세보기 목록은 원본 거래(State.transactions)만 봐서 생긴 불일치였음. 재정계정 선택 시 가상 거래도 포함하도록 수정, 목록에 "↔ 계좌이체" 표시 추가, 탭해도 편집 화면이 깨지지 않고 안내 메시지 뜨도록 함 | cache:v285
+// v3.82 | 2026-07-08 KST | 추가: 홈>날짜클릭>계좌 선택 목록을 "일반계정" 탭이 먼저 보이고 "정기계정" 탭을 눌러 전환하는 방식으로 개편, 대표계정은 항상 맨 위 고정 + 나머지는 이름순 정렬. "🚫 안 쓰는 계좌 숨기기 관리"로 일반/정기계정 둘 다 개별적으로 숨김 처리 가능 | cache:v286
 'use strict';
-const APP_VERSION = 'v3.81 (cache v285)';
+const APP_VERSION = 'v3.82 (cache v286)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -8840,6 +8840,8 @@ function renderTxStepPick(sheet) {
 
 /* ---- STEP 2: 중분류 선택 (subGroup이 있는 대분류) ---- */
 let txPickGroupManageHidden = false; // 이름선택 화면: "숨김 관리" 모드 on/off
+let ddAcctManageHidden = false; // 일별 상세보기: 계좌 "숨김 관리" 모드 on/off
+let ddAcctTab = 'normal'; // 일별 상세보기 계좌선택: 'normal'(일반계정) | 'deposit'(정기계정)
 let txPickGroupChosungFilter = null; // 이름선택 화면: 초성 찾기 선택값(null=전체)
 
 function renderTxStepPickGroup(sheet) {
@@ -9409,7 +9411,16 @@ function renderDayDetail(dateStr) {
   const sheet = document.getElementById('dayDetailSheet');
 
   // 계좌 목록 및 현재 선택 계좌 결정
-  const accounts = State.linkedAccounts || [];
+  // 대표계정은 항상 맨 위 고정, 나머지는 이름순 정렬. 숨김 처리된 계좌는 선택 목록에서 제외
+  // (단, 지금 선택되어 있는 계좌가 숨김이어도 갑자기 사라지면 혼란스러우니 그대로 유지)
+  const allAccounts = State.linkedAccounts || [];
+  const accounts = allAccounts
+    .filter(a => !a.hidden || a.id === State.selectedAccountId)
+    .slice()
+    .sort((a, b) => {
+      if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
+      return a.name.localeCompare(b.name, 'ko');
+    });
   const defaultAcct = accounts.find(a => a.isDefault) || accounts[0] || null;
   // selectedAccountId가 유효한 계좌가 아닐 때만 대표계정으로 초기화
   if (!State.selectedAccountId || !accounts.find(a => a.id === State.selectedAccountId)) {
@@ -9441,16 +9452,42 @@ function renderDayDetail(dateStr) {
 
   const acctLabel = selAcct ? selAcct.name : '계좌 없음';
 
-  const acctSelectorHTML = accounts.length === 0
+  const tabbedAccountsOf = (tab, includeHidden) => {
+    const src = includeHidden ? allAccounts : accounts;
+    return src.filter(a => tab === 'normal' ? (a.isDefault || a.accountKind !== 'deposit') : (!a.isDefault && a.accountKind === 'deposit'));
+  };
+  const tabBarHTML = `
+    <div style="display:flex;gap:4px;padding:6px 8px 4px;">
+      <button class="ddacct-tab${ddAcctTab==='normal'?' active':''}" data-tab="normal" style="flex:1;padding:6px 0;border-radius:8px;font-size:12.5px;font-weight:700;${ddAcctTab==='normal'?'background:var(--primary);color:#fff;':'background:var(--surface-2,#F0F2F5);color:var(--text-2);'}">일반계정</button>
+      <button class="ddacct-tab${ddAcctTab==='deposit'?' active':''}" data-tab="deposit" style="flex:1;padding:6px 0;border-radius:8px;font-size:12.5px;font-weight:700;${ddAcctTab==='deposit'?'background:var(--primary);color:#fff;':'background:var(--surface-2,#F0F2F5);color:var(--text-2);'}">정기계정</button>
+    </div>`;
+
+  const acctManageListHTML = ddAcctManageHidden
+    ? `<div class="acct-list" id="ddAcctList" style="max-height:320px;overflow-y:auto;">
+        ${tabBarHTML}
+        <div style="padding:8px 12px;font-size:11.5px;color:var(--text-3);border-bottom:1px solid var(--border);">체크하면 이 계좌는 목록에서 안 보여요 (대표계정은 숨길 수 없음)</div>
+        ${tabbedAccountsOf(ddAcctTab, true).sort((a,b)=>{ if(!!a.isDefault!==!!b.isDefault) return a.isDefault?-1:1; return a.name.localeCompare(b.name,'ko'); }).map(a => `
+          <label class="acct-item" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" class="acct-hide-toggle" data-id="${a.id}" ${a.hidden?'checked':''} ${a.isDefault?'disabled':''} style="accent-color:var(--primary);width:15px;height:15px;flex-shrink:0;">
+            <span style="${a.hidden?'color:var(--text-3);':''}">${a.hidden?'🚫 ':''}${escapeHTML(a.name)}${a.isDefault?' (대표계정)':''}</span>
+          </label>
+        `).join('') || `<div style="padding:14px;text-align:center;color:var(--text-3);font-size:12.5px;">계좌가 없어요</div>`}
+        <button id="ddAcctManageBack" style="width:100%;text-align:center;padding:9px;font-size:12.5px;color:var(--primary);font-weight:700;">← 계좌 선택으로 돌아가기</button>
+      </div>`
+    : `<div class="acct-list" id="ddAcctList">
+        ${tabBarHTML}
+        ${tabbedAccountsOf(ddAcctTab, false).map(a => `<div class="acct-item${selAcct&&a.id===selAcct.id?' active':''}" data-id="${a.id}">${escapeHTML(a.name)}</div>`).join('') || `<div style="padding:14px;text-align:center;color:var(--text-3);font-size:12.5px;">계좌가 없어요</div>`}
+        <button id="ddAcctManageBtn" style="width:100%;text-align:center;padding:9px;font-size:12px;color:var(--text-3);font-weight:600;border-top:1px solid var(--border);">🚫 안 쓰는 계좌 숨기기 관리</button>
+      </div>`;
+
+  const acctSelectorHTML = allAccounts.length === 0
     ? `<div class="acct-empty">설정 &gt; 연결계좌 관리에서 계좌를 먼저 추가해주세요</div>`
     : `<div class="acct-selector">
         <div class="acct-current" id="ddAcctBtn">
           <span id="ddAcctLabel">${acctLabel}</span>
           <span class="acct-arrow">▼</span>
         </div>
-        <div class="acct-list" id="ddAcctList">
-          ${accounts.map(a => `<div class="acct-item${selAcct&&a.id===selAcct.id?' active':''}" data-id="${a.id}">${escapeHTML(a.name)}</div>`).join('')}
-        </div>
+        ${acctManageListHTML}
       </div>`;
 
   sheet.innerHTML = `
@@ -9479,7 +9516,7 @@ function renderDayDetail(dateStr) {
     </div>
   `;
 
-  sheet.querySelector('#ddClose').addEventListener('click', closeAllSheets);
+  sheet.querySelector('#ddClose').addEventListener('click', () => { ddAcctManageHidden = false; closeAllSheets(); });
 
   // 날짜 버튼 탭 → 인라인 미니 달력
   sheet.querySelector('#ddDateLabel').addEventListener('click', () => {
@@ -9527,9 +9564,10 @@ function renderDayDetail(dateStr) {
   });
 
   // 계정선택 토글 — 변경 시 목록 즉시 갱신
-  if (accounts.length > 0) {
+  if (allAccounts.length > 0) {
     const acctBtn  = sheet.querySelector('#ddAcctBtn');
     const acctList = sheet.querySelector('#ddAcctList');
+    if (ddAcctManageHidden) { acctList.classList.add('open'); acctBtn.classList.add('open'); }
     acctBtn.addEventListener('click', () => {
       const isOpen = acctList.classList.toggle('open');
       acctBtn.classList.toggle('open', isOpen);
@@ -9538,6 +9576,30 @@ function renderDayDetail(dateStr) {
       el.addEventListener('click', () => {
         State.selectedAccountId = el.dataset.id;
         // 계정 바뀌면 목록 전체 다시 렌더링
+        renderDayDetail(dateStr);
+      });
+    });
+    sheet.querySelector('#ddAcctManageBtn')?.addEventListener('click', () => {
+      ddAcctManageHidden = true;
+      renderDayDetail(dateStr);
+    });
+    sheet.querySelector('#ddAcctManageBack')?.addEventListener('click', () => {
+      ddAcctManageHidden = false;
+      renderDayDetail(dateStr);
+    });
+    acctList.querySelectorAll('.ddacct-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        ddAcctTab = btn.dataset.tab;
+        renderDayDetail(dateStr);
+      });
+    });
+    sheet.querySelectorAll('.acct-hide-toggle').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const a = (State.linkedAccounts || []).find(x => x.id === cb.dataset.id);
+        if (!a) return;
+        a.hidden = cb.checked;
+        await DB.put('linkedAccounts', a);
+        await reloadData();
         renderDayDetail(dateStr);
       });
     });
