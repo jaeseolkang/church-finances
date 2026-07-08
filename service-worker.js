@@ -1,4 +1,4 @@
-// 2026-07-05 KST | CACHE_NAME v2090 (내용탭 이자 합산 로직도 중복카테고리 대응)
+// 2026-07-05 KST | CACHE_NAME v2091 (내용탭 이자 합산 로직도 중복카테고리 대응)
 'use strict';
 const CACHE_NAME = 'gaegyebu-v2090';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];

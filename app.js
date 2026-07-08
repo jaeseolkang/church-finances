@@ -1,6 +1,6 @@
-// v3.77 | 2026-07-05 KST | 개선: 통계>수입>"내용" 탭에서 예금이자/적금이자/기타이자 등으로 계좌마다 따로 나오던 이자 항목들을 "이자" 한 줄로 합쳐서 보여주도록 수정 — 당해년도 모든 계좌의 이자 합계가 한눈에 보임(화면+인쇄 모두 적용) | cache:v281
+// v3.78 | 2026-07-08 KST | 수정: 통계>수입>"내용" 탭의 "이자" 항목이 재정계정(mainAcctTxs) 거래만 집계하던 문제 해결 — 이제 모든 계좌(서브계좌 포함)에 입력된 이자의 합으로 정확히 표시됨(화면/인쇄/상세시트 모두 적용) | cache:v282
 'use strict';
-const APP_VERSION = 'v3.77 (cache v281)';
+const APP_VERSION = 'v3.78 (cache v282)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3483,7 +3483,7 @@ function printStats() {
 
   // ── 내용 탭: 집계 데이터 ──
   const detailTx = listForBreakdown.slice().sort((a,b) => a.date.localeCompare(b.date));
-  const aggMap = buildStatsAggMap(detailTx, isIncome);
+  const aggMap = buildStatsAggMap(detailTx, isIncome, range);
   const aggRows = Object.entries(aggMap)
     .map(([key,r]) => ({key,...r}))
     .sort((a,b) => b.amount - a.amount);
@@ -3995,7 +3995,7 @@ function renderStats() {
         : (State.statsView === 'stats'
             ? `${renderStatsTabBars(statRows, statTotal, isIncome)}
                ${!isIncome ? `<div style="margin-top:6px;">${renderExpenseTableA4(list, range)}</div>` : ''}`
-            : renderStatsTabDetail(detailTx, isIncome))
+            : renderStatsTabDetail(detailTx, isIncome, range))
     }
   `;
 
@@ -4613,7 +4613,7 @@ function renderStatsTabBars(rows, total, isIncome) {
 
 // [내용] 탭: 수입=헌금 종류별 / 지출=대분류/소분류 집계 테이블
 // 통계 [내용] 탭 집계: key → { label, amount, count, entries:[{txId,date,amount}] }
-function buildStatsAggMap(detailTx, isIncome) {
+function buildStatsAggMap(detailTx, isIncome, range) {
   const aggMap = {};
   if (isIncome) {
     // 수입: 헌금 종류(세부항목 이름) 기준으로 집계
@@ -4626,6 +4626,9 @@ function buildStatsAggMap(detailTx, isIncome) {
     );
     for (const t of detailTx) {
       const isInterestTx = interestCatIdsForAgg.has(t.categoryId);
+      // detailTx는 재정계정(mainAcctTxs) 기준이라 서브계좌에 기록된 이자가 빠진다.
+      // range가 주어지면 이자는 아래에서 전체 계좌 기준으로 다시 집계하므로 여기서는 건너뛴다.
+      if (isInterestTx && range) continue;
       for (const l of (t.lines || [])) {
         const si  = subItemById(l.subItemId);
         const key = isInterestTx ? '__interest__' : (si ? si.name : 'etc');
@@ -4634,6 +4637,20 @@ function buildStatsAggMap(detailTx, isIncome) {
         aggMap[key].amount += l.amount;
         aggMap[key].count  += 1;
         aggMap[key].entries.push({ txId: t.id, date: t.date, amount: l.amount, categoryId: t.categoryId, subGroupId: t.subGroupId || t.personId });
+      }
+    }
+    // range가 주어지면 "이자"는 재정계정뿐 아니라 모든(서브)계좌에 입력된 이자를 합산한다.
+    if (range && interestCatIdsForAgg.size > 0) {
+      for (const t of State.transactions) {
+        if (t.type !== 'income') continue;
+        if (!interestCatIdsForAgg.has(t.categoryId)) continue;
+        if (t.date < range.start || t.date > range.end) continue;
+        for (const l of (t.lines && t.lines.length ? t.lines : [{ subItemId: null, amount: t.amount }])) {
+          if (!aggMap['__interest__']) aggMap['__interest__'] = { label: '이자', amount: 0, count: 0, entries: [] };
+          aggMap['__interest__'].amount += l.amount;
+          aggMap['__interest__'].count  += 1;
+          aggMap['__interest__'].entries.push({ txId: t.id, date: t.date, amount: l.amount, categoryId: t.categoryId, subGroupId: t.subGroupId || t.personId });
+        }
       }
     }
   } else {
@@ -4654,7 +4671,7 @@ function buildStatsAggMap(detailTx, isIncome) {
   return aggMap;
 }
 
-function renderStatsTabDetail(detailTx, isIncome) {
+function renderStatsTabDetail(detailTx, isIncome, range) {
   const sortKey = State.statsSortKey;
   const sortDir = State.statsSortDir;
   const arrow = sortDir === 'desc' ? ' ▼' : ' ▲';
@@ -4674,7 +4691,7 @@ function renderStatsTabDetail(detailTx, isIncome) {
     return header + `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', `선택한 기간의 ${isIncome?'수입':'지출'} 내역이 없습니다`)}</div>`;
   }
 
-  const aggMap = buildStatsAggMap(detailTx, isIncome);
+  const aggMap = buildStatsAggMap(detailTx, isIncome, range);
 
   const aggRows = Object.entries(aggMap)
     .map(([key, r]) => ({ key, ...r }))
@@ -9848,7 +9865,7 @@ function renderSubStatDetail(key) {
   const isIncome = State.statsType === 'income';
   const allTx  = txInPeriod(range.start, range.end);
   const detailTx = allTx.filter(t => t.type === State.statsType);
-  const aggMap = buildStatsAggMap(detailTx, isIncome);
+  const aggMap = buildStatsAggMap(detailTx, isIncome, range);
   const agg = aggMap[key] || { label: '내역', amount: 0, count: 0, entries: [] };
 
   const entries = agg.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
