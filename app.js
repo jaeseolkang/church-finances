@@ -1,6 +1,6 @@
-// v3.78 | 2026-07-08 KST | 수정: 통계>수입>"내용" 탭의 "이자" 항목이 재정계정(mainAcctTxs) 거래만 집계하던 문제 해결 — 이제 모든 계좌(서브계좌 포함)에 입력된 이자의 합으로 정확히 표시됨(화면/인쇄/상세시트 모두 적용) | cache:v282
+// v3.79 | 2026-07-08 KST | 수정: 통계>내용 탭에서 헌금종류/이자 클릭 시 나오는 상세 목록이 날짜 그룹 내에서 이름순 정렬되도록 수정. 교인명부(가족보기) 미분류 인원, 총자산 화면의 연결계좌(일반/정기) 목록도 이름순 정렬 적용 — 앱 전반 출력/통계 정렬 일관성 점검 | cache:v283
 'use strict';
-const APP_VERSION = 'v3.78 (cache v282)';
+const APP_VERSION = 'v3.79 (cache v283)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -5457,7 +5457,7 @@ async function renderAccounts() {
   // ── 연도 필터 적용 합계 (일반계정/정기계정 표 + 인쇄/엑셀에 사용) ──
   const selectedYear = State.accountsYear || 'all';
   const yearTotals = selectedYear === 'all' ? totals : calcAcctTotals(selectedYear);
-  const nonDefaultAccts = (State.linkedAccounts || []).filter(a => !a.isDefault);
+  const nonDefaultAccts = (State.linkedAccounts || []).filter(a => !a.isDefault).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
   let normalCarry = 0, normalIncome = 0, normalExpense = 0;
   let depositCarry = 0, depositIncome = 0, depositExpense = 0;
@@ -7124,7 +7124,7 @@ function renderMembers() {
     </tr>
     ${ms.map(m => memberRow(m, true)).join('')}
   `;}).join('');
-  const noGroupRows = noGroup.map(m => memberRow(m, false)).join('');
+  const noGroupRows = noGroup.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(m => memberRow(m, false)).join('');
 
   // 이름순 보기
   const nameRows = [...members].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(m => memberRow(m, false)).join('');
@@ -9868,9 +9868,22 @@ function renderSubStatDetail(key) {
   const aggMap = buildStatsAggMap(detailTx, isIncome, range);
   const agg = aggMap[key] || { label: '내역', amount: 0, count: 0, entries: [] };
 
-  const entries = agg.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const entries = agg.entries.slice().map(e => {
+    const srcTx = State.transactions.find(x => x.id === e.txId);
+    const cat = srcTx ? txCatInfo(srcTx) : catFallbackInfo(e.categoryId);
+    // 수입(헌금)이면 중분류(사람 이름) 표시, 지출이면 카테고리 이름
+    let rowLabel;
+    if (isIncome && e.subGroupId) {
+      const sgName = srcTx ? txSubGroupName(srcTx) : null;
+      const sg = sgName ? { name: sgName } : (State.subGroups||[]).find(g=>g.id===e.subGroupId);
+      rowLabel = sg ? sg.name : (cat.icon ? cat.icon+' '+cat.name : cat.name);
+    } else {
+      rowLabel = (cat.icon ? cat.icon+' ' : '') + cat.name;
+    }
+    return { ...e, rowLabel };
+  }).sort((a,b) => a.date.localeCompare(b.date) || a.rowLabel.localeCompare(b.rowLabel, 'ko'));
 
-  // 날짜별 그룹화
+  // 날짜별 그룹화 (그룹 내부는 이름순 정렬된 상태 유지)
   const byDate = {};
   for (const e of entries) {
     (byDate[e.date] = byDate[e.date] || []).push(e);
@@ -9896,17 +9909,7 @@ function renderSubStatDetail(key) {
             <div class="section-title">${dayLabel(d)}</div>
             <div class="card" style="padding:0 16px; margin-bottom:14px;">
               ${byDate[d].map(e => {
-                const srcTx = State.transactions.find(x => x.id === e.txId);
-                const cat = srcTx ? txCatInfo(srcTx) : catFallbackInfo(e.categoryId);
-                // 수입(헌금)이면 중분류(사람 이름) 표시, 지출이면 카테고리 이름
-                let rowLabel;
-                if (isIncome && e.subGroupId) {
-                  const sgName = srcTx ? txSubGroupName(srcTx) : null;
-                  const sg = sgName ? { name: sgName } : (State.subGroups||[]).find(g=>g.id===e.subGroupId);
-                  rowLabel = sg ? sg.name : (cat.icon ? cat.icon+' '+cat.name : cat.name);
-                } else {
-                  rowLabel = (cat.icon ? cat.icon+' ' : '') + cat.name;
-                }
+                const rowLabel = e.rowLabel;
                 return `
                   <div class="stats-agg-row tx-item" data-id="${e.txId}" style="cursor:pointer;">
                     <div class="stats-agg-label">${escapeHTML(rowLabel)}</div>
@@ -9939,9 +9942,9 @@ function renderInterestDetail(key) {
   const aggMap = buildInterestAggMap(range);
   const agg = aggMap[key] || { label: '내역', amount: 0, count: 0, entries: [] };
 
-  const entries = agg.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const entries = agg.entries.slice().sort((a,b) => a.date.localeCompare(b.date) || a.subName.localeCompare(b.subName, 'ko'));
 
-  // 날짜별 그룹화
+  // 날짜별 그룹화 (그룹 내부는 이름순 정렬된 상태 유지)
   const byDate = {};
   for (const e of entries) {
     (byDate[e.date] = byDate[e.date] || []).push(e);
