@@ -1,6 +1,6 @@
-// v3.82 | 2026-07-08 KST | 추가: 홈>날짜클릭>계좌 선택 목록을 "일반계정" 탭이 먼저 보이고 "정기계정" 탭을 눌러 전환하는 방식으로 개편, 대표계정은 항상 맨 위 고정 + 나머지는 이름순 정렬. "🚫 안 쓰는 계좌 숨기기 관리"로 일반/정기계정 둘 다 개별적으로 숨김 처리 가능 | cache:v286
+// v3.83 | 2026-07-08 KST | 긴급수정: 계좌 숨기기 관리 화면에서 체크박스가 안 눌리던 문제 — 숨김 관리용 줄(label)이 기존 "계좌 선택" 클릭 핸들러와 클래스명(acct-item)이 겹쳐서, 체크하는 순간 그 핸들러가 먼저 반응해 화면을 다시 그려버려 체크가 씹혔음. 클래스명을 분리해서 수정 | cache:v287
 'use strict';
-const APP_VERSION = 'v3.82 (cache v286)';
+const APP_VERSION = 'v3.83 (cache v287)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -9467,7 +9467,7 @@ function renderDayDetail(dateStr) {
         ${tabBarHTML}
         <div style="padding:8px 12px;font-size:11.5px;color:var(--text-3);border-bottom:1px solid var(--border);">체크하면 이 계좌는 목록에서 안 보여요 (대표계정은 숨길 수 없음)</div>
         ${tabbedAccountsOf(ddAcctTab, true).sort((a,b)=>{ if(!!a.isDefault!==!!b.isDefault) return a.isDefault?-1:1; return a.name.localeCompare(b.name,'ko'); }).map(a => `
-          <label class="acct-item" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <label class="acct-manage-item" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;">
             <input type="checkbox" class="acct-hide-toggle" data-id="${a.id}" ${a.hidden?'checked':''} ${a.isDefault?'disabled':''} style="accent-color:var(--primary);width:15px;height:15px;flex-shrink:0;">
             <span style="${a.hidden?'color:var(--text-3);':''}">${a.hidden?'🚫 ':''}${escapeHTML(a.name)}${a.isDefault?' (대표계정)':''}</span>
           </label>
