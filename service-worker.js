@@ -1,6 +1,6 @@
-// 2026-07-08 KST | CACHE_NAME v2092 (통장이동 등에 헌금 접미어 잘못 붙던 버그 수정)
+// 2026-07-08 KST | CACHE_NAME v2093 (일별 상세보기 계좌이체 가상거래 반영)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2092';
+const CACHE_NAME = 'gaegyebu-v2093';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

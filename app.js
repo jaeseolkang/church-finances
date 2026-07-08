@@ -1,6 +1,6 @@
-// v3.80 | 2026-07-08 KST | 긴급수정: "리스트" 등 화면에서 통장이동·이자 같은 헌금 아닌 수입 항목에도 "OO헌금"으로 접미어가 잘못 붙던 문제 — 예: 통장이동의 "정기재정3"이 "정기재정3헌금"으로 표시됨. "수입 타입이면 무조건" 붙이던 조건을 "헌금 카테고리일 때만" 붙이도록 정확히 좁혀서 수정 | cache:v284
+// v3.81 | 2026-07-08 KST | 긴급수정: 홈 화면 날짜 클릭 시 뜨는 "일별 상세보기"에서, 서브계좌↔재정계정 이체의 가상 반영 거래가 안 보이던 문제 — 캘린더 합계에는 이미 포함되어 있었는데(mainAcctTxs 사용) 상세보기 목록은 원본 거래(State.transactions)만 봐서 생긴 불일치였음. 재정계정 선택 시 가상 거래도 포함하도록 수정, 목록에 "↔ 계좌이체" 표시 추가, 탭해도 편집 화면이 깨지지 않고 안내 메시지 뜨도록 함 | cache:v285
 'use strict';
-const APP_VERSION = 'v3.80 (cache v284)';
+const APP_VERSION = 'v3.81 (cache v285)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1862,7 +1862,7 @@ function txItemHTML(t) {
     <div class="tx-item" data-id="${t.id}">
       <div class="tx-icon" style="background:${hexToLight(cat.color)};">${cat.icon}</div>
       <div class="tx-mid">
-        <div class="tx-cat">${escapeHTML(title)}</div>
+        <div class="tx-cat">${escapeHTML(title)}${t.isSynthetic?' <span style="font-size:10px;color:var(--text-3);font-weight:600;">↔ 계좌이체</span>':''}</div>
         <div class="tx-memo">${sub}</div>
       </div>
       <div class="tx-amt tabular ${t.type}">${t.type === 'income' ? '+' : '-'}${fmtMoney(t.amount)}원</div>
@@ -9418,13 +9418,17 @@ function renderDayDetail(dateStr) {
   const selAcct = accounts.find(a => a.id === State.selectedAccountId) || defaultAcct || null;
 
   // 선택된 계좌에 해당하는 거래만 필터링
-  // 대표계정(재정계정): accountId가 null이거나 대표계정 id인 거래
+  // 대표계정(재정계정): accountId가 null이거나 대표계정 id인 거래 + 서브계좌↔재정계정 이체의
+  // 가상 반영 거래(mainAcctSyntheticTxs)까지 포함해야 캘린더 합계와 일치한다.
+  // (예전엔 State.transactions만 봐서, 서브계좌 쪽에서만 기록된 이체가 재정계정 쪽 상세보기엔
+  //  안 잡히고 캘린더 합계에만 반영되는 불일치가 있었음)
   // 다른 계정: accountId가 해당 계정 id인 거래
   const isDefault = selAcct && selAcct.isDefault;
-  const list = State.transactions
+  const sourceTxs = isDefault ? mainAcctTxs() : State.transactions;
+  const list = sourceTxs
     .filter(t => {
       if (t.date !== dateStr) return false;
-      if (isDefault) return !t.accountId || t.accountId === selAcct.id;
+      if (isDefault) return true; // mainAcctTxs()가 이미 재정계정 기준(실거래+가상거래)으로 걸러져 있음
       return t.accountId === (selAcct ? selAcct.id : null);
     })
     .sort((a, b) => {
@@ -9542,7 +9546,15 @@ function renderDayDetail(dateStr) {
   sheet.querySelector('#ddAddIncome').addEventListener('click', () => openTxSheet(null, dateStr, 'income', State.selectedAccountId));
   sheet.querySelector('#ddAddExpense').addEventListener('click', () => openTxSheet(null, dateStr, 'expense', State.selectedAccountId));
   sheet.querySelectorAll('.tx-item').forEach(el => {
-    el.addEventListener('click', () => openTxSheet(el.dataset.id, dateStr));
+    el.addEventListener('click', () => {
+      const tappedTx = list.find(t => t.id === el.dataset.id);
+      if (tappedTx && tappedTx.isSynthetic) {
+        const srcAcct = (State.linkedAccounts||[]).find(a => a.id === tappedTx.sourceAccountId);
+        showToast(`이 거래는 ${srcAcct ? srcAcct.name : '다른 계좌'}에서 확인/수정하세요`);
+        return;
+      }
+      openTxSheet(el.dataset.id, dateStr);
+    });
   });
 }
 
