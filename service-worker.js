@@ -1,6 +1,6 @@
-// 2026-07-09 KST | CACHE_NAME v2097 (통장이동/예금 입력화면 탭+숨김 추가)
+// 2026-07-09 KST | CACHE_NAME v2098 (정기계정 잔액계산 심각한 버그 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2097';
+const CACHE_NAME = 'gaegyebu-v2098';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
