@@ -1,6 +1,6 @@
-// v3.76 | 2026-07-05 KST | 수정: 통계에서 수입 집계할 때 "통장이동"(다른 계좌에서 온 내부이체, 진짜 새 수입 아님)이 같이 잡히던 문제 — 통계/내용 탭의 카테고리별·내용별 집계(화면+인쇄)와 월간/기간설정 요약카드의 "총수입"에서 제외. (연간 요약카드는 계정 탭 잔액계산과 공유하는 함수라 이번엔 그대로 둠 — 필요하시면 별도로 분리해드릴 수 있음) | cache:v280
+// v3.77 | 2026-07-05 KST | 개선: 통계>수입>"내용" 탭에서 예금이자/적금이자/기타이자 등으로 계좌마다 따로 나오던 이자 항목들을 "이자" 한 줄로 합쳐서 보여주도록 수정 — 당해년도 모든 계좌의 이자 합계가 한눈에 보임(화면+인쇄 모두 적용) | cache:v281
 'use strict';
-const APP_VERSION = 'v3.76 (cache v280)';
+const APP_VERSION = 'v3.77 (cache v281)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4617,11 +4617,19 @@ function buildStatsAggMap(detailTx, isIncome) {
   const aggMap = {};
   if (isIncome) {
     // 수입: 헌금 종류(세부항목 이름) 기준으로 집계
+    // 단, "이자"는 계좌마다 소분류명(예금이자/적금이자/기타이자 등)이 달라도
+    // 당해년도 모든 계좌의 이자를 하나로 합쳐서 "이자" 한 줄로 보여준다.
+    // 혹시 "이자"라는 이름의 카테고리가 중복으로 여러 개 있어도(예전 데이터 마이그레이션 흔적 등)
+    // 전부 다 잡히도록 이름이 "이자"인 income 카테고리를 전부 매칭한다.
+    const interestCatIdsForAgg = new Set(
+      State.categories.filter(c => c.type === 'income' && c.name === '이자').map(c => c.id)
+    );
     for (const t of detailTx) {
+      const isInterestTx = interestCatIdsForAgg.has(t.categoryId);
       for (const l of (t.lines || [])) {
         const si  = subItemById(l.subItemId);
-        const key = si ? si.name : 'etc';
-        const lbl = key;
+        const key = isInterestTx ? '__interest__' : (si ? si.name : 'etc');
+        const lbl = isInterestTx ? '이자' : key;
         if (!aggMap[key]) aggMap[key] = { label: lbl, amount: 0, count: 0, entries: [] };
         aggMap[key].amount += l.amount;
         aggMap[key].count  += 1;
@@ -4703,8 +4711,12 @@ function renderStatsTabDetail(detailTx, isIncome) {
 // 대표계정(재정계정) 거래도 포함하기 위해 mainAcctTxs()가 아닌 전체 거래를 날짜로만 필터링한다.
 function buildInterestAggMap(range) {
   const aggMap = {};
-  const interestCat = State.categories.find(c => c.type === 'income' && c.name === '이자');
-  if (!interestCat) return aggMap;
+  // 혹시 "이자"라는 이름의 카테고리가 중복으로 여러 개 있어도(예: 예전 데이터 마이그레이션 흔적)
+  // 전부 다 잡히도록 이름이 "이자"인 income 카테고리를 전부 매칭한다.
+  const interestCatIds = new Set(
+    State.categories.filter(c => c.type === 'income' && c.name === '이자').map(c => c.id)
+  );
+  if (interestCatIds.size === 0) return aggMap;
 
   const acctById = {};
   for (const a of (State.linkedAccounts || [])) acctById[a.id] = a;
@@ -4713,7 +4725,7 @@ function buildInterestAggMap(range) {
 
   for (const t of State.transactions) {
     if (t.type !== 'income') continue;
-    if (t.categoryId !== interestCat.id) continue;
+    if (!interestCatIds.has(t.categoryId)) continue;
     if (t.date < range.start || t.date > range.end) continue;
 
     const key   = t.accountId || 'default';
