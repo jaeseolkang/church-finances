@@ -1,6 +1,6 @@
-// v3.83 | 2026-07-08 KST | 긴급수정: 계좌 숨기기 관리 화면에서 체크박스가 안 눌리던 문제 — 숨김 관리용 줄(label)이 기존 "계좌 선택" 클릭 핸들러와 클래스명(acct-item)이 겹쳐서, 체크하는 순간 그 핸들러가 먼저 반응해 화면을 다시 그려버려 체크가 씹혔음. 클래스명을 분리해서 수정 | cache:v287
+// v3.84 | 2026-07-08 KST | 수정: 통계>내용 탭에서 헌금종류(감사헌금 등) 클릭 시 나오는 개인별 목록이 날짜별로 묶여서 전체적으로 이름순처럼 안 보이던 문제 — 날짜 묶음 없이 이름순 하나로 나열하도록 변경. 앱 전체 정렬 재점검: 명부(가족순/이름순/기부금순)·항목구조표·계정탭·예산양식·헌금 개인별 피벗(화면+인쇄+엑셀)은 이미 정상 정렬 확인됨 | cache:v288
 'use strict';
-const APP_VERSION = 'v3.83 (cache v287)';
+const APP_VERSION = 'v3.84 (cache v288)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -4697,20 +4697,7 @@ function renderStatsTabDetail(detailTx, isIncome, range) {
     .map(([key, r]) => ({ key, ...r }))
     .sort((a, b) => {
       let cmp;
-      if (sortKey === 'label') {
-        if (isIncome) {
-          // 수입(헌금) 내용은 다른 통계/인쇄/엑셀 화면과 동일하게
-          // TX_ENTRY_ITEM_ORDER 순서를 우선하고, 목록에 없는 이름(예: 이자)은 가나다순으로 뒤에 붙인다.
-          const ia = TX_ENTRY_ITEM_ORDER.indexOf(a.label);
-          const ib = TX_ENTRY_ITEM_ORDER.indexOf(b.label);
-          if (ia !== -1 && ib !== -1) cmp = ia - ib;
-          else if (ia !== -1) cmp = -1;
-          else if (ib !== -1) cmp = 1;
-          else cmp = a.label.localeCompare(b.label, 'ko');
-        } else {
-          cmp = a.label.localeCompare(b.label, 'ko');
-        }
-      }
+      if (sortKey === 'label') cmp = a.label.localeCompare(b.label, 'ko');
       else if (sortKey === 'count') cmp = a.count - b.count;
       else cmp = a.amount - b.amount;
       return sortDir === 'asc' ? cmp : -cmp;
@@ -9969,14 +9956,9 @@ function renderSubStatDetail(key) {
       rowLabel = (cat.icon ? cat.icon+' ' : '') + cat.name;
     }
     return { ...e, rowLabel };
-  }).sort((a,b) => a.date.localeCompare(b.date) || a.rowLabel.localeCompare(b.rowLabel, 'ko'));
+  }).sort((a,b) => a.rowLabel.localeCompare(b.rowLabel, 'ko') || a.date.localeCompare(b.date));
 
-  // 날짜별 그룹화 (그룹 내부는 이름순 정렬된 상태 유지)
-  const byDate = {};
-  for (const e of entries) {
-    (byDate[e.date] = byDate[e.date] || []).push(e);
-  }
-  const dates = Object.keys(byDate).sort();
+  // 이름순 하나로만 나열 (날짜별로 묶으면 전체적으로 이름순처럼 안 보였음 — "개인별"로 보려는 목적에 맞게 변경)
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -9991,22 +9973,16 @@ function renderSubStatDetail(key) {
         <b class="tabular ${isIncome ? 'income' : 'expense'}">${fmtMoney(agg.amount)}원</b>
       </div>
 
-      ${dates.length === 0
+      ${entries.length === 0
         ? `<div class="card" style="padding:6px 16px;">${emptyStateHTML('내역이 없어요', '선택한 기간의 거래 내역이 없습니다')}</div>`
-        : dates.map(d => `
-            <div class="section-title">${dayLabel(d)}</div>
-            <div class="card" style="padding:0 16px; margin-bottom:14px;">
-              ${byDate[d].map(e => {
-                const rowLabel = e.rowLabel;
-                return `
-                  <div class="stats-agg-row tx-item" data-id="${e.txId}" style="cursor:pointer;">
-                    <div class="stats-agg-label">${escapeHTML(rowLabel)}</div>
-                    <div class="stats-agg-amt tabular ${isIncome ? 'income' : 'expense'}">${fmtMoney(e.amount)}원</div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          `).join('')
+        : `<div class="card" style="padding:0 16px; margin-bottom:14px;">
+              ${entries.map(e => `
+                <div class="stats-agg-row tx-item" data-id="${e.txId}" style="cursor:pointer;">
+                  <div class="stats-agg-label">${escapeHTML(e.rowLabel)} <span style="font-size:11px;color:var(--text-3);font-weight:500;">${dayLabel(e.date)}</span></div>
+                  <div class="stats-agg-amt tabular ${isIncome ? 'income' : 'expense'}">${fmtMoney(e.amount)}원</div>
+                </div>
+              `).join('')}
+            </div>`
       }
     </div>
   `;
