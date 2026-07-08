@@ -1,6 +1,6 @@
-// v3.84 | 2026-07-08 KST | 수정: 통계>내용 탭에서 헌금종류(감사헌금 등) 클릭 시 나오는 개인별 목록이 날짜별로 묶여서 전체적으로 이름순처럼 안 보이던 문제 — 날짜 묶음 없이 이름순 하나로 나열하도록 변경. 앱 전체 정렬 재점검: 명부(가족순/이름순/기부금순)·항목구조표·계정탭·예산양식·헌금 개인별 피벗(화면+인쇄+엑셀)은 이미 정상 정렬 확인됨 | cache:v288
+// v3.85 | 2026-07-09 KST | 추가: 홈>추가>수입/지출에서 "통장이동"·"예금" 카테고리의 세부항목 입력화면도 계좌 선택 화면과 동일하게 "일반계정/정기계정" 탭으로 나누고, "🚫 안 쓰는 계좌 숨기기 관리"로 개별 계좌를 숨길 수 있게 함(계좌 선택 화면과 같은 숨김 상태를 공유) | cache:v289
 'use strict';
-const APP_VERSION = 'v3.84 (cache v288)';
+const APP_VERSION = 'v3.85 (cache v289)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -8842,6 +8842,8 @@ function renderTxStepPick(sheet) {
 let txPickGroupManageHidden = false; // 이름선택 화면: "숨김 관리" 모드 on/off
 let ddAcctManageHidden = false; // 일별 상세보기: 계좌 "숨김 관리" 모드 on/off
 let ddAcctTab = 'normal'; // 일별 상세보기 계좌선택: 'normal'(일반계정) | 'deposit'(정기계정)
+let txItemsAcctTab = 'normal'; // 통장이동/예금 세부항목 입력화면: 'normal' | 'deposit'
+let txItemsManageHidden = false; // 통장이동/예금 세부항목 입력화면: 계좌 숨김 관리 모드
 let txPickGroupChosungFilter = null; // 이름선택 화면: 초성 찾기 선택값(null=전체)
 
 function renderTxStepPickGroup(sheet) {
@@ -9077,6 +9079,55 @@ async function renderTxStepItems(sheet) {
     }
   }
 
+  // 통장이동/예금 카테고리는 소분류 이름이 실제 계좌 이름과 같은 구조라서,
+  // 계좌 선택 화면과 똑같이 일반계정/정기계정 탭으로 나누고 숨김 계좌도 뺄 수 있게 한다.
+  const isTransferCat = cat.name === '통장이동' || cat.name === '예금';
+  let transferTabHTML = '';
+  if (isTransferCat) {
+    const acctByName = new Map((State.linkedAccounts||[]).map(a => [a.name, a]));
+    const classify = (it) => {
+      const acct = acctByName.get(it.name);
+      return acct && acct.accountKind === 'deposit' ? 'deposit' : 'normal';
+    };
+    const isHiddenItem = (it) => {
+      const acct = acctByName.get(it.name);
+      return !!(acct && acct.hidden);
+    };
+    if (txItemsManageHidden) {
+      const manageItems = items.filter(it => classify(it) === txItemsAcctTab && acctByName.has(it.name));
+      transferTabHTML = `
+        <div style="display:flex;gap:4px;margin-bottom:8px;">
+          <button class="txitems-tab" data-tab="normal" style="flex:1;padding:6px 0;border-radius:8px;font-size:12.5px;font-weight:700;${txItemsAcctTab==='normal'?'background:var(--primary);color:#fff;':'background:var(--surface-2,#F0F2F5);color:var(--text-2);'}">일반계정</button>
+          <button class="txitems-tab" data-tab="deposit" style="flex:1;padding:6px 0;border-radius:8px;font-size:12.5px;font-weight:700;${txItemsAcctTab==='deposit'?'background:var(--primary);color:#fff;':'background:var(--surface-2,#F0F2F5);color:var(--text-2);'}">정기계정</button>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:10px;padding:6px 0;margin-bottom:10px;">
+          <div style="padding:6px 12px;font-size:11.5px;color:var(--text-3);">체크하면 이 계좌는 목록에서 안 보여요</div>
+          ${manageItems.map(it => {
+            const acct = acctByName.get(it.name);
+            return `<label class="txitems-manage-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;">
+              <input type="checkbox" class="txitem-hide-toggle" data-acct-id="${acct.id}" ${acct.hidden?'checked':''} ${acct.isDefault?'disabled':''} style="accent-color:var(--primary);width:15px;height:15px;flex-shrink:0;">
+              <span style="${acct.hidden?'color:var(--text-3);':''}">${acct.hidden?'🚫 ':''}${escapeHTML(it.name)}${acct.isDefault?' (대표계정)':''}</span>
+            </label>`;
+          }).join('') || `<div style="padding:10px 12px;color:var(--text-3);font-size:12.5px;">계좌가 없어요</div>`}
+          <button id="txItemsManageBack" style="width:100%;text-align:center;padding:8px;font-size:12.5px;color:var(--primary);font-weight:700;">← 돌아가기</button>
+        </div>`;
+      items = []; // 관리 모드에서는 금액입력 그리드는 숨김
+    } else {
+      transferTabHTML = `
+        <div style="display:flex;gap:4px;margin-bottom:8px;">
+          <button class="txitems-tab" data-tab="normal" style="flex:1;padding:6px 0;border-radius:8px;font-size:12.5px;font-weight:700;${txItemsAcctTab==='normal'?'background:var(--primary);color:#fff;':'background:var(--surface-2,#F0F2F5);color:var(--text-2);'}">일반계정</button>
+          <button class="txitems-tab" data-tab="deposit" style="flex:1;padding:6px 0;border-radius:8px;font-size:12.5px;font-weight:700;${txItemsAcctTab==='deposit'?'background:var(--primary);color:#fff;':'background:var(--surface-2,#F0F2F5);color:var(--text-2);'}">정기계정</button>
+        </div>
+        <button id="txItemsManageBtn" style="width:100%;text-align:center;padding:7px;font-size:11.5px;color:var(--text-3);font-weight:600;margin-bottom:8px;">🚫 안 쓰는 계좌 숨기기 관리</button>`;
+      items = items.filter(it => {
+        // 계좌와 매칭 안 되는 항목(예: 실제 계좌명이 아닌 예전 데이터)은 항상 보이게 둔다
+        if (!acctByName.has(it.name)) return true;
+        if (isHiddenItem(it)) return false;
+        return classify(it) === txItemsAcctTab;
+      });
+    }
+  }
+
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
   const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
   const hasTpl = !!tpl;
@@ -9123,6 +9174,7 @@ async function renderTxStepItems(sheet) {
     <div class="sheet-body">
       <div class="formrow">
         <label>세부항목별 금액 입력</label>
+        ${transferTabHTML}
         <div id="itemsList" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:2px 8px;">
           ${items.filter(it => it.isPrimary !== false).map(it => `
             <div class="formrow" style="margin-bottom:4px; min-width:0;">
@@ -9174,7 +9226,7 @@ async function renderTxStepItems(sheet) {
     </div>
   `;
 
-  sheet.querySelector('#txClose').addEventListener('click', closeTxSheet);
+  sheet.querySelector('#txClose').addEventListener('click', () => { txItemsManageHidden = false; closeTxSheet(); });
 
   // 수정 모드: 대분류 변경 → pick 단계
   sheet.querySelector('#txChangeCat')?.addEventListener('click', () => {
@@ -9318,6 +9370,33 @@ async function renderTxStepItems(sheet) {
 
   sheet.querySelector('#txSave').addEventListener('click', saveTx);
   if (editing) sheet.querySelector('#txDelete').addEventListener('click', deleteTx);
+
+  if (isTransferCat) {
+    sheet.querySelectorAll('.txitems-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        txItemsAcctTab = btn.dataset.tab;
+        renderTxStepItems(sheet);
+      });
+    });
+    sheet.querySelector('#txItemsManageBtn')?.addEventListener('click', () => {
+      txItemsManageHidden = true;
+      renderTxStepItems(sheet);
+    });
+    sheet.querySelector('#txItemsManageBack')?.addEventListener('click', () => {
+      txItemsManageHidden = false;
+      renderTxStepItems(sheet);
+    });
+    sheet.querySelectorAll('.txitem-hide-toggle').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const acct = (State.linkedAccounts||[]).find(a => a.id === cb.dataset.acctId);
+        if (!acct) return;
+        acct.hidden = cb.checked;
+        await DB.put('linkedAccounts', acct);
+        await reloadData();
+        renderTxStepItems(sheet);
+      });
+    });
+  }
 }
 
 async function addSubItemInline(sheet, categoryId) {
