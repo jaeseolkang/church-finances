@@ -1,4 +1,4 @@
-// 2026-07-08 KST | CACHE_NAME v2091 (통계>내용 상세/명부/총자산 이름순 정렬 적용)
+// 2026-07-05 KST | CACHE_NAME v2091 (통장이동 등에 헌금 접미어 잘못 붙던 버그 수정)
 'use strict';
 const CACHE_NAME = 'gaegyebu-v2091';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
