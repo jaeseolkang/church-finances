@@ -4697,7 +4697,20 @@ function renderStatsTabDetail(detailTx, isIncome, range) {
     .map(([key, r]) => ({ key, ...r }))
     .sort((a, b) => {
       let cmp;
-      if (sortKey === 'label') cmp = a.label.localeCompare(b.label, 'ko');
+      if (sortKey === 'label') {
+        if (isIncome) {
+          // 수입(헌금) 내용은 다른 통계/인쇄/엑셀 화면과 동일하게
+          // TX_ENTRY_ITEM_ORDER 순서를 우선하고, 목록에 없는 이름(예: 이자)은 가나다순으로 뒤에 붙인다.
+          const ia = TX_ENTRY_ITEM_ORDER.indexOf(a.label);
+          const ib = TX_ENTRY_ITEM_ORDER.indexOf(b.label);
+          if (ia !== -1 && ib !== -1) cmp = ia - ib;
+          else if (ia !== -1) cmp = -1;
+          else if (ib !== -1) cmp = 1;
+          else cmp = a.label.localeCompare(b.label, 'ko');
+        } else {
+          cmp = a.label.localeCompare(b.label, 'ko');
+        }
+      }
       else if (sortKey === 'count') cmp = a.count - b.count;
       else cmp = a.amount - b.amount;
       return sortDir === 'asc' ? cmp : -cmp;
