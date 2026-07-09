@@ -1,6 +1,6 @@
-// v3.94 | 2026-07-09 KST | 수정: 기부금영수증 PDF 파일명에 .normalize('NFC') 적용 — iOS 저장 후 Windows 등으로 옮길 때 한글 자모가 분해되어 깨져 보이던 문제(NFD→NFC) 방지 | cache:v298
+// v3.95 | 2026-07-10 KST | 수정: 로그아웃 후 순간적인 네트워크 오류가 '비밀번호 없음'으로 오인되어 최초 설정 화면이 잘못 뜨던 문제 해결 — getAdminPasswordFromFirebase()가 조회 실패를 null로 뭉개지 않고 예외로 전파하도록 변경, 관련 호출부(설정탭 로그인, 로그인모드 안내문구, FAB 잠금해제 프롬프트) 모두 네트워크 오류와 '비밀번호 미설정'을 구분해서 처리 | cache:v299
 'use strict';
-const APP_VERSION = 'v3.94 (cache v298)';
+const APP_VERSION = 'v3.95 (cache v299)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -22,8 +22,8 @@ async function getAdminPasswordFromFirebase() {
       return rec ? rec.value : null;
     } catch(e) { return null; }
   }
-  try { return await fbGet('churchData/adminPassword'); }
-  catch(e) { return null; }
+  // 네트워크 오류는 '비밀번호 없음'과 구분해야 하므로 여기서 삼키지 않고 그대로 던진다.
+  return await fbGet('churchData/adminPassword');
 }
 
 // 비밀번호 저장 (Firebase or IndexedDB)
@@ -65,8 +65,15 @@ function showPasswordPrompt(onSuccess, onCancel) {
   const tryLogin = async () => {
     const pw = input.value;
     if (!pw) { error.textContent = '비밀번호를 입력해주세요'; return; }
-    // Firebase에서 비밀번호 확인
-    const saved = await getAdminPasswordFromFirebase();
+    error.textContent = '확인 중...';
+    let saved;
+    try {
+      // Firebase에서 비밀번호 확인
+      saved = await getAdminPasswordFromFirebase();
+    } catch (e) {
+      error.textContent = '네트워크 오류 — 다시 시도해주세요';
+      return;
+    }
     if (!saved) { error.textContent = '비밀번호가 설정되지 않았어요 (설정에서 등록)'; return; }
     if (pw.trim() === String(saved).trim()) {
       setIsAdmin(true);
@@ -6437,18 +6444,27 @@ function renderSettings() {
     if (loginInp) loginInp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
     // 비밀번호가 한 번도 설정되지 않았으면 안내문구를 '최초 설정' 모드로 전환
+    // 주의: 네트워크 오류로 확인에 실패한 경우를 '비밀번호 없음'과 반드시 구분해야 함.
+    // (구분하지 않으면 로그아웃 직후 순간적인 네트워크 오류만으로 최초 설정 화면이 떠서,
+    //  기존 비밀번호가 새로 입력한 값으로 덮어써질 위험이 있었음)
     (async () => {
+      let saved;
       try {
-        const saved = await getAdminPasswordFromFirebase();
-        if (!saved) {
-          const lbl = page.querySelector('#loginModeLabel');
-          const sub = page.querySelector('#loginModeSub');
-          if (lbl) lbl.textContent = '🔑 비밀번호 최초 설정';
-          if (sub) sub.textContent = '로그인을 위해 비밀번호를 설정하세요';
-          if (loginInp) loginInp.placeholder = '사용할 비밀번호 입력 (4자 이상)';
-          btnLogin.textContent = '비밀번호 설정';
-        }
-      } catch(e) {}
+        saved = await getAdminPasswordFromFirebase();
+      } catch (e) {
+        // 조회 자체가 실패한 것 — 비밀번호가 없다고 단정하지 말고 경고만 표시
+        const sub = page.querySelector('#loginModeSub');
+        if (sub) sub.textContent = '⚠️ 네트워크 연결을 확인해주세요';
+        return;
+      }
+      if (!saved) {
+        const lbl = page.querySelector('#loginModeLabel');
+        const sub = page.querySelector('#loginModeSub');
+        if (lbl) lbl.textContent = '🔑 비밀번호 최초 설정';
+        if (sub) sub.textContent = '로그인을 위해 비밀번호를 설정하세요';
+        if (loginInp) loginInp.placeholder = '사용할 비밀번호 입력 (4자 이상)';
+        btnLogin.textContent = '비밀번호 설정';
+      }
     })();
   }
 
