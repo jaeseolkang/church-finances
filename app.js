@@ -1,6 +1,6 @@
-// v3.93 | 2026-07-09 KST | 수정: 기부금영수증 폰트 크기가 지정값(13px/11px)대로 안 보이던 문제 해결 — iOS Safari의 텍스트 자동 확대(text-size-adjust) 기능이 넓은 colspan 셀(주소)을 좁은 셀(성명)보다 더 키우던 것을, PDF캡처박스·프린트CSS·화면미리보기 3곳에 -webkit-text-size-adjust:100% 적용해 비활성화 | cache:v297
+// v3.94 | 2026-07-09 KST | 수정: 기부금영수증 PDF 파일명에 .normalize('NFC') 적용 — iOS 저장 후 Windows 등으로 옮길 때 한글 자모가 분해되어 깨져 보이던 문제(NFD→NFC) 방지 | cache:v298
 'use strict';
-const APP_VERSION = 'v3.93 (cache v297)';
+const APP_VERSION = 'v3.94 (cache v298)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6801,7 +6801,7 @@ async function buildReceiptPdf(rec) {
     const x = (pageW - imgW) / 2;
     const y = (pageH - imgH) / 2;
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, imgW, imgH);
-    const fileName = `기부금영수증_${rec.serial}_${rec.primary.name}.pdf`;
+    const fileName = `기부금영수증_${rec.serial}_${rec.primary.name}.pdf`.normalize('NFC');
     return { pdf, fileName };
   } finally {
     box.remove();
