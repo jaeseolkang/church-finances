@@ -1,4 +1,4 @@
-// v3.90 | 2026-07-09 KST | 수정: 기부금영수증 PDF에서 명부 데이터로 채워지는 칸(기부자 성명·주민등록번호·주소, 기부금단체 단체명·사업자등록번호·소재지)의 글자 크기가 13px로 라벨(11px)보다 컸던 것을 12px로 통일 | cache:v294
+// v3.91 | 2026-07-09 KST | 수정: 기부금영수증 PDF 기부금 수령인란의 성명(입력 데이터)도 12px로 통일 (양식 라벨 "기부금 수령인"은 기존 크기 유지) | cache:v295
 'use strict';
 const APP_VERSION = 'v3.90 (cache v294)';
 
@@ -6739,7 +6739,7 @@ function donationReceiptHTMLBody(rec) {
       <div style="display:flex;justify-content:flex-end;">신청인&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명 또는 인)</div>
       <div style="margin-top:6px;">위와 같이 기부금을 기부받았음을 증명합니다.</div>
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px;position:relative;">
-        <span style="font-size:13.5px;">기부금 수령인&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${escapeHTML(rec.church.receiverLine)} (서명 또는 인)</span>
+        <span style="font-size:13.5px;">기부금 수령인&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size:12px;">${escapeHTML(rec.church.receiverLine)}</span> (서명 또는 인)</span>
         ${seal ? `<img src="${seal}" style="width:90px;height:90px;object-fit:contain;position:absolute;right:4px;top:-65px;opacity:0.92;">` : ''}
       </div>
     </div>
