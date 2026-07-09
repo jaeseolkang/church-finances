@@ -1,6 +1,6 @@
-// v3.92 | 2026-07-09 KST | 수정: 기부금영수증 1·2번 표 성명/주민등록번호 13px, 주소 11px로 재조정 | cache:v296
+// v3.93 | 2026-07-09 KST | 수정: 기부금영수증 폰트 크기가 지정값(13px/11px)대로 안 보이던 문제 해결 — iOS Safari의 텍스트 자동 확대(text-size-adjust) 기능이 넓은 colspan 셀(주소)을 좁은 셀(성명)보다 더 키우던 것을, PDF캡처박스·프린트CSS·화면미리보기 3곳에 -webkit-text-size-adjust:100% 적용해 비활성화 | cache:v297
 'use strict';
-const APP_VERSION = 'v3.92 (cache v296)';
+const APP_VERSION = 'v3.93 (cache v297)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1208,7 +1208,7 @@ function doPrint(html) {
 function _doPrintBlob(html) {
   const printCSS = `
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
-    html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;background:#fff;}
+    html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;background:#fff;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
     table{border-collapse:collapse;width:100%;font-size:7.5pt;}
     th{background:#1F4E79!important;color:#fff!important;padding:2.5pt 3pt;border:0.5pt solid #3a6fa0!important;font-size:7.5pt;font-weight:700;}
     td{padding:2pt 3pt;border:0.5pt solid #aaa!important;font-size:7.5pt;min-width:0;}
@@ -6655,7 +6655,7 @@ function renderDonationReceiptHTML() {
 
       <div id="donReceiptCard" class="card" style="display:none;padding:14px 16px;margin-bottom:14px;">
         <div style="font-weight:800;font-size:13.5px;margin-bottom:10px;">미리보기</div>
-        <div id="donReceiptPreview" style="border:1px solid var(--border);border-radius:10px;padding:14px;background:#fff;font-size:11px;color:#111;overflow-x:auto;"></div>
+        <div id="donReceiptPreview" style="border:1px solid var(--border);border-radius:10px;padding:14px;background:#fff;font-size:11px;color:#111;overflow-x:auto;-webkit-text-size-adjust:100%;text-size-adjust:100%;"></div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button id="donPrintBtn" style="flex:1;padding:12px;border-radius:10px;background:var(--primary-light);color:var(--primary);font-weight:800;font-size:14px;border:none;">🖨️ 인쇄</button>
           <button id="donPdfBtn" style="flex:1;padding:12px;border-radius:10px;background:var(--primary);color:#fff;font-weight:800;font-size:14px;border:none;">⬇️ PDF로 저장</button>
@@ -6785,7 +6785,7 @@ async function buildReceiptPdf(rec) {
     throw new Error('PDF 라이브러리를 불러오지 못했습니다');
   }
   const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#fff;padding:24px 14px;box-sizing:border-box;';
+  box.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#fff;padding:24px 14px;box-sizing:border-box;-webkit-text-size-adjust:100%;text-size-adjust:100%;';
   box.innerHTML = donationReceiptHTMLBody(rec);
   document.body.appendChild(box);
   try {
