@@ -1,6 +1,6 @@
-// v3.86 | 2026-07-09 KST | 심각한 버그 수정: calcAcctBalanceMap()에서 "대표계정이 아닌 계좌"에서 다른 계좌로 예금 이체를 한 경우(예: 건축계정→정기건축3), 도착 계좌 쪽 입금이 반영 안 되고 완전히 누락되던 문제. 정기계정 12개 잔액이 잘못 계산되고 있었음(0원 또는 마이너스로 표시). 계정 탭, 만기알림 메일 등 이 함수를 쓰는 모든 화면에 영향. 실제 데이터로 검증 완료 | cache:v290
+// v3.87 | 2026-07-09 KST | 수정: ①설정>항목관리에서 "예금"/"통장이동"처럼 항목이 "통장"이라는 중분류 밑에 모여있는 경우, 그 안의 소분류를 생성순서로만 정렬하던 함수(subItemsOfGroup)를 이름순 정렬로 수정 ②계좌를 새로 만들거나 이름을 바꿀 때 "통장이동"·"예금" 카테고리 양쪽에 자동으로 같은 이름의 항목이 생기도록(또는 이름 동기화) 만들어서, 앞으로 "계좌는 있는데 거래입력엔 안 보이는" 누락이 안 생기게 함 | cache:v291
 'use strict';
-const APP_VERSION = 'v3.86 (cache v290)';
+const APP_VERSION = 'v3.87 (cache v291)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -650,7 +650,7 @@ function subGroupsOfCategory(catId) {
 function subItemsOfGroup(groupId) {
   return State.subItems
     .filter(s => s.subGroupId === groupId)
-    .sort((a,b) => (a.order??0)-(b.order??0));
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko') || (a.order??0)-(b.order??0));
 }
 
 // 한 대분류(예: 헌금) 안의 모든 중분류(헌금자 이름)들이 공통으로 가져야 하는
@@ -10358,6 +10358,26 @@ async function openLinkedAccountEditSheet(acct, kind) {
     // 이 화면에서 입력한 값이 실제로 통계/계정 화면에 반영된다.
     if (isDefaultChk) {
       await setYearCarryover(earliestYear, carryover);
+    } else {
+      // 대표계정이 아닌 계좌는 "통장이동"(수입)·"예금"(지출) 카테고리에 같은 이름의 소분류가
+      // 있어야 거래입력 화면에서 입출금을 기록할 수 있다. 새로 계좌를 만들거나 이름을
+      // 바꿀 때 두 카테고리 모두에 자동으로 만들어/이름을 맞춰줘서, 나중에 "항목은 있는데
+      // 거래입력에는 안 보인다"는 누락이 안 생기게 한다.
+      const tongCat = State.categories.find(c => c.name === '통장이동' && c.type === 'income');
+      const expCat  = State.categories.find(c => c.name === '예금' && c.type === 'expense');
+      const oldName = isNew ? null : acct.name;
+      for (const cat of [tongCat, expCat]) {
+        if (!cat) continue;
+        const items = (State.subItems||[]).filter(s => s.categoryId === cat.id);
+        if (!isNew && oldName && oldName !== name) {
+          // 이름이 바뀐 경우: 예전 이름과 일치하는 소분류를 새 이름으로 같이 변경
+          const matched = items.find(s => s.name === oldName);
+          if (matched) { matched.name = name; await DB.put('subItems', matched); continue; }
+        }
+        if (!items.some(s => s.name === name)) {
+          await DB.put('subItems', { id: uid(), categoryId: cat.id, name, order: items.length, budget: 0 });
+        }
+      }
     }
     await reloadData();
     // 대표계정이면 selectedAccountId도 업데이트
