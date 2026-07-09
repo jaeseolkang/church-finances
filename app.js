@@ -1,6 +1,6 @@
-// v3.88 | 2026-07-09 KST | 수정: 설정>항목관리에서 대분류가 정렬 없이(생성순서로) 나열되던 것을 이름순 정렬로 수정 — 중분류/소분류는 지난번에 이미 정렬되어 있었고, 이제 대분류까지 포함해 이 화면의 세 단계(대분류·중분류·소분류) 전부 이름순으로 나옴 | cache:v292
+// v3.90 | 2026-07-09 KST | 수정: 기부금영수증 PDF에서 명부 데이터로 채워지는 칸(기부자 성명·주민등록번호·주소, 기부금단체 단체명·사업자등록번호·소재지)의 글자 크기가 13px로 라벨(11px)보다 컸던 것을 12px로 통일 | cache:v294
 'use strict';
-const APP_VERSION = 'v3.88 (cache v292)';
+const APP_VERSION = 'v3.90 (cache v294)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6660,6 +6660,7 @@ function renderDonationReceiptHTML() {
           <button id="donPrintBtn" style="flex:1;padding:12px;border-radius:10px;background:var(--primary-light);color:var(--primary);font-weight:800;font-size:14px;border:none;">🖨️ 인쇄</button>
           <button id="donPdfBtn" style="flex:1;padding:12px;border-radius:10px;background:var(--primary);color:#fff;font-weight:800;font-size:14px;border:none;">⬇️ PDF로 저장</button>
         </div>
+        <button id="donShareBtn" style="width:100%;padding:12px;border-radius:10px;background:#F0FBF4;color:#227A4C;font-weight:800;font-size:14px;border:none;margin-top:8px;">📤 공유하기 (메일·카톡·문자 등)</button>
         <div id="donPdfStatus" style="font-size:11.5px;color:var(--text-3);margin-top:8px;text-align:center;"></div>
       </div>
 
@@ -6686,21 +6687,21 @@ function donationReceiptHTMLBody(rec) {
     <div style="font-weight:800;font-size:12px;margin:14px 0 4px;">1. 기부자</div>
     <table style="width:100%;border-collapse:collapse;">
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">성&nbsp;&nbsp;&nbsp;&nbsp;명</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.primary.name)}</td>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.primary.name)}</td>
           <td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">주민등록번호<br><span style="font-weight:400;font-size:9.5px;">(사업자등록번호)</span></td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.primary.residentId||'')}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.primary.residentId||'')}</td></tr>
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;">주&nbsp;&nbsp;&nbsp;&nbsp;소</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;" colspan="3">${escapeHTML(rec.primary.address||'')}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;" colspan="3">${escapeHTML(rec.primary.address||'')}</td></tr>
     </table>
 
     <div style="font-weight:800;font-size:12px;margin:14px 0 4px;">2. 기부금 단체</div>
     <table style="width:100%;border-collapse:collapse;">
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">단 체 명</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.church.name)}</td>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.church.name)}</td>
           <td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">주민등록번호<br><span style="font-weight:400;font-size:9.5px;">(사업자등록번호)</span></td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.church.bizNo)}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.church.bizNo)}</td></tr>
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;">소 재 지</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;" colspan="3">${escapeHTML(rec.church.addr)}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;" colspan="3">${escapeHTML(rec.church.addr)}</td></tr>
     </table>
 
     <div style="font-weight:800;font-size:12px;margin:14px 0 4px;">3. 기부금 모집처(언론기관 등)</div>
@@ -6778,20 +6779,15 @@ function donationReceiptHTMLBody(rec) {
   `;
 }
 
-// 영수증을 실제 PDF 파일로 만들어서 다운로드 (html2canvas로 캡처 -> jsPDF에 A4로 삽입)
-async function downloadReceiptPDF(rec, statusEl) {
+// 영수증 PDF 생성 공통 로직 (html2canvas로 캡처 -> jsPDF에 A4로 삽입). jsPDF 객체와 파일명을 반환.
+async function buildReceiptPdf(rec) {
   if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
-    showToast('PDF 기능을 불러오지 못했어요. 새로고침 후 다시 시도해주세요');
-    return;
+    throw new Error('PDF 라이브러리를 불러오지 못했습니다');
   }
-  if (statusEl) statusEl.textContent = 'PDF 생성 중...';
-
-  // 화면 밖에 A4 비율(210:297)의 흰 배경 컨테이너를 만들어 그 안에 영수증을 렌더링
   const box = document.createElement('div');
   box.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#fff;padding:24px 14px;box-sizing:border-box;';
   box.innerHTML = donationReceiptHTMLBody(rec);
   document.body.appendChild(box);
-
   try {
     const canvas = await html2canvas(box, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
     const { jsPDF } = window.jspdf;
@@ -6805,14 +6801,54 @@ async function downloadReceiptPDF(rec, statusEl) {
     const x = (pageW - imgW) / 2;
     const y = (pageH - imgH) / 2;
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, imgW, imgH);
-    pdf.save(`기부금영수증_${rec.serial}_${rec.primary.name}.pdf`);
+    const fileName = `기부금영수증_${rec.serial}_${rec.primary.name}.pdf`;
+    return { pdf, fileName };
+  } finally {
+    box.remove();
+  }
+}
+
+async function downloadReceiptPDF(rec, statusEl) {
+  if (statusEl) statusEl.textContent = 'PDF 생성 중...';
+  try {
+    const { pdf, fileName } = await buildReceiptPdf(rec);
+    pdf.save(fileName);
     if (statusEl) statusEl.textContent = '✅ PDF로 저장됐어요';
   } catch (e) {
     console.error('PDF 생성 오류:', e);
     showToast('PDF 생성에 실패했어요');
     if (statusEl) statusEl.textContent = '';
   } finally {
-    box.remove();
+    if (statusEl) setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  }
+}
+
+// 메일·카카오톡·문자 등으로 바로 보낼 수 있게 기기의 공유 시트를 연다.
+// (파일 공유를 지원 안 하는 환경이면 대신 PDF 다운로드로 대체)
+async function shareReceiptPDF(rec, statusEl) {
+  if (statusEl) statusEl.textContent = '공유 준비 중...';
+  try {
+    const { pdf, fileName } = await buildReceiptPdf(rec);
+    const blob = pdf.output('blob');
+    const file = new File([blob], fileName, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: `기부금영수증 — ${rec.primary.name}`,
+        text: `${rec.issueDate} 발급 기부금영수증 (${rec.serial})`,
+      });
+      if (statusEl) statusEl.textContent = '';
+    } else {
+      showToast('이 기기/브라우저는 공유를 지원하지 않아 PDF로 대신 저장했어요');
+      pdf.save(fileName);
+      if (statusEl) statusEl.textContent = '';
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') { if (statusEl) statusEl.textContent = ''; return; } // 사용자가 공유 취소함
+    console.error('공유 오류:', e);
+    showToast('공유에 실패했어요');
+    if (statusEl) statusEl.textContent = '';
+  } finally {
     if (statusEl) setTimeout(() => { statusEl.textContent = ''; }, 2500);
   }
 }
@@ -6956,6 +6992,7 @@ async function initDonationReceiptView(page) {
       doPrint(`<div class="print-page"><div class="page-inner">${donationReceiptHTMLBody(rec)}</div></div>`);
     };
     page.querySelector('#donPdfBtn').onclick = () => downloadReceiptPDF(rec, page.querySelector('#donPdfStatus'));
+    page.querySelector('#donShareBtn').onclick = () => shareReceiptPDF(rec, page.querySelector('#donPdfStatus'));
   }
 
   page.querySelector('#donLogWrap').addEventListener('click', async (e) => {

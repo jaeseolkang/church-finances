@@ -1,6 +1,6 @@
-// 2026-07-09 KST | CACHE_NAME v2100 (항목관리 대분류도 이름순 정렬)
+// 2026-07-09 KST | CACHE_NAME v2102 (기부금영수증 폰트 크기 12px 통일)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2100';
+const CACHE_NAME = 'gaegyebu-v2102';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
