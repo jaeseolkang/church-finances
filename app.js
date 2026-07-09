@@ -1,4 +1,4 @@
-// v3.91 | 2026-07-09 KST | 수정: 기부금영수증 PDF 기부금 수령인란의 성명(입력 데이터)도 12px로 통일 (양식 라벨 "기부금 수령인"은 기존 크기 유지) | cache:v295
+// v3.92 | 2026-07-09 KST | 수정: 기부금영수증 1·2번 표 성명/주민등록번호 13px, 주소 11px로 재조정 | cache:v296
 'use strict';
 const APP_VERSION = 'v3.90 (cache v294)';
 
@@ -6687,21 +6687,21 @@ function donationReceiptHTMLBody(rec) {
     <div style="font-weight:800;font-size:12px;margin:14px 0 4px;">1. 기부자</div>
     <table style="width:100%;border-collapse:collapse;">
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">성&nbsp;&nbsp;&nbsp;&nbsp;명</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.primary.name)}</td>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.primary.name)}</td>
           <td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">주민등록번호<br><span style="font-weight:400;font-size:9.5px;">(사업자등록번호)</span></td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.primary.residentId||'')}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.primary.residentId||'')}</td></tr>
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;">주&nbsp;&nbsp;&nbsp;&nbsp;소</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;" colspan="3">${escapeHTML(rec.primary.address||'')}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:11px;" colspan="3">${escapeHTML(rec.primary.address||'')}</td></tr>
     </table>
 
     <div style="font-weight:800;font-size:12px;margin:14px 0 4px;">2. 기부금 단체</div>
     <table style="width:100%;border-collapse:collapse;">
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">단 체 명</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.church.name)}</td>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.church.name)}</td>
           <td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;width:15%;">주민등록번호<br><span style="font-weight:400;font-size:9.5px;">(사업자등록번호)</span></td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;width:35%;">${escapeHTML(rec.church.bizNo)}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:13px;width:35%;">${escapeHTML(rec.church.bizNo)}</td></tr>
       <tr><td style="border:1px solid #333;padding:6px 8px;font-size:11px;background:#F2F4F8;font-weight:700;text-align:center;">소 재 지</td>
-          <td style="border:1px solid #333;padding:6px 8px;font-size:12px;" colspan="3">${escapeHTML(rec.church.addr)}</td></tr>
+          <td style="border:1px solid #333;padding:6px 8px;font-size:11px;" colspan="3">${escapeHTML(rec.church.addr)}</td></tr>
     </table>
 
     <div style="font-weight:800;font-size:12px;margin:14px 0 4px;">3. 기부금 모집처(언론기관 등)</div>
