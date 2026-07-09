@@ -1,6 +1,6 @@
-// v3.87 | 2026-07-09 KST | 수정: ①설정>항목관리에서 "예금"/"통장이동"처럼 항목이 "통장"이라는 중분류 밑에 모여있는 경우, 그 안의 소분류를 생성순서로만 정렬하던 함수(subItemsOfGroup)를 이름순 정렬로 수정 ②계좌를 새로 만들거나 이름을 바꿀 때 "통장이동"·"예금" 카테고리 양쪽에 자동으로 같은 이름의 항목이 생기도록(또는 이름 동기화) 만들어서, 앞으로 "계좌는 있는데 거래입력엔 안 보이는" 누락이 안 생기게 함 | cache:v291
+// v3.88 | 2026-07-09 KST | 수정: 설정>항목관리에서 대분류가 정렬 없이(생성순서로) 나열되던 것을 이름순 정렬로 수정 — 중분류/소분류는 지난번에 이미 정렬되어 있었고, 이제 대분류까지 포함해 이 화면의 세 단계(대분류·중분류·소분류) 전부 이름순으로 나옴 | cache:v292
 'use strict';
-const APP_VERSION = 'v3.87 (cache v291)';
+const APP_VERSION = 'v3.88 (cache v292)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10503,7 +10503,8 @@ function renderCatTree(sheet) {
   const prevBody = sheet.querySelector('.sheet-body');
   const savedScrollTop = prevBody ? prevBody.scrollTop : 0;
 
-  const cats = State.categories.filter(c => c.type === catManageType);
+  const cats = State.categories.filter(c => c.type === catManageType)
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
   const year = catManageYear;
   const totalBudget = cats.reduce((s, c) => s + getBudget(c, year), 0);
   const isIncome = catManageType === 'income';
