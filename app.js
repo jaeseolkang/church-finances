@@ -1,6 +1,6 @@
-// v3.95 | 2026-07-10 KST | 수정: 로그아웃 후 순간적인 네트워크 오류가 '비밀번호 없음'으로 오인되어 최초 설정 화면이 잘못 뜨던 문제 해결 — getAdminPasswordFromFirebase()가 조회 실패를 null로 뭉개지 않고 예외로 전파하도록 변경, 관련 호출부(설정탭 로그인, 로그인모드 안내문구, FAB 잠금해제 프롬프트) 모두 네트워크 오류와 '비밀번호 미설정'을 구분해서 처리 | cache:v299
+// v3.96 | 2026-07-10 KST | 긴급수정: 거래내역 등 데이터 동기화(syncToFirebase)가 Firebase에 PUT으로 churchData 전체를 덮어써서, 그 하위 필드인 adminPassword가 동기화될 때마다 삭제되던 심각한 버그 수정 — 이 때문에 로그인 화면을 여는 사람마다 "비밀번호 없음"으로 오인되어 매번 새 비밀번호를 등록하게 되고, 결과적으로 비밀번호가 계속 바뀌는 것처럼 보였음. syncToFirebase()가 PUT(fbSet) 대신 PATCH(신규 fbUpdate)를 사용해 churchData의 다른 형제 필드(adminPassword)를 보존하도록 변경 | cache:v300
 'use strict';
-const APP_VERSION = 'v3.95 (cache v299)';
+const APP_VERSION = 'v3.96 (cache v300)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -136,6 +136,19 @@ async function fbSet(path, data) {
   return res.json();
 }
 
+// PATCH 방식 — 지정한 필드만 갱신하고 나머지 형제 필드(예: adminPassword)는 보존한다.
+// PUT은 해당 경로를 통째로 덮어써서 명시하지 않은 하위 필드를 전부 삭제하므로,
+// churchData처럼 여러 종류의 데이터가 함께 있는 경로에는 반드시 PATCH를 써야 한다.
+async function fbUpdate(path, data) {
+  const res = await fetch(`${FB_URL}/${path}.json`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('FB PATCH failed: ' + res.status);
+  return res.json();
+}
+
 // Firebase에 전체 데이터 저장
 async function syncToFirebase() {
   if (!USE_FIREBASE) return false;
@@ -151,7 +164,7 @@ async function syncToFirebase() {
       transactions: State.transactions,
       templates: allTemplates || [],
     };
-    await fbSet('churchData', data);
+    await fbUpdate('churchData', data);
     console.log('Firebase sync OK');
     return true;
   } catch (e) {
