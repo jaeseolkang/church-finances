@@ -1,6 +1,8 @@
-// v3.97 | 2026-07-21 KST | 수정: 통계-월간-리스트(printLedgerRange) 인쇄 시 페이지당 30행으로 강제 분할하던 로직 제거. 표를 월별로 하나의 연속된 <table>로 두고 브라우저의 page-break-inside:auto 자동 페이지네이션에 맡겨서, 각 페이지 하단에 여백이 남은 채 다음 페이지로 넘어가던 문제를 해결(모든 페이지가 마지막 페이지처럼 끝까지 채워짐) | cache:v301
+// v3.98 | 2026-07-21 KST | 수정: PC 인쇄(#print-area)와 모바일 인쇄(새 탭 blob)가 서로 다른 CSS를
+// 쓰던 것을 getPrintCSS() 하나로 통일하고, 통계-월간-리스트 결재란(사인방)을 표 바깥 <div>가 아닌
+// 표 안의 <tr> 행으로 옮겨서 모바일 인쇄 시 마지막 페이지의 결재란이 사라지던 문제를 해결 | cache:v302
 'use strict';
-const APP_VERSION = 'v3.97 (cache v301)';
+const APP_VERSION = 'v3.98 (cache v302)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1202,6 +1204,10 @@ const TABS = [
 ];
 
 /* ── 공통 인쇄 헬퍼 ── */
+// 2026-07-21 KST | 수정: PC 인쇄(#print-area, index.html의 전역 스타일 의존)와 모바일 인쇄
+// (_doPrintBlob, 아래 getPrintCSS() 내장 스타일)가 서로 다른 CSS를 사용해서 같은 인쇄 결과물이
+// 기기에 따라 다르게 나오던 문제를 해결. 이제 PC 인쇄 시에도 getPrintCSS()를 <style>로 직접
+// 주입해서 모바일과 완전히 동일한 페이지 분할 규칙을 사용하도록 통일.
 function doPrint(html) {
   // iOS에서 홈 화면에 설치한 앱(독립 실행 모드, standalone)은 window.print() 자체가 작동하지 않는다.
   // 그래서 모바일은 반드시 "새 사파리 탭"으로 열어야 인쇄가 된다 — PC와 통일했다가 이 제약을
@@ -1215,9 +1221,17 @@ function doPrint(html) {
     const area = document.getElementById('print-area');
     area.innerHTML = html;
     area.style.display = 'block';
+    let styleTag = document.getElementById('printStyleInject');
+    if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'printStyleInject';
+      document.head.appendChild(styleTag);
+    }
+    styleTag.textContent = getPrintCSS();
     const cleanup = () => {
       area.style.display = 'none';
       area.innerHTML = '';
+      if (styleTag && styleTag.parentNode) styleTag.parentNode.removeChild(styleTag);
       window.removeEventListener('afterprint', cleanup);
     };
     window.addEventListener('afterprint', cleanup);
@@ -1225,8 +1239,9 @@ function doPrint(html) {
   }
 }
 
-function _doPrintBlob(html) {
-  const printCSS = `
+// PC/모바일 인쇄가 공통으로 사용하는 스타일. 여기 한 곳만 고치면 두 플랫폼에 동일하게 반영된다.
+function getPrintCSS() {
+  return `
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
     html,body{margin:0;padding:0;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;font-size:9pt;color:#000;background:#fff;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
     table{border-collapse:collapse;width:100%;font-size:7.5pt;}
@@ -1252,6 +1267,7 @@ function _doPrintBlob(html) {
     #pivot-tbl col{width:var(--pcw);}
     #pivot-tbl th{font-size:6pt!important;padding:2pt 1pt!important;text-align:center!important;overflow:hidden!important;word-break:break-all!important;min-width:0!important;box-sizing:border-box!important;}
     #pivot-tbl td{font-size:6.5pt!important;padding:2pt 1pt!important;overflow:hidden!important;word-break:break-all!important;min-width:0!important;box-sizing:border-box!important;}
+    #print-area{display:block;}
     @media print{
       @page{size:A4 portrait;margin:15mm 12mm;}
       .print-page{
@@ -1270,6 +1286,10 @@ function _doPrintBlob(html) {
       #print-btn{display:none!important;}
     }
   `;
+}
+
+function _doPrintBlob(html) {
+  const printCSS = getPrintCSS();
 
   const fullHTML = `<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8">
@@ -3404,10 +3424,18 @@ function printLedgerRange(range) {
   </tr></thead>`;
 
   const approvalSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCAyNDAgODAiPgogIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIzMCIgaGVpZ2h0PSI4MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIzMCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjE3MCIgeT0iMCIgd2lkdGg9IjcwIiBoZWlnaHQ9IjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjMwIiB5PSIxNiIgd2lkdGg9IjcwIiBoZWlnaHQ9IjY0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgogIDxyZWN0IHg9IjEwMCIgeT0iMTYiIHdpZHRoPSI3MCIgaGVpZ2h0PSI2NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIxNzAiIHk9IjE2IiB3aWR0aD0iNzAiIGhlaWdodD0iNjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHRleHQgeD0iMTUiIHk9IjQ0IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgd3JpdGluZy1tb2RlPSJ0YiI+6rKw7J6sPC90ZXh0PgogIDx0ZXh0IHg9IjY1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7ri7Tri7k8L3RleHQ+CiAgPHRleHQgeD0iMTM1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7rtoDsnqU8L3RleHQ+CiAgPHRleHQgeD0iMjA1IiB5PSI4IiBmb250LWZhbWlseT0iJ+unkeydgCDqs6DrlJUnLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjkiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7ri7TsnoTrqqnsgqw8L3RleHQ+Cjwvc3ZnPg==';
-  const approvalBox = `
-    <div style="page-break-inside:avoid;break-inside:avoid;margin-top:6pt;display:flex;justify-content:flex-end;">
-      <img src="${approvalSvg}" style="width:65%;height:auto;" alt="결재란">
-    </div>`;
+  // 2026-07-21 KST | 수정: 결재란을 </table> 뒤에 붙는 별도 <div>가 아니라 같은 표의 <tr> 행으로
+  // 바꿈. 표 바깥의 형제 div는 브라우저(특히 모바일 Safari)마다 "다음 페이지로 넘길지, 그냥
+  // 잘라버릴지" 판단이 달라서 모바일 인쇄에서만 결재란(사인방)이 통째로 사라지는 문제가 있었음.
+  // 데이터 행/결산 행과 똑같이 표 안의 한 행으로 넣으면, 이미 정상 동작 중인 표의 행 단위
+  // page-break-inside:avoid 로직을 그대로 타서 PC/모바일 모두 동일하게 렌더링된다.
+  const approvalRow = `<tr style="page-break-inside:avoid;">
+    <td colspan="7" style="border:none!important;background:transparent!important;padding:6pt 0 0;">
+      <div style="display:flex;justify-content:flex-end;">
+        <img src="${approvalSvg}" style="width:65%;height:auto;" alt="결재란">
+      </div>
+    </td>
+  </tr>`;
 
   // 2026-07-21 KST | 수정: 페이지당 30행 강제 분할을 제거. 표가 브라우저의 자연스러운
   // page-break-inside:auto 로직에 따라 실제 페이지 높이만큼 스스로 채워지도록 변경해서,
@@ -3445,10 +3473,8 @@ function printLedgerRange(range) {
       ${monthTitle}
       <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
         ${colgroup}${makeHead()}
-        <tbody>${dataRowsHTML}</tbody>
-        <tbody>${summaryRowsHTML}</tbody>
+        <tbody>${dataRowsHTML}${summaryRowsHTML}${approvalRow}</tbody>
       </table>
-      ${approvalBox}
     </div></div>`);
   });
 
