@@ -1,6 +1,6 @@
-// 2026-07-10 KST | CACHE_NAME v2108 (동기화 시 관리자 비밀번호가 삭제되던 버그 수정)
+// 2026-07-21 KST | CACHE_NAME v2109 (통계-월간-리스트 인쇄 시 페이지 여백 남는 문제 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2108';
+const CACHE_NAME = 'gaegyebu-v2109';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

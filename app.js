@@ -1,6 +1,6 @@
-// v3.96 | 2026-07-10 KST | 긴급수정: 거래내역 등 데이터 동기화(syncToFirebase)가 Firebase에 PUT으로 churchData 전체를 덮어써서, 그 하위 필드인 adminPassword가 동기화될 때마다 삭제되던 심각한 버그 수정 — 이 때문에 로그인 화면을 여는 사람마다 "비밀번호 없음"으로 오인되어 매번 새 비밀번호를 등록하게 되고, 결과적으로 비밀번호가 계속 바뀌는 것처럼 보였음. syncToFirebase()가 PUT(fbSet) 대신 PATCH(신규 fbUpdate)를 사용해 churchData의 다른 형제 필드(adminPassword)를 보존하도록 변경 | cache:v300
+// v3.97 | 2026-07-21 KST | 수정: 통계-월간-리스트(printLedgerRange) 인쇄 시 페이지당 30행으로 강제 분할하던 로직 제거. 표를 월별로 하나의 연속된 <table>로 두고 브라우저의 page-break-inside:auto 자동 페이지네이션에 맡겨서, 각 페이지 하단에 여백이 남은 채 다음 페이지로 넘어가던 문제를 해결(모든 페이지가 마지막 페이지처럼 끝까지 채워짐) | cache:v301
 'use strict';
-const APP_VERSION = 'v3.96 (cache v300)';
+const APP_VERSION = 'v3.97 (cache v301)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3409,11 +3409,14 @@ function printLedgerRange(range) {
       <img src="${approvalSvg}" style="width:65%;height:auto;" alt="결재란">
     </div>`;
 
-  const ROWS_PER_PAGE = 30;
+  // 2026-07-21 KST | 수정: 페이지당 30행 강제 분할을 제거. 표가 브라우저의 자연스러운
+  // page-break-inside:auto 로직에 따라 실제 페이지 높이만큼 스스로 채워지도록 변경해서,
+  // 매 페이지 하단에 여백이 남고 다음 페이지로 넘어가던 문제를 해결(월별로 한 장(div)에
+  // 전체 표를 담고, 물리적 페이지 분할은 브라우저 인쇄 엔진이 처리하도록 위임).
   const pages = [];
 
   sections.forEach(sec => {
-    const dataRowsArr = sec.rows.map(r => `<tr>
+    const dataRowsHTML = sec.rows.map(r => `<tr>
       <td style="${TD2}text-align:center;">${r.date.slice(5)}</td>
       <td style="${TD2}">${escapeHTML(r.cat)}</td>
       <td style="${TD2}">${escapeHTML(r.major)}</td>
@@ -3421,7 +3424,7 @@ function printLedgerRange(range) {
       <td style="${TD2}text-align:right;color:#1F497D;">${r.income ? r.income.toLocaleString('ko-KR') : ''}</td>
       <td style="${TD2}text-align:right;color:#CC0000;">${r.expense ? '-'+r.expense.toLocaleString('ko-KR') : ''}</td>
       <td style="${TD2}text-align:right;">${r.acc.toLocaleString('ko-KR')}</td>
-    </tr>`);
+    </tr>`).join('');
 
     const summaryRowsHTML = [
       [sec.month+'월 결산', '수입/지출', sec.inc, sec.exp],
@@ -3438,30 +3441,15 @@ function printLedgerRange(range) {
 
     const monthTitle = `<div style="font-size:11pt;font-weight:800;margin-bottom:4pt;">${sec.year}년 ${sec.month}월</div>`;
 
-    if (dataRowsArr.length === 0) {
-      pages.push(`<div class="print-page"><div class="page-inner">
-        ${monthTitle}
-        <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
-          ${colgroup}${makeHead()}
-          <tbody>${summaryRowsHTML}</tbody>
-        </table>
-        ${approvalBox}
-      </div></div>`);
-    } else {
-      for (let i = 0; i < dataRowsArr.length; i += ROWS_PER_PAGE) {
-        const chunk = dataRowsArr.slice(i, i + ROWS_PER_PAGE).join('');
-        const isLast = i + ROWS_PER_PAGE >= dataRowsArr.length;
-        pages.push(`<div class="print-page"><div class="page-inner">
-          ${i === 0 ? monthTitle : ''}
-          <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
-            ${colgroup}${makeHead()}
-            <tbody>${chunk}</tbody>
-            ${isLast ? `<tbody>${summaryRowsHTML}</tbody>` : ''}
-          </table>
-          ${isLast ? approvalBox : ''}
-        </div></div>`);
-      }
-    }
+    pages.push(`<div class="print-page"><div class="page-inner">
+      ${monthTitle}
+      <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+        ${colgroup}${makeHead()}
+        <tbody>${dataRowsHTML}</tbody>
+        <tbody>${summaryRowsHTML}</tbody>
+      </table>
+      ${approvalBox}
+    </div></div>`);
   });
 
   doPrint(pages.join(''));
