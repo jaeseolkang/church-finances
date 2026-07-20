@@ -1,8 +1,11 @@
-// v3.98 | 2026-07-21 KST | 수정: PC 인쇄(#print-area)와 모바일 인쇄(새 탭 blob)가 서로 다른 CSS를
-// 쓰던 것을 getPrintCSS() 하나로 통일하고, 통계-월간-리스트 결재란(사인방)을 표 바깥 <div>가 아닌
-// 표 안의 <tr> 행으로 옮겨서 모바일 인쇄 시 마지막 페이지의 결재란이 사라지던 문제를 해결 | cache:v302
+// v3.99 | 2026-07-21 KST | 수정: 반복등록(추가-수입추가-헌금-이름-헌금종류)이 이름별로 따로
+// 저장되지 않고 대분류 전체에 하나로만 저장/적용되던 버그 수정. 이름(중분류=subGroup) 선택 후
+// 반복등록 저장/적용/해제 시 실제 안 쓰이던 옛 formPersonId 대신 formSubGroupId를 키로 사용하도록
+// 변경 — 이제 사람마다(예: A는 주일헌금만, B는 주일헌금+건축헌금+선교헌금) 각자 다른 반복등록을
+// 저장할 수 있음. ※기존에 저장해둔 반복등록(헌금 등 이름 있는 대분류)은 이름 구분 없이 저장돼
+// 있었기 때문에 이 업데이트 후에는 더 이상 자동 적용되지 않음 — 사람별로 다시 등록해야 함 | cache:v303
 'use strict';
-const APP_VERSION = 'v3.98 (cache v302)';
+const APP_VERSION = 'v3.99 (cache v303)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -7826,7 +7829,10 @@ async function getTemplates() { return await DB.getAll('templates'); }
 async function saveTemplate(tpl) { await DB.put('templates', tpl); }
 async function deleteTemplate(id) { await DB.del('templates', id); }
 
-// 반복 템플릿 키: 대분류+이름 조합마다 1개
+// 반복 템플릿 키: 대분류+이름(중분류=subGroup) 조합마다 1개.
+// 2026-07-21 KST | 수정: 호출부에서 이미 안 쓰는 옛 formPersonId 대신 실제 "이름" 식별자인
+// formSubGroupId를 넘기도록 고쳐서, 헌금처럼 이름별로 나뉘는 대분류에서 반복등록이 그동안
+// 이름 구분 없이 대분류 전체에 하나로만 저장되던 버그를 해결(이제 사람마다 따로 저장/적용됨).
 function tplKey(categoryId, personId) {
   return `${categoryId}:${personId || ''}`;
 }
@@ -8911,7 +8917,7 @@ function renderTxStepPick(sheet) {
         return;
       }
       // 반복 등록된 항목이면 금액 자동 적용
-      const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
+      const tpl = await getRepeatTpl(State.formCategoryId, State.formSubGroupId);
       if (tpl) {
         tpl.lines.forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
       }
@@ -9212,7 +9218,7 @@ async function renderTxStepItems(sheet) {
   }
 
   const total = Object.values(State.formAmounts).reduce((s, v) => s + (Number(v) || 0), 0);
-  const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
+  const tpl = await getRepeatTpl(State.formCategoryId, State.formSubGroupId);
   const hasTpl = !!tpl;
 
   sheet.innerHTML = `
@@ -9337,7 +9343,7 @@ async function renderTxStepItems(sheet) {
   const repeatDelBtn   = sheet.querySelector('#txRepeatDel');
   if (repeatApplyBtn) {
     repeatApplyBtn.addEventListener('click', async () => {
-      const tpl = await getRepeatTpl(State.formCategoryId, State.formPersonId);
+      const tpl = await getRepeatTpl(State.formCategoryId, State.formSubGroupId);
       if (!tpl) return;
       State.formAmounts = {};
       tpl.lines.forEach(l => { State.formAmounts[l.subItemId] = l.amount; });
@@ -9351,14 +9357,14 @@ async function renderTxStepItems(sheet) {
         .filter(([, v]) => Number(v) > 0)
         .map(([subItemId, amount]) => ({ subItemId, amount: Number(amount) }));
       if (lines.length === 0) { showToast('금액을 먼저 입력해주세요'); return; }
-      await saveRepeatTpl(State.formCategoryId, State.formPersonId, lines);
+      await saveRepeatTpl(State.formCategoryId, State.formSubGroupId, lines);
       showToast('🔄 반복 등록됐어요');
       await renderTxStepItems(sheet);
     });
   }
   if (repeatDelBtn) {
     repeatDelBtn.addEventListener('click', async () => {
-      await deleteRepeatTpl(State.formCategoryId, State.formPersonId);
+      await deleteRepeatTpl(State.formCategoryId, State.formSubGroupId);
       showToast('반복 해제됐어요');
       await renderTxStepItems(sheet);
     });

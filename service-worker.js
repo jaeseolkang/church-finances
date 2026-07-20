@@ -1,6 +1,6 @@
-// 2026-07-21 KST | CACHE_NAME v2110 (PC/모바일 인쇄 결과물 통일 + 결재란 모바일 누락 수정)
+// 2026-07-21 KST | CACHE_NAME v2111 (반복등록 이름별 분리 저장 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2110';
+const CACHE_NAME = 'gaegyebu-v2111';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
