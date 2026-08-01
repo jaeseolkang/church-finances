@@ -1,11 +1,9 @@
-// v3.99 | 2026-07-21 KST | 수정: 반복등록(추가-수입추가-헌금-이름-헌금종류)이 이름별로 따로
-// 저장되지 않고 대분류 전체에 하나로만 저장/적용되던 버그 수정. 이름(중분류=subGroup) 선택 후
-// 반복등록 저장/적용/해제 시 실제 안 쓰이던 옛 formPersonId 대신 formSubGroupId를 키로 사용하도록
-// 변경 — 이제 사람마다(예: A는 주일헌금만, B는 주일헌금+건축헌금+선교헌금) 각자 다른 반복등록을
-// 저장할 수 있음. ※기존에 저장해둔 반복등록(헌금 등 이름 있는 대분류)은 이름 구분 없이 저장돼
-// 있었기 때문에 이 업데이트 후에는 더 이상 자동 적용되지 않음 — 사람별로 다시 등록해야 함 | cache:v303
+// v3.100 | 2026-07-21 KST | 수정: 지출현황(#exp-page) 인쇄 시 대분류/중분류가 매 행마다 반복
+// 표시되던 것을, 화면(앱 UI)처럼 그룹 첫 행에만 표시하고 나머지는 비워서 병합된 것처럼 보이게
+// 함(rowspan은 페이지 분할과 충돌해 셀이 잘리는 버그가 있어 실제 병합 대신 라벨/테두리만 생략하는
+// 방식 사용) | cache:v304
 'use strict';
-const APP_VERSION = 'v3.99 (cache v303)';
+const APP_VERSION = 'v3.100 (cache v304)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3723,12 +3721,28 @@ function printStats() {
       const catTotal = flatRows.reduce((s,r)=>s+r.amt, 0);
       grandTotal += catTotal;
 
-      // rowspan 없이 모든 셀 명시 출력
+      // 2026-07-21 KST | 수정: 대분류/중분류를 매 행마다 반복 표시하던 것을, 화면(앱 UI)처럼
+      // 같은 그룹의 첫 행에만 표시하고 나머지는 비워서 "병합된 것처럼" 보이게 함. 실제 rowspan은
+      // 쓰지 않는다 — rowspan은 브라우저 자동 페이지분할과 충돌해 셀이 페이지 경계에서 잘리는
+      // 버그가 있어(위 주석 참고) 각 행을 계속 독립된 <tr>로 유지하고, 반복되는 라벨과 그 사이
+      // 테두리만 지워서 시각적으로만 하나로 이어 보이게 처리.
+      flatRows.forEach((r, idx) => {
+        const prev = flatRows[idx-1];
+        const next = flatRows[idx+1];
+        r.catFirst = idx === 0;
+        r.catLast  = idx === flatRows.length-1;
+        r.sgFirst  = !prev || prev.sgName !== r.sgName;
+        r.sgLast   = !next || next.sgName !== r.sgName;
+      });
+
+      // rowspan 없이 모든 셀을 각자 출력하되, 반복 라벨/테두리만 생략
       flatRows.forEach(r => {
         const remarkColor = r.remark && acctBalanceMap[r.subName] < 0 ? '#CC0000' : '#1F497D';
+        const catBorder = (r.catFirst?'':'border-top:none;') + (r.catLast?'':'border-bottom:none;');
+        const sgBorder  = (r.sgFirst?'':'border-top:none;') + (r.sgLast?'':'border-bottom:none;');
         tableRows += `<tr>
-          <td style="${SB('#fff','font-weight:700;text-align:center;')}">${escapeHTML(r.catName)}</td>
-          <td style="${SB('#DEEAF1')}">${escapeHTML(r.sgName)}</td>
+          <td style="${SB('#fff','font-weight:700;text-align:center;'+catBorder)}">${r.catFirst ? escapeHTML(r.catName) : ''}</td>
+          <td style="${SB('#DEEAF1', sgBorder)}">${r.sgFirst ? escapeHTML(r.sgName) : ''}</td>
           <td style="${SB('#BDD7EE')}">${escapeHTML(r.subName)}</td>
           <td style="${S('text-align:right;')}">${r.amt.toLocaleString('ko-KR')}</td>
           <td style="${S('text-align:right;color:'+remarkColor+';font-weight:'+(r.remark?'700':'400')+';')}">${escapeHTML(r.remark)}</td>
