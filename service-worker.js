@@ -1,6 +1,6 @@
-// 2026-07-21 KST | CACHE_NAME v2112 (지출현황 인쇄 대분류/중분류 반복 표시 -> 그룹 첫 행만 표시)
+// 2026-07-21 KST | CACHE_NAME v2113 (지출현황 인쇄 그룹 테두리 !important 미적용 수정)
 'use strict';
-const CACHE_NAME = 'gaegyebu-v2112';
+const CACHE_NAME = 'gaegyebu-v2113';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });

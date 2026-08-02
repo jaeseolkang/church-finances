@@ -1,9 +1,9 @@
-// v3.100 | 2026-07-21 KST | 수정: 지출현황(#exp-page) 인쇄 시 대분류/중분류가 매 행마다 반복
-// 표시되던 것을, 화면(앱 UI)처럼 그룹 첫 행에만 표시하고 나머지는 비워서 병합된 것처럼 보이게
-// 함(rowspan은 페이지 분할과 충돌해 셀이 잘리는 버그가 있어 실제 병합 대신 라벨/테두리만 생략하는
-// 방식 사용) | cache:v304
+// v3.101 | 2026-07-21 KST | 수정: 지출현황 인쇄(#exp-page)에서 대분류/중분류 반복 라벨은 잘
+// 비워지고 있었는데, 그룹 중간 행의 테두리를 지우려던 인라인 스타일이 `#exp-page td{border...
+// !important}` 규칙에 그대로 덮어써져서 셀마다 테두리가 살아있어 "병합 안 된 것처럼" 보이던
+// 문제 수정 — border-top/bottom:none에도 !important를 붙여 실제로 이기도록 함 | cache:v305
 'use strict';
-const APP_VERSION = 'v3.100 (cache v304)';
+const APP_VERSION = 'v3.101 (cache v305)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -3738,8 +3738,8 @@ function printStats() {
       // rowspan 없이 모든 셀을 각자 출력하되, 반복 라벨/테두리만 생략
       flatRows.forEach(r => {
         const remarkColor = r.remark && acctBalanceMap[r.subName] < 0 ? '#CC0000' : '#1F497D';
-        const catBorder = (r.catFirst?'':'border-top:none;') + (r.catLast?'':'border-bottom:none;');
-        const sgBorder  = (r.sgFirst?'':'border-top:none;') + (r.sgLast?'':'border-bottom:none;');
+        const catBorder = (r.catFirst?'':'border-top:none!important;') + (r.catLast?'':'border-bottom:none!important;');
+        const sgBorder  = (r.sgFirst?'':'border-top:none!important;') + (r.sgLast?'':'border-bottom:none!important;');
         tableRows += `<tr>
           <td style="${SB('#fff','font-weight:700;text-align:center;'+catBorder)}">${r.catFirst ? escapeHTML(r.catName) : ''}</td>
           <td style="${SB('#DEEAF1', sgBorder)}">${r.sgFirst ? escapeHTML(r.sgName) : ''}</td>
