@@ -8330,6 +8330,9 @@ function renderBackupRangeSheet() {
     return `<option value="${ym}">${y}년 ${Number(m)}월</option>`;
   }).join('');
   const isEmail = backupAction === 'email';
+  // 오늘 날짜를 기본값으로 쓰기 때문에, 최근 거래일보다 오늘이 더 늦으면
+  // input의 max도 오늘까지 열어줘야 기본값이 범위를 벗어나 무효화되지 않는다.
+  const rangeMaxForInput = dateRange ? (dateRange.max > todayStr() ? dateRange.max : todayStr()) : todayStr();
 
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -8356,12 +8359,12 @@ function renderBackupRangeSheet() {
       <div class="formrow">
         <label>시작일</label>
         <input type="date" class="dateinput" id="bkStart"
-          ${dateRange ? `min="${dateRange.min}" max="${dateRange.max}"` : ''}>
+          ${dateRange ? `min="${dateRange.min}" max="${rangeMaxForInput}"` : ''}>
       </div>
       <div class="formrow">
         <label>종료일</label>
         <input type="date" class="dateinput" id="bkEnd"
-          ${dateRange ? `min="${dateRange.min}" max="${dateRange.max}"` : ''}>
+          ${dateRange ? `min="${dateRange.min}" max="${rangeMaxForInput}"` : ''}>
       </div>
       <div style="font-size:12.5px; color:var(--text-3); padding:0 2px 16px;">선택한 기간(연-월-일)의 거래 데이터와 모든 카테고리/이름 정보가 함께 ${isEmail ? '발송됩니다.' : '저장됩니다.'}</div>
       `}
@@ -8381,8 +8384,10 @@ function renderBackupRangeSheet() {
   if (backupMode === 'single') {
     sheet.querySelector('#bkSingle').value = months[months.length - 1];
   } else if (backupMode === 'range' && dateRange) {
-    sheet.querySelector('#bkStart').value = dateRange.min;
-    sheet.querySelector('#bkEnd').value   = dateRange.max;
+    // 기본값은 오늘 날짜(당일) — min/max는 그대로 전체 범위를 유지해 필요시 조정 가능
+    const t = todayStr();
+    sheet.querySelector('#bkStart').value = t;
+    sheet.querySelector('#bkEnd').value   = t;
   }
 
   // 탭 전환
