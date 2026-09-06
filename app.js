@@ -1,9 +1,10 @@
-// v3.101 | 2026-07-21 KST | 수정: 지출현황 인쇄(#exp-page)에서 대분류/중분류 반복 라벨은 잘
-// 비워지고 있었는데, 그룹 중간 행의 테두리를 지우려던 인라인 스타일이 `#exp-page td{border...
-// !important}` 규칙에 그대로 덮어써져서 셀마다 테두리가 살아있어 "병합 안 된 것처럼" 보이던
-// 문제 수정 — border-top/bottom:none에도 !important를 붙여 실제로 이기도록 함 | cache:v305
+// v4.000 | 2026-09-06 KST | 수정: Firebase 동기화 데이터 유실 버그 수정 —
+// syncToFirebase()/syncFromFirebase()가 완전성 검증 없이 무조건 덮어쓰던 문제를
+// 고쳐, 업로드는 로그인(관리자 인증)된 기기만 가능하도록 제한하고 로컬 거래 건수가
+// 클라우드보다 뚜렷이 적으면(80% 미만) 업로드를 중단하도록 안전장치 추가.
+// 조회(다운로드)는 기존대로 비로그인 사용자도 가능 | cache:v4000
 'use strict';
-const APP_VERSION = 'v3.101 (cache v305)';
+const APP_VERSION = 'v4.000 (cache v4000)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -155,6 +156,12 @@ async function fbUpdate(path, data) {
 // Firebase에 전체 데이터 저장
 async function syncToFirebase() {
   if (!USE_FIREBASE) return false;
+  // 로그인(관리자 인증)된 기기만 업로드 가능 — 비로그인 기기가 실수로라도
+  // 클라우드 데이터를 덮어쓰는 것을 원천 차단한다.
+  if (!getIsAdmin()) {
+    console.warn('Firebase sync 차단: 로그인되지 않은 기기의 업로드 시도');
+    return false;
+  }
   try {
     const allTemplates = await DB.getAll('templates');
     const data = {
@@ -167,6 +174,24 @@ async function syncToFirebase() {
       transactions: State.transactions,
       templates: allTemplates || [],
     };
+
+    // 안전장치: 이 기기의 로컬 거래 건수가 클라우드보다 뚜렷하게 적다면
+    // (예: 기기가 아직 초기 동기화를 마치지 못한 상태) 업로드를 중단해
+    // 클라우드의 더 완전한 데이터가 사라지는 것을 막는다.
+    try {
+      const remoteTxRaw = await fbGet('churchData/transactions');
+      const remoteCount = Array.isArray(remoteTxRaw) ? remoteTxRaw.length
+        : (remoteTxRaw && typeof remoteTxRaw === 'object' ? Object.keys(remoteTxRaw).length : 0);
+      if (remoteCount > 0 && data.transactions.length < remoteCount * 0.8) {
+        console.error(`Firebase sync 중단: 로컬(${data.transactions.length}건)이 클라우드(${remoteCount}건)보다 훨씬 적어 업로드를 막았습니다.`);
+        showToast('⚠️ 동기화 보류 — 이 기기 데이터가 클라우드보다 적어 자동 업로드를 막았어요. 앱을 새로고침한 뒤 다시 시도해주세요.');
+        return false;
+      }
+    } catch (e) {
+      // 클라우드 확인 자체가 실패하면(오프라인 등) 기존 동작대로 진행 —
+      // 오프라인 상태에서도 로컬 저장은 계속 되어야 하므로 업로드만 조용히 실패시킴
+    }
+
     await fbUpdate('churchData', data);
     console.log('Firebase sync OK');
     return true;
@@ -179,6 +204,8 @@ async function syncToFirebase() {
 // Firebase에서 데이터 불러와서 로컬 DB 업데이트
 async function syncFromFirebase() {
   if (!USE_FIREBASE) return false;
+  // 조회(다운로드)는 비로그인 사용자(교인 등)도 허용한다 — 최신 재정 현황을
+  // 볼 수 있어야 하므로. 업로드만 syncToFirebase()에서 로그인 기기로 제한한다.
   try {
     // 먼저 syncedAt만 가져와서 비교 (전체 데이터 안 받음)
     const remoteSyncedAt = await fbGet('churchData/syncedAt');
