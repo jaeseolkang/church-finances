@@ -4,8 +4,12 @@
 // 기존 fbGet/fbSet/fbUpdate 호출부(churchData/... 등)는 그대로 두고
 // 세 함수 내부에서만 경로를 재작성하므로 나머지 코드 변경 없음.
 // 새 교회 저장소를 만들 때는 CHURCH_ID 한 줄만 바꾸면 됨 | cache:v4100
+// v4.101 | 2026-09-08 KST | 수정: IndexedDB/localStorage 오리진 공유 버그 수정 —
+// IndexedDB(DB_NAME)와 localStorage(관리자 로그인 상태)가 오리진 단위로 저장되어
+// 같은 도메인(jaeseolkang.github.io)의 다른 교회 사이트와 로컬 데이터·로그인
+// 상태가 섞이던 문제를 CHURCH_ID를 키에 포함시켜 해결함.
 'use strict';
-const APP_VERSION = 'v4.100 (cache v4100)';
+const APP_VERSION = 'v4.101 (cache v4101)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -257,7 +261,11 @@ async function syncFromFirebase() {
    - transactions: 거래 1건 = 날짜 + categoryId + (선택)personId + lines[{subItemId, amount}]
    ========================================================= */
 const DB = (() => {
-  const DB_NAME = 'budgetAppDB';
+  // IndexedDB는 오리진(도메인) 단위로 저장되어 경로(scope)로 자동 분리되지
+  // 않는다. 같은 오리진(jaeseolkang.github.io)에 여러 교회 저장소가 함께
+  // 있으므로, 이름 자체에 CHURCH_ID를 포함시켜 교회별로 완전히 다른
+  // 데이터베이스를 쓰도록 한다.
+  const DB_NAME = 'budgetAppDB_' + CHURCH_ID;
   const DB_VERSION = 6;
   let db = null;
 
@@ -476,19 +484,22 @@ async function seedIfEmpty() {
    APP STATE
    ========================================================= */
 // 관리자 권한 상태 - IndexedDB settings에 저장 (앱 재실행 후에도 유지)
-function getIsAdmin() { return localStorage.getItem('churchAdmin') === '1'; }
+// localStorage도 오리진 단위 저장이라 CHURCH_ID를 키에 포함시켜, 한 교회에서
+// 로그인한 상태가 같은 오리진의 다른 교회 사이트로 넘어가지 않도록 한다.
+const ADMIN_LS_KEY = 'churchAdmin_' + CHURCH_ID;
+function getIsAdmin() { return localStorage.getItem(ADMIN_LS_KEY) === '1'; }
 function setIsAdmin(v) { 
-  v ? localStorage.setItem('churchAdmin','1') : localStorage.removeItem('churchAdmin');
+  v ? localStorage.setItem(ADMIN_LS_KEY,'1') : localStorage.removeItem(ADMIN_LS_KEY);
   // IndexedDB에도 동기화 (백업)
   if (typeof DB !== 'undefined') DB.put('settings', { key: 'adminLoggedIn', value: v ? '1' : '0' }).catch(()=>{});
 }
 async function restoreAdminState() {
   // localStorage 먼저 확인
-  if (localStorage.getItem('churchAdmin') === '1') return;
+  if (localStorage.getItem(ADMIN_LS_KEY) === '1') return;
   // IndexedDB에서 복원 (Firebase 호출 없음 - 빠름)
   try {
     const rec = await DB.get('settings', 'adminLoggedIn');
-    if (rec && rec.value === '1') localStorage.setItem('churchAdmin', '1');
+    if (rec && rec.value === '1') localStorage.setItem(ADMIN_LS_KEY, '1');
   } catch(e) {}
 }
 
