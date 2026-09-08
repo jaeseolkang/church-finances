@@ -1,11 +1,11 @@
-// 2026-09-08 KST | CACHE_NAME v4100 (멀티 교회 지원 — CHURCH_ID로 Firebase 경로 분리)
+// 2026-09-08 KST | CACHE_NAME v4101 (IndexedDB/localStorage 오리진 공유 버그 수정 반영)
 // 캐시 이름에 SW scope(저장소 경로)를 자동 포함시켜, 같은 오리진
 // (jaeseolkang.github.io)을 쓰는 여러 교회 저장소가 activate 시
 // 서로의 캐시를 지우지 않도록 함. 이 값은 모든 교회 저장소에서
-// 그대로 두면 되고, 버전 문자열('v4100')만 배포 시 올리면 됨.
+// 그대로 두면 되고, 버전 문자열('v4101')만 배포 시 올리면 됨.
 'use strict';
 const CACHE_PREFIX = 'gaegyebu-' + self.registration.scope;
-const CACHE_NAME = CACHE_PREFIX + '-v4100';
+const CACHE_NAME = CACHE_PREFIX + '-v4101';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
