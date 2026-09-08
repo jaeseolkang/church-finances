@@ -1,16 +1,24 @@
-// v4.000 | 2026-09-06 KST | 수정: Firebase 동기화 데이터 유실 버그 수정 —
-// syncToFirebase()/syncFromFirebase()가 완전성 검증 없이 무조건 덮어쓰던 문제를
-// 고쳐, 업로드는 로그인(관리자 인증)된 기기만 가능하도록 제한하고 로컬 거래 건수가
-// 클라우드보다 뚜렷이 적으면(80% 미만) 업로드를 중단하도록 안전장치 추가.
-// 조회(다운로드)는 기존대로 비로그인 사용자도 가능 | cache:v4000
+// v4.100 | 2026-09-08 KST | 수정: 멀티 교회(멀티테넌트) 지원 —
+// 하나의 Firebase 프로젝트를 여러 교회가 공유하되, 모든 읽기/쓰기 경로 앞에
+// churches/{CHURCH_ID}/ 를 자동으로 붙여 교회별 데이터를 완전히 분리함.
+// 기존 fbGet/fbSet/fbUpdate 호출부(churchData/... 등)는 그대로 두고
+// 세 함수 내부에서만 경로를 재작성하므로 나머지 코드 변경 없음.
+// 새 교회 저장소를 만들 때는 CHURCH_ID 한 줄만 바꾸면 됨 | cache:v4100
 'use strict';
-const APP_VERSION = 'v4.000 (cache v4000)';
+const APP_VERSION = 'v4.100 (cache v4100)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
 // church-finances 저장소: true / finances 저장소: false
 // ============================================================
 const USE_FIREBASE = true;
+
+// ============================================================
+// 🏠 교회 식별자 — 저장소(교회)마다 이 값만 고유하게 바꾸면 됨.
+// Firebase DB 안에서 churches/{CHURCH_ID}/ 경로 아래로 데이터가 분리됨.
+// (영문 소문자/숫자/하이픈만 사용 권장 — Firebase 경로에 안전한 문자)
+// ============================================================
+const CHURCH_ID = 'juwon-church';
 
 
 
@@ -124,14 +132,21 @@ const FIREBASE_CONFIG = {
 // Firebase REST API 방식 (SDK 불필요 - fetch만 사용)
 const FB_URL = 'https://juwon-church-default-rtdb.asia-southeast1.firebasedatabase.app';
 
+// 모든 경로 앞에 churches/{CHURCH_ID}/ 를 붙여 교회별로 데이터를 분리한다.
+// 호출부(fbGet('churchData/...') 등)는 그대로 두고 여기서만 재작성하므로
+// 이 세 함수 밖의 코드는 손댈 필요가 없다.
+function fbPath(path) {
+  return `churches/${CHURCH_ID}/${path}`;
+}
+
 async function fbGet(path) {
-  const res = await fetch(`${FB_URL}/${path}.json`);
+  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`);
   if (!res.ok) throw new Error('FB GET failed: ' + res.status);
   return res.json();
 }
 
 async function fbSet(path, data) {
-  const res = await fetch(`${FB_URL}/${path}.json`, {
+  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -144,7 +159,7 @@ async function fbSet(path, data) {
 // PUT은 해당 경로를 통째로 덮어써서 명시하지 않은 하위 필드를 전부 삭제하므로,
 // churchData처럼 여러 종류의 데이터가 함께 있는 경로에는 반드시 PATCH를 써야 한다.
 async function fbUpdate(path, data) {
-  const res = await fetch(`${FB_URL}/${path}.json`, {
+  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
