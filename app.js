@@ -1,28 +1,16 @@
-// v4.100 | 2026-09-08 KST | 수정: 멀티 교회(멀티테넌트) 지원 —
-// 하나의 Firebase 프로젝트를 여러 교회가 공유하되, 모든 읽기/쓰기 경로 앞에
-// churches/{CHURCH_ID}/ 를 자동으로 붙여 교회별 데이터를 완전히 분리함.
-// 기존 fbGet/fbSet/fbUpdate 호출부(churchData/... 등)는 그대로 두고
-// 세 함수 내부에서만 경로를 재작성하므로 나머지 코드 변경 없음.
-// 새 교회 저장소를 만들 때는 CHURCH_ID 한 줄만 바꾸면 됨 | cache:v4100
-// v4.101 | 2026-09-08 KST | 수정: IndexedDB/localStorage 오리진 공유 버그 수정 —
-// IndexedDB(DB_NAME)와 localStorage(관리자 로그인 상태)가 오리진 단위로 저장되어
-// 같은 도메인(jaeseolkang.github.io)의 다른 교회 사이트와 로컬 데이터·로그인
-// 상태가 섞이던 문제를 CHURCH_ID를 키에 포함시켜 해결함.
+// v4.000 | 2026-09-06 KST | 수정: Firebase 동기화 데이터 유실 버그 수정 —
+// syncToFirebase()/syncFromFirebase()가 완전성 검증 없이 무조건 덮어쓰던 문제를
+// 고쳐, 업로드는 로그인(관리자 인증)된 기기만 가능하도록 제한하고 로컬 거래 건수가
+// 클라우드보다 뚜렷이 적으면(80% 미만) 업로드를 중단하도록 안전장치 추가.
+// 조회(다운로드)는 기존대로 비로그인 사용자도 가능 | cache:v4000
 'use strict';
-const APP_VERSION = 'v4.101 (cache v4101)';
+const APP_VERSION = 'v4.000 (cache v4000)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
 // church-finances 저장소: true / finances 저장소: false
 // ============================================================
 const USE_FIREBASE = true;
-
-// ============================================================
-// 🏠 교회 식별자 — 저장소(교회)마다 이 값만 고유하게 바꾸면 됨.
-// Firebase DB 안에서 churches/{CHURCH_ID}/ 경로 아래로 데이터가 분리됨.
-// (영문 소문자/숫자/하이픈만 사용 권장 — Firebase 경로에 안전한 문자)
-// ============================================================
-const CHURCH_ID = 'juwon-church';
 
 
 
@@ -136,21 +124,14 @@ const FIREBASE_CONFIG = {
 // Firebase REST API 방식 (SDK 불필요 - fetch만 사용)
 const FB_URL = 'https://juwon-church-default-rtdb.asia-southeast1.firebasedatabase.app';
 
-// 모든 경로 앞에 churches/{CHURCH_ID}/ 를 붙여 교회별로 데이터를 분리한다.
-// 호출부(fbGet('churchData/...') 등)는 그대로 두고 여기서만 재작성하므로
-// 이 세 함수 밖의 코드는 손댈 필요가 없다.
-function fbPath(path) {
-  return `churches/${CHURCH_ID}/${path}`;
-}
-
 async function fbGet(path) {
-  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`);
+  const res = await fetch(`${FB_URL}/${path}.json`);
   if (!res.ok) throw new Error('FB GET failed: ' + res.status);
   return res.json();
 }
 
 async function fbSet(path, data) {
-  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`, {
+  const res = await fetch(`${FB_URL}/${path}.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -163,7 +144,7 @@ async function fbSet(path, data) {
 // PUT은 해당 경로를 통째로 덮어써서 명시하지 않은 하위 필드를 전부 삭제하므로,
 // churchData처럼 여러 종류의 데이터가 함께 있는 경로에는 반드시 PATCH를 써야 한다.
 async function fbUpdate(path, data) {
-  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`, {
+  const res = await fetch(`${FB_URL}/${path}.json`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -261,11 +242,7 @@ async function syncFromFirebase() {
    - transactions: 거래 1건 = 날짜 + categoryId + (선택)personId + lines[{subItemId, amount}]
    ========================================================= */
 const DB = (() => {
-  // IndexedDB는 오리진(도메인) 단위로 저장되어 경로(scope)로 자동 분리되지
-  // 않는다. 같은 오리진(jaeseolkang.github.io)에 여러 교회 저장소가 함께
-  // 있으므로, 이름 자체에 CHURCH_ID를 포함시켜 교회별로 완전히 다른
-  // 데이터베이스를 쓰도록 한다.
-  const DB_NAME = 'budgetAppDB_' + CHURCH_ID;
+  const DB_NAME = 'budgetAppDB';
   const DB_VERSION = 6;
   let db = null;
 
@@ -484,22 +461,19 @@ async function seedIfEmpty() {
    APP STATE
    ========================================================= */
 // 관리자 권한 상태 - IndexedDB settings에 저장 (앱 재실행 후에도 유지)
-// localStorage도 오리진 단위 저장이라 CHURCH_ID를 키에 포함시켜, 한 교회에서
-// 로그인한 상태가 같은 오리진의 다른 교회 사이트로 넘어가지 않도록 한다.
-const ADMIN_LS_KEY = 'churchAdmin_' + CHURCH_ID;
-function getIsAdmin() { return localStorage.getItem(ADMIN_LS_KEY) === '1'; }
+function getIsAdmin() { return localStorage.getItem('churchAdmin') === '1'; }
 function setIsAdmin(v) { 
-  v ? localStorage.setItem(ADMIN_LS_KEY,'1') : localStorage.removeItem(ADMIN_LS_KEY);
+  v ? localStorage.setItem('churchAdmin','1') : localStorage.removeItem('churchAdmin');
   // IndexedDB에도 동기화 (백업)
   if (typeof DB !== 'undefined') DB.put('settings', { key: 'adminLoggedIn', value: v ? '1' : '0' }).catch(()=>{});
 }
 async function restoreAdminState() {
   // localStorage 먼저 확인
-  if (localStorage.getItem(ADMIN_LS_KEY) === '1') return;
+  if (localStorage.getItem('churchAdmin') === '1') return;
   // IndexedDB에서 복원 (Firebase 호출 없음 - 빠름)
   try {
     const rec = await DB.get('settings', 'adminLoggedIn');
-    if (rec && rec.value === '1') localStorage.setItem(ADMIN_LS_KEY, '1');
+    if (rec && rec.value === '1') localStorage.setItem('churchAdmin', '1');
   } catch(e) {}
 }
 
@@ -5249,6 +5223,23 @@ function getChosung(str) {
   const c = CHOSUNG_TABLE[Math.floor(code / 588)];
   return CHOSUNG_DOUBLE_MAP[c] || c;
 }
+// 이름 전체 글자의 초성을 이어붙인 문자열 (예: '김철수' -> 'ㄱㅊㅅ'). 한글이 아닌
+// 글자(숫자/영문 등)는 그대로 둬서 부분 텍스트 검색과도 자연스럽게 섞이게 한다.
+function getChosungString(str) {
+  if (!str) return '';
+  return [...str].map(ch => getChosung(ch) || ch).join('');
+}
+// 검색어가 초성(ㄱ,ㄴ,ㄷ...)으로만 이루어져 있으면 이름의 초성 문자열에 포함되는지로
+// 매칭하고, 그 외(일반 글자 포함)엔 이름에 그대로 포함되는지로 매칭한다.
+// 예: "ㄱㄷㅎ" -> "김대현"은 매칭, "김철수"는 매칭 안 됨 (초성 하나만 필터할 때보다 훨씬 좁혀짐)
+function matchesNameSearch(name, query) {
+  if (!name || !query) return true;
+  const q = query.trim();
+  if (!q) return true;
+  const isChosungQuery = [...q].every(ch => CHOSUNG_BASIC_LIST.includes(ch));
+  if (isChosungQuery) return getChosungString(name).includes(q);
+  return name.toLowerCase().includes(q.toLowerCase());
+}
 
 function openItemStructureSheet() {
   const sheet = document.getElementById('itemStructureSheet');
@@ -9006,6 +8997,7 @@ let ddAcctTab = 'normal'; // 일별 상세보기 계좌선택: 'normal'(일반�
 let txItemsAcctTab = 'normal'; // 통장이동/예금 세부항목 입력화면: 'normal' | 'deposit'
 let txItemsManageHidden = false; // 통장이동/예금 세부항목 입력화면: 계좌 숨김 관리 모드
 let txPickGroupChosungFilter = null; // 이름선택 화면: 초성 찾기 선택값(null=전체)
+let txPickGroupSearchQuery = ''; // 이름선택 화면: 검색창 입력값(이름 또는 초성)
 
 function renderTxStepPickGroup(sheet) {
   const cat = catById(State.formCategoryId);
@@ -9018,10 +9010,10 @@ function renderTxStepPickGroup(sheet) {
     const person = (State.persons || []).find(p => p.id === g.id);
     return !person || !person.hidden;
   });
-  // 초성 찾기 필터 적용
-  const groups = txPickGroupChosungFilter
-    ? groupsAll.filter(g => getChosung(g.name) === txPickGroupChosungFilter)
-    : groupsAll;
+  // 초성 찾기 필터 적용 (버튼 필터 + 검색창 텍스트/초성 필터를 함께 적용)
+  const groups = groupsAll
+    .filter(g => !txPickGroupChosungFilter || getChosung(g.name) === txPickGroupChosungFilter)
+    .filter(g => matchesNameSearch(g.name, txPickGroupSearchQuery));
   // subGroups(사람)가 있는 카테고리(예: 헌금)는 ungroupedItems 표시 안 함 — 공통 소분류이므로
   const ungroupedItems = groupsAll.length > 0 ? [] : State.subItems.filter(s => s.categoryId === State.formCategoryId && !s.subGroupId);
 
@@ -9058,6 +9050,7 @@ function renderTxStepPickGroup(sheet) {
       <div class="formrow">
         <label>이름 선택</label>
         ${groupsAll.length > 0 ? `
+        <input type="text" id="txPickGroupSearch" class="dateinput" placeholder="이름 또는 초성 검색 (예: ㄱㄷㅎ)" value="${escapeHTML(txPickGroupSearchQuery)}" style="margin-bottom:8px;">
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
           <button class="chosung-btn" data-chosung="" style="padding:5px 9px;border-radius:7px;font-size:12px;font-weight:700;border:1px solid var(--border);${!txPickGroupChosungFilter?'background:var(--primary);color:#fff;border-color:var(--primary);':'background:#fff;color:var(--text-2);'}">전체</button>
           ${CHOSUNG_BASIC_LIST.map(c => `
@@ -9078,7 +9071,7 @@ function renderTxStepPickGroup(sheet) {
               <span>${escapeHTML(s.name)}</span>
             </button>
           `).join('')}
-          ${groupsAll.length > 0 && groups.length === 0 ? `<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12.5px;width:100%;">"${txPickGroupChosungFilter}"으로 시작하는 이름이 없어요</div>` : ''}
+          ${groupsAll.length > 0 && groups.length === 0 ? `<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12.5px;width:100%;">${txPickGroupSearchQuery ? `"${escapeHTML(txPickGroupSearchQuery)}"에 해당하는 이름이 없어요` : `"${txPickGroupChosungFilter}"으로 시작하는 이름이 없어요`}</div>` : ''}
         </div>
       </div>
       <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
@@ -9106,6 +9099,20 @@ function renderTxStepPickGroup(sheet) {
       renderTxStepPickGroup(sheet);
     });
   });
+  const pickSearchInput = sheet.querySelector('#txPickGroupSearch');
+  if (pickSearchInput) {
+    // 매 입력마다 목록을 다시 그리므로, 포커스/커서 위치를 유지해 타이핑이 끊기지 않게 한다.
+    pickSearchInput.addEventListener('input', () => {
+      txPickGroupSearchQuery = pickSearchInput.value;
+      const caret = pickSearchInput.selectionStart;
+      renderTxStepPickGroup(sheet);
+      const refocused = sheet.querySelector('#txPickGroupSearch');
+      if (refocused) {
+        refocused.focus();
+        refocused.setSelectionRange(caret, caret);
+      }
+    });
+  }
   sheet.querySelectorAll('.pickgroup-hide-toggle').forEach(cb => {
     cb.addEventListener('change', async () => {
       const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
@@ -9127,6 +9134,7 @@ function renderTxStepPickGroup(sheet) {
   sheet.querySelector('#txBack').addEventListener('click', () => {
     txPickGroupManageHidden = false;
     txPickGroupChosungFilter = null;
+    txPickGroupSearchQuery = '';
     State.formStep = 'pick';
     State.formCategoryId = null;
     renderTxSheet();
@@ -9134,6 +9142,7 @@ function renderTxStepPickGroup(sheet) {
   sheet.querySelector('#txClose').addEventListener('click', () => {
     txPickGroupManageHidden = false;
     txPickGroupChosungFilter = null;
+    txPickGroupSearchQuery = '';
     if (State.editingTx) {
       // 수정 모드에서 중분류 변경 중 취소 → items로 복귀
       State.formSubGroupId = State.editingTx.subGroupId || State.editingTx.personId || null;
