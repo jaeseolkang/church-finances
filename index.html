@@ -1007,8 +1007,25 @@ input,textarea,select{font-family:inherit; color:inherit;}
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js')
-      .then(reg => console.log('[SW] 등록 완료:', reg.scope))
+      .then(reg => {
+        console.log('[SW] 등록 완료:', reg.scope);
+        // 앱을 열 때마다 서버에 새 버전이 있는지 즉시 확인 (브라우저의 자체 주기적
+        // 확인만 믿으면 최대 24시간까지 새 버전을 못 받아올 수 있음)
+        reg.update();
+      })
       .catch(err => console.warn('[SW] 등록 실패:', err));
+  });
+
+  // 새 서비스워커가 이 페이지를 실제로 장악(activate)하는 순간 자동으로
+  // 새로고침한다. 이게 없으면 새 버전이 백그라운드에서 설치·활성화까지 끝나도
+  // 이미 열려 있던 화면(구버전 app.js가 메모리에 로드된 상태)은 그대로 남아있고,
+  // "종료 후 재실행"이 진짜 새로고침이 아니라 정지된 화면을 그대로 다시 보여주는
+  // 경우(특히 모바일 앱스위처)엔 계속 구버전처럼 보이게 된다.
+  let swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefreshing) return;
+    swRefreshing = true;
+    location.reload();
   });
 }
 
