@@ -1,7 +1,7 @@
 // v4.100 | 2026-09-08 KST | 수정: 멀티 교회(멀티테넌트) 지원 —
 
 'use strict';
-const APP_VERSION = 'v4.101 (cache v4101)';
+const APP_VERSION = 'v4.102 (cache v4102)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -6723,8 +6723,21 @@ function renderSettings() {
         await reg.unregister();
       }
     }
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch (e) { /* Cache Storage 미지원 브라우저 등은 무시하고 진행 */ }
     showToast('캐시를 비웠습니다. 새로고침합니다...');
-    setTimeout(() => location.reload(true), 800);
+    // location.reload(true)의 'true'는 최신 브라우저(Safari/Chrome)에서 더 이상
+    // 캐시를 무시하지 않는다 — 그래서 서비스워커/Cache Storage는 지웠는데도
+    // 브라우저 자체의 일반 HTTP 캐시에 남은 예전 index.html/app.js를 그대로
+    // 다시 보여주는 문제가 있었다. 주소 끝에 매번 바뀌는 쿼리스트링을 붙여
+    // "완전히 다른 주소"로 이동시키면 그 캐시를 우회해 반드시 새로 받아온다.
+    setTimeout(() => {
+      const url = new URL(location.href);
+      url.searchParams.set('_r', Date.now());
+      location.href = url.toString();
+    }, 800);
   });
 
   // 만기 알림 이메일

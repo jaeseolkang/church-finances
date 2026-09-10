@@ -5,7 +5,7 @@
 // 그대로 두면 되고, 버전 문자열('v4101')만 배포 시 올리면 됨.
 'use strict';
 const CACHE_PREFIX = 'gaegyebu-' + self.registration.scope;
-const CACHE_NAME = CACHE_PREFIX + '-v4101';
+const CACHE_NAME = CACHE_PREFIX + '-v4102';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
