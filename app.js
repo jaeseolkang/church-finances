@@ -1,13 +1,5 @@
 // v4.100 | 2026-09-08 KST | 수정: 멀티 교회(멀티테넌트) 지원 —
-// 하나의 Firebase 프로젝트를 여러 교회가 공유하되, 모든 읽기/쓰기 경로 앞에
-// churches/{CHURCH_ID}/ 를 자동으로 붙여 교회별 데이터를 완전히 분리함.
-// 기존 fbGet/fbSet/fbUpdate 호출부(churchData/... 등)는 그대로 두고
-// 세 함수 내부에서만 경로를 재작성하므로 나머지 코드 변경 없음.
-// 새 교회 저장소를 만들 때는 CHURCH_ID 한 줄만 바꾸면 됨 | cache:v4100
-// v4.101 | 2026-09-08 KST | 수정: IndexedDB/localStorage 오리진 공유 버그 수정 —
-// IndexedDB(DB_NAME)와 localStorage(관리자 로그인 상태)가 오리진 단위로 저장되어
-// 같은 도메인(jaeseolkang.github.io)의 다른 교회 사이트와 로컬 데이터·로그인
-// 상태가 섞이던 문제를 CHURCH_ID를 키에 포함시켜 해결함.
+
 'use strict';
 const APP_VERSION = 'v4.101 (cache v4101)';
 
@@ -22,11 +14,14 @@ const USE_FIREBASE = true;
 // Firebase DB 안에서 churches/{CHURCH_ID}/ 경로 아래로 데이터가 분리됨.
 // (영문 소문자/숫자/하이픈만 사용 권장 — Firebase 경로에 안전한 문자)
 // ============================================================
+
+
+// ============================================================
 const CHURCH_ID = 'juwon-church';
-// 화면(브라우저 탭 제목, 홈 화면 아이콘 이름)에 표시할 교회 이름.
-// 새 교회 저장소를 만들 때 CHURCH_ID와 이 값만 함께 바꾸면 index.html은
-// 손대지 않아도 자동으로 올바른 이름이 표시된다.
 const CHURCH_DISPLAY_NAME = '주원교회';
+// ============================================================
+
+
 (function applyChurchDisplayName() {
   const title = `${CHURCH_DISPLAY_NAME} 회계부`;
   document.title = title;
