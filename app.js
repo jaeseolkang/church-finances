@@ -1,7 +1,7 @@
 // v4.100 | 2026-09-08 KST | 수정: 멀티 교회(멀티테넌트) 지원 —
 
 'use strict';
-const APP_VERSION = 'v4.102 (cache v4102)';
+const APP_VERSION = 'v4.103 (cache v4103)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10,23 +10,17 @@ const APP_VERSION = 'v4.102 (cache v4102)';
 const USE_FIREBASE = true;
 
 // ============================================================
-// 🏠 교회 식별자 — 저장소(교회)마다 이 값만 고유하게 바꾸면 됨.
-// Firebase DB 안에서 churches/{CHURCH_ID}/ 경로 아래로 데이터가 분리됨.
-// (영문 소문자/숫자/하이픈만 사용 권장 — Firebase 경로에 안전한 문자)
-// ============================================================
-
-
-// ============================================================
 const CHURCH_ID = 'juwon-church';
-const CHURCH_DISPLAY_NAME = '주원교회';
+// 브라우저 탭 제목 / 홈 화면 앱 이름에 그대로 쓰이는 전체 이름.
+// (예: 실제 교회로 배포할 땐 'OO교회 회계부'처럼 통째로 넣으면 됨)
+const CHURCH_DISPLAY_NAME = '교회회계 프로그램';
 // ============================================================
 
 
 (function applyChurchDisplayName() {
-  const title = `${CHURCH_DISPLAY_NAME} 회계부`;
-  document.title = title;
+  document.title = CHURCH_DISPLAY_NAME;
   const appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-  if (appleTitleMeta) appleTitleMeta.setAttribute('content', title);
+  if (appleTitleMeta) appleTitleMeta.setAttribute('content', CHURCH_DISPLAY_NAME);
 })();
 
 
