@@ -978,11 +978,11 @@ function openChurchInfoSheet(current, onSave) {
       <div class="settings-sub" style="padding:0 2px 12px;">기부금 영수증에 표시되는 정보예요.</div>
       <div class="formrow">
         <label>교회명</label>
-        <input type="text" id="ciName" class="dateinput" value="${escapeHTML(current.name)}" placeholder="예: 주원교회">
+        <input type="text" id="ciName" class="dateinput" value="${escapeHTML(current.name)}" placeholder="예: OO교회">
       </div>
       <div class="formrow">
         <label>담임목사 이름</label>
-        <input type="text" id="ciPastor" class="dateinput" value="${escapeHTML(current.pastorName)}" placeholder="예: 이현재">
+        <input type="text" id="ciPastor" class="dateinput" value="${escapeHTML(current.pastorName)}" placeholder="예: 홍길동">
       </div>
       <div class="formrow">
         <label>소속교단 (선택)</label>
@@ -990,7 +990,7 @@ function openChurchInfoSheet(current, onSave) {
       </div>
       <div class="formrow">
         <label>사업자등록번호</label>
-        <input type="text" id="ciBizNo" class="dateinput" value="${escapeHTML(current.bizNo)}" placeholder="예: 144-89-00213">
+        <input type="text" id="ciBizNo" class="dateinput" value="${escapeHTML(current.bizNo)}" placeholder="예: 123-45-67890">
       </div>
       <div class="formrow">
         <label>주소</label>
