@@ -188,6 +188,13 @@ async function syncToFirebase() {
   }
   try {
     const allTemplates = await DB.getAll('templates');
+    // 기기마다 따로 저장되는 설정값들(교회 정보/직인/앱 이름)도 함께 올려서
+    // 다른 기기에서도 똑같이 보이게 한다.
+    const [churchInfoRec, churchSealRec, appTitleRec] = await Promise.all([
+      DB.get('settings', 'churchInfo'),
+      DB.get('settings', 'churchSeal'),
+      DB.get('settings', 'appTitle'),
+    ]);
     const data = {
       syncedAt: new Date().toISOString(),
       categories: State.categories,
@@ -197,6 +204,11 @@ async function syncToFirebase() {
       linkedAccounts: State.linkedAccounts || [],
       transactions: State.transactions,
       templates: allTemplates || [],
+      settings: {
+        churchInfo: churchInfoRec ? churchInfoRec.value : null,
+        churchSeal: churchSealRec ? churchSealRec.dataUrl : null,
+        appTitle: appTitleRec ? appTitleRec.value : null,
+      },
     };
 
     // 안전장치: 이 기기의 로컬 거래 건수가 클라우드보다 뚜렷하게 적다면
@@ -954,6 +966,7 @@ function openAppTitleSheet(current, onSave) {
   sheet.querySelector('#atSave').addEventListener('click', async () => {
     const val = sheet.querySelector('#atInput').value.trim() || '교회 회계부';
     await setAppTitle(val);
+    if (USE_FIREBASE) syncToFirebase().catch(e => console.error('sync error:', e));
     closeAllSheets();
     onSave(val);
   });
@@ -1012,6 +1025,7 @@ function openChurchInfoSheet(current, onSave) {
       addr: sheet.querySelector('#ciAddr').value.trim(),
     };
     await setChurchInfo(value);
+    if (USE_FIREBASE) syncToFirebase().catch(e => console.error('sync error:', e));
     closeAllSheets();
     showToast('교회 정보가 저장됐어요');
     onSave(value);
@@ -6759,6 +6773,7 @@ function renderSettings() {
     const reader = new FileReader();
     reader.onload = async () => {
       await DB.put('settings', { key: 'churchSeal', dataUrl: reader.result });
+      if (USE_FIREBASE) syncToFirebase().catch(err => console.error('sync error:', err));
       await refreshSealUI();
       showToast('✅ 직인이 등록됐어요');
       e.target.value = '';
@@ -6767,6 +6782,7 @@ function renderSettings() {
   });
   page.querySelector('#btnSealRemove')?.addEventListener('click', async () => {
     await DB.del('settings', 'churchSeal');
+    if (USE_FIREBASE) syncToFirebase().catch(err => console.error('sync error:', err));
     await refreshSealUI();
     showToast('직인을 삭제했어요');
   });
@@ -8754,6 +8770,13 @@ async function restoreFromData(data) {
   for (const a of (data.linkedAccounts||[])) await DB.put('linkedAccounts', a);
   for (const t of (data.transactions||[])) await DB.put('transactions', t);
   for (const tpl of (data.templates||[])) await DB.put('templates', tpl);
+  // 다른 기기가 올려둔 설정값(교회 정보/직인/앱 이름)도 함께 반영.
+  // 예전 버전에서 올라온 데이터(settings 필드 없음)는 건드리지 않고 그대로 둔다.
+  if (data.settings) {
+    if (data.settings.churchInfo) await DB.put('settings', { key: 'churchInfo', value: data.settings.churchInfo });
+    if (data.settings.churchSeal) await DB.put('settings', { key: 'churchSeal', dataUrl: data.settings.churchSeal });
+    if (data.settings.appTitle) await DB.put('settings', { key: 'appTitle', value: data.settings.appTitle });
+  }
   await reloadData();
   renderCurrentPage();
   showToast(`✅ 복원 완료 — 거래 ${(data.transactions||[]).length}건`);
