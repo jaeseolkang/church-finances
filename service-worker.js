@@ -1,11 +1,11 @@
-// 2026-09-10 KST | CACHE_NAME v4103 (특정 교회 이름 제거 — "교회회계 프로그램"으로 일괄 표기)
+// 2026-09-11 KST | CACHE_NAME v4104 (특정 교회 이름 제거 — "교회회계 프로그램"으로 일괄 표기)
 // 캐시 이름에 SW scope(저장소 경로)를 자동 포함시켜, 같은 오리진
 // (jaeseolkang.github.io)을 쓰는 여러 교회 저장소가 activate 시
 // 서로의 캐시를 지우지 않도록 함. 이 값은 모든 교회 저장소에서
 // 그대로 두면 되고, 버전 문자열('v4101')만 배포 시 올리면 됨.
 'use strict';
 const CACHE_PREFIX = 'gaegyebu-' + self.registration.scope;
-const CACHE_NAME = CACHE_PREFIX + '-v4103';
+const CACHE_NAME = CACHE_PREFIX + '-v4104';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
