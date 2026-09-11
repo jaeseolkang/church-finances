@@ -1,7 +1,7 @@
 // v4.100 | 2026-09-08 KST | 수정: 멀티 교회(멀티테넌트) 지원 —
 
 'use strict';
-const APP_VERSION = 'v4.103 (cache v4103)';
+const APP_VERSION = 'v4.104 (cache v4104)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -20,7 +20,7 @@ const USE_FIREBASE = true;
 const CHURCH_ID = 'juwon-church';
 // 브라우저 탭 제목 / 홈 화면 앱 이름에 그대로 쓰이는 전체 이름.
 // (예: 실제 교회로 배포할 땐 'OO교회 회계부'처럼 통째로 넣으면 됨)
-const CHURCH_DISPLAY_NAME = 'OOO교회';
+const CHURCH_DISPLAY_NAME = '교회회계 프로그램';
 // ============================================================
 
 
@@ -2859,7 +2859,7 @@ function openStatsPeriodPicker() {
    EXCEL EXPORT — 개인별헌금 / 월지출 / 월장부
    ========================================================= */
 
-// 주보명단 엑셀 — 주보헌금.py와 동일한 형식(C=분류, E=내용, G=수입/지출)으로,
+// 주보 헌금명단 엑셀 — 주보헌금.py와 동일한 형식(C=분류, E=내용, G=수입/지출)으로,
 // 선택한 기간의 '헌금' 수입만 뽑아서 만든다.
 function openBulletinRangeSheet() {
   let sheet = document.getElementById('bulletinRangeSheet');
@@ -2873,7 +2873,7 @@ function openBulletinRangeSheet() {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>주보명단 만들기</h3>
+      <h3>주보 헌금명단</h3>
       <button id="brClose" class="sheet-close-btn">${ICONS.close}닫기</button>
     </div>
     <div class="sheet-body">
@@ -6532,7 +6532,7 @@ function renderSettings() {
       </div>
       <div class="settings-row" id="rowBulletinExcel">
         <div>
-          <div class="settings-label">주보명단 만들기</div>
+          <div class="settings-label">주보 헌금명단</div>
           <div class="settings-sub">헌금 수입만 뽑아 분류/내용 형식의 엑셀로 내보내기</div>
         </div>
         ${ICONS.download}
