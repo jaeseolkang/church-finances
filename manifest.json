@@ -1,7 +1,7 @@
 {
-  "name": "주원교회 회계부",
+  "name": "OO교회 회계부",
   "short_name": "교회회계부",
-  "description": "주원교회 회계부 - 오프라인 지원 PWA",
+  "description": "OO교회 회계부 - 오프라인 지원 PWA",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#F7F8FA",
