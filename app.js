@@ -10,10 +10,17 @@ const APP_VERSION = 'v4.103 (cache v4103)';
 const USE_FIREBASE = true;
 
 // ============================================================
+// 🏠 교회 식별자 — 저장소(교회)마다 이 값만 고유하게 바꾸면 됨.
+// Firebase DB 안에서 churches/{CHURCH_ID}/ 경로 아래로 데이터가 분리됨.
+// (영문 소문자/숫자/하이픈만 사용 권장 — Firebase 경로에 안전한 문자)
+// ============================================================
+
+
+// ============================================================
 const CHURCH_ID = 'juwon-church';
 // 브라우저 탭 제목 / 홈 화면 앱 이름에 그대로 쓰이는 전체 이름.
 // (예: 실제 교회로 배포할 땐 'OO교회 회계부'처럼 통째로 넣으면 됨)
-const CHURCH_DISPLAY_NAME = '교회회계 프로그램';
+const CHURCH_DISPLAY_NAME = 'OOO교회';
 // ============================================================
 
 
@@ -2851,6 +2858,101 @@ function openStatsPeriodPicker() {
 /* =========================================================
    EXCEL EXPORT — 개인별헌금 / 월지출 / 월장부
    ========================================================= */
+
+// 주보명단 엑셀 — 주보헌금.py와 동일한 형식(C=분류, E=내용, G=수입/지출)으로,
+// 선택한 기간의 '헌금' 수입만 뽑아서 만든다.
+function openBulletinRangeSheet() {
+  let sheet = document.getElementById('bulletinRangeSheet');
+  if (!sheet) {
+    sheet = document.createElement('div');
+    sheet.id = 'bulletinRangeSheet';
+    sheet.className = 'sheet';
+    document.getElementById('app').appendChild(sheet);
+  }
+  const t = todayStr();
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>주보명단 만들기</h3>
+      <button id="brClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body">
+      <div class="settings-sub" style="padding:0 2px 12px;">선택한 기간의 헌금 수입만 뽑아서, 분류(이름)·내용(헌금종류) 형식의 엑셀로 만들어요.</div>
+      <div class="formrow">
+        <label>시작일</label>
+        <input type="date" class="dateinput" id="brStart" value="${t}">
+      </div>
+      <div class="formrow">
+        <label>종료일</label>
+        <input type="date" class="dateinput" id="brEnd" value="${t}">
+      </div>
+      <button class="btn-primary" id="brMake">만들기</button>
+    </div>
+  `;
+  openSheet('bulletinRangeSheet');
+
+  sheet.querySelector('#brClose').addEventListener('click', closeAllSheets);
+  sheet.querySelector('#brMake').addEventListener('click', () => {
+    const s = sheet.querySelector('#brStart').value;
+    const e = sheet.querySelector('#brEnd').value;
+    if (!s || !e) { showToast('날짜를 선택해주세요'); return; }
+    if (s > e) { showToast('시작일이 종료일보다 늦어요'); return; }
+    closeAllSheets();
+    generateBulletinExcel(s, e);
+  });
+}
+
+function generateBulletinExcel(startDate, endDate) {
+  // '헌금' 카테고리 찾기 (예금이자/통장이동/예금/선교계정 등 다른 수입은 제외 — 주보헌금.py와 동일)
+  const heongCat = State.categories.find(c => c.type === 'income' && c.name === '헌금');
+  if (!heongCat) { showToast("'헌금' 수입 카테고리가 없어요"); return; }
+
+  const subGroupMap = {}; (State.subGroups || []).forEach(g => subGroupMap[g.id] = g);
+  const subItemMap = {}; (State.subItems || []).forEach(s => subItemMap[s.id] = s);
+
+  const list = txInPeriod(startDate, endDate).filter(t => t.type === 'income' && t.categoryId === heongCat.id);
+
+  // 헌금 거래만 수집 (거래 안의 lines 한 줄당 한 행) — 주보헌금.py와 동일한 로직
+  const rows = [];
+  for (const t of list) {
+    const group = subGroupMap[t.subGroupId];
+    const name = group && group.name;
+    if (!name) continue; // 이름 없는 행(소그룹 미지정 등) 제외
+    const lines = t.lines || [];
+    if (!lines.length) continue;
+    for (const line of lines) {
+      const amount = line.amount;
+      if (amount === undefined || amount === null || amount === 0) continue;
+      const item = subItemMap[line.subItemId];
+      const content = (item && item.name) || '';
+      rows.push([name, content]);
+    }
+  }
+
+  if (!rows.length) { showToast('해당 기간에 헌금 수입 내역이 없어요'); return; }
+
+  // jw.xlsx 형식: C=분류, E=내용, G=수입/지출 (주보헌금.py와 동일한 열 배치)
+  const aoa = [];
+  const header = new Array(7).fill('');
+  header[2] = '분류'; header[4] = '내용'; header[6] = '수입/지출';
+  aoa.push(header);
+  for (const [name, content] of rows) {
+    const row = new Array(7).fill('');
+    row[2] = name; row[4] = content; row[6] = '수입';
+    aoa.push(row);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [
+    { wch: 18.75 }, { wch: 20.75 }, { wch: 13.75 }, { wch: 10 },
+    { wch: 40.75 }, { wch: 12.75 }, { wch: 10 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  const fname = 'jw.xlsx';
+  XLSX.writeFile(wb, fname);
+  showToast(`✅ 헌금 ${rows.length}건을 변환했어요`);
+}
 
 // 1. 개인별헌금 엑셀 (수입 통계)
 function exportPivotToExcel() {
@@ -6428,6 +6530,13 @@ function renderSettings() {
         </div>
         ${ICONS.download}
       </div>
+      <div class="settings-row" id="rowBulletinExcel">
+        <div>
+          <div class="settings-label">주보명단 만들기</div>
+          <div class="settings-sub">헌금 수입만 뽑아 분류/내용 형식의 엑셀로 내보내기</div>
+        </div>
+        ${ICONS.download}
+      </div>
       <div class="settings-row" id="rowExport">
         <div>
           <div class="settings-label">데이터 백업 (JSON)</div>
@@ -6514,6 +6623,7 @@ function renderSettings() {
   page.querySelector('#rowCats').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openCatManageSheet(); });
   page.querySelector('#rowItemStructure').addEventListener('click', () => openItemStructureSheet());
   page.querySelector('#rowExportExcel').addEventListener('click', exportExcel);
+  page.querySelector('#rowBulletinExcel').addEventListener('click', () => openBulletinRangeSheet());
   page.querySelector('#rowExport').addEventListener('click', () => openBackupRangeSheet('download'));
   page.querySelector('#rowEmailBackup').addEventListener('click', () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; } openBackupRangeSheet('email'); });
   // 로그아웃
