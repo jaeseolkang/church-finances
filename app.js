@@ -1,7 +1,7 @@
-// v4.106 | 2026-10-03 KST | 수정: 설정에 자동 백업(매주 월요일 정오) 토글·백업 위치 지정 추가, 앱 업데이트 전 백업 확인 질문 추가 —
+// v4.107 | 2026-10-03 KST | 수정: 백업 위치 안내를 기기별(iOS/기타) 메시지 + 확인 버튼 대화상자로 변경 —
 
 'use strict';
-const APP_VERSION = 'v4.106 (cache v4106)';
+const APP_VERSION = 'v4.107 (cache v4107)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1662,6 +1662,24 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// 확인 버튼을 눌러야 닫히는 안내 대화상자 (토스트는 긴 문구가 잘리고 금방 사라져서 대체)
+function showInfoDialog(title, msg) {
+  const old = document.getElementById('infoDialog');
+  if (old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'infoDialog';
+  wrap.style.cssText = 'position:absolute; inset:0; z-index:130; display:flex; align-items:center; justify-content:center; background:rgba(15,18,30,0.45); padding:24px;';
+  wrap.innerHTML = `
+    <div style="background:var(--card); border-radius:20px; padding:22px 20px 16px; width:100%; max-width:320px; box-shadow:0 8px 30px rgba(0,0,0,0.2);">
+      <div style="font-size:16px; font-weight:800; margin-bottom:10px;">${title}</div>
+      <div style="font-size:14px; line-height:1.65; color:var(--text-2); white-space:pre-line;">${msg}</div>
+      <button id="infoDialogOk" class="btn-primary" style="margin-top:18px; padding:13px 0; font-size:14.5px;">확인</button>
+    </div>`;
+  (document.getElementById('app') || document.body).appendChild(wrap);
+  wrap.querySelector('#infoDialogOk').addEventListener('click', () => wrap.remove());
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) wrap.remove(); });
 }
 
 function changeMonth(delta) {
@@ -6856,7 +6874,7 @@ function renderSettings() {
     // 백업 위치 — 폴더 핸들은 이 기기 IndexedDB에만 저장되므로 기기마다 따로 지정 필요
     const dirSub = page.querySelector('#autoBackupDirSub');
     const dirHandle = await getAutoBackupDirHandle();
-    if (dirSub) dirSub.textContent = dirHandle ? `📁 ${dirHandle.name} (이 기기)` : '미지정 — 파일 다운로드로 저장돼요 (이 기기에서 지정 필요)';
+    if (dirSub) dirSub.textContent = dirHandle ? `📁 ${dirHandle.name} (이 기기)` : '미지정';
     page.querySelector('#rowAutoBackupDir').addEventListener('click', pickAutoBackupFolder);
   })();
 
@@ -8092,7 +8110,12 @@ async function runAutoBackup(manual = false) {
 
 async function pickAutoBackupFolder() {
   if (!window.showDirectoryPicker) {
-    showToast('이 기기(ios)에서는 iCloud Drive의 다운로드(Downloads)에 저장 됩니다');
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const msg = isIOS
+      ? '이 기기에서는 백업 폴더를 직접 지정할 수 없어요.\n백업 파일은 iCloud Drive의 다운로드(Downloads)에 저장 됩니다.'
+      : '이 기기에서는 백업 폴더를 직접 지정할 수 없어요.\n백업 파일은 기기의 다운로드(Download) 폴더에 저장 됩니다.';
+    showInfoDialog('백업 위치 안내', msg);
     return;
   }
   try {
