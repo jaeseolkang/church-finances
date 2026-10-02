@@ -1558,6 +1558,7 @@ function renderShell() {
     <div class="sheet" id="excelRangeSheet"></div>
     <div class="sheet" id="backupRangeSheet"></div>
     <div class="sheet" id="maturitySheet"></div>
+    <div class="sheet" id="bulkOfferSheet" style="max-height:100%;border-radius:0;z-index:96;"></div>
     <div class="toast" id="toast"></div>
   `;
   renderTabbar();
@@ -10034,6 +10035,8 @@ function renderDayDetail(dateStr) {
         <button class="day-add-btn expense" id="ddAddExpense">${ICONS.plus} 지출 추가</button>
       </div>
 
+      ${State.categories.some(c => c.name === '헌금' && c.type === 'income') ? `<button class="day-add-btn" id="ddBulkOffer" style="width:100%;background:var(--income-light);color:var(--income);margin:-8px 0 14px;">📊 헌금 일괄 입력 (여러 명 한 번에)</button>` : ''}
+
       <div class="card" style="padding:4px 16px;">
         ${list.length === 0 ? emptyStateHTML('이 날의 내역이 없어요', '위 버튼으로 수입이나 지출을 추가해보세요') : list.map(txItemHTML).join('')}
       </div>
@@ -10131,6 +10134,7 @@ function renderDayDetail(dateStr) {
 
   sheet.querySelector('#ddAddIncome').addEventListener('click', () => openTxSheet(null, dateStr, 'income', State.selectedAccountId));
   sheet.querySelector('#ddAddExpense').addEventListener('click', () => openTxSheet(null, dateStr, 'expense', State.selectedAccountId));
+  sheet.querySelector('#ddBulkOffer')?.addEventListener('click', () => openBulkOfferSheet(dateStr));
   sheet.querySelectorAll('.tx-item').forEach(el => {
     el.addEventListener('click', () => {
       const tappedTx = list.find(t => t.id === el.dataset.id);
@@ -10142,6 +10146,330 @@ function renderDayDetail(dateStr) {
       openTxSheet(el.dataset.id, dateStr);
     });
   });
+}
+
+/* =========================================================
+   BULK OFFER SHEET (헌금 일괄 입력) — 엑셀형 셀 그리드
+   행: 교인(subGroups), 열: 헌금종류(공통 소분류 이름)
+   금액 단위: 천원 — 셀에 1을 입력하면 1,000원으로 저장된다.
+   ========================================================= */
+let bulkOfferDate = todayStr();
+let bulkManageRows = false;   // 교인 가리기 관리 모드
+let bulkManageCols = false;   // 헌금종류 가리기 관리 모드
+let bulkGridData = {};        // { "groupId::헌금종류이름" : 천원 단위 숫자 }
+let bulkHiddenCols = [];      // 이 화면에서만 가려둔 헌금종류 이름 목록 (settings에 저장)
+
+async function getBulkHiddenCols() {
+  const rec = await DB.get('settings', 'bulkOfferHiddenCols');
+  return rec && Array.isArray(rec.value) ? rec.value : [];
+}
+async function setBulkHiddenCols(v) {
+  await DB.put('settings', { key: 'bulkOfferHiddenCols', value: v });
+}
+
+// 일괄 입력에 보여줄 교인(중분류) 목록 — 개별 입력과 같은 방식으로
+// 명부(persons)에서 숨김 처리된 교인은 제외한다.
+function bulkVisibleGroups(heongCat) {
+  return subGroupsOfCategory(heongCat.id).filter(g => {
+    const person = (State.persons || []).find(p => p.id === g.id);
+    return !person || !person.hidden;
+  });
+}
+
+function bulkCellKey(groupId, colName) { return `${groupId}::${colName}`; }
+
+// 일괄 입력의 열(헌금종류) 이름 목록.
+// 기본은 그룹별 공통 소분류(canonical)이고, 이 교회처럼 그룹 연결 없이
+// 카테고리 레벨 공통 소분류만 쓰는 구조면 그 항목들을 열로 사용한다.
+function bulkColumnNames(heongCat) {
+  const canon = canonicalSubItemNamesForCategory(heongCat.id);
+  if (canon.length > 0) return canon;
+  return sortItemsForEntry(subItemsOfCategory(heongCat.id).filter(s => !s.subGroupId)).map(s => s.name);
+}
+
+// 저장 시 헌금종류 이름 → 소분류 레코드 찾기.
+// 개별 입력(STEP3)과 같은 우선순위: 그 교인 전용 항목 → 공통(subGroupId 없는) 항목.
+function bulkFindSubItem(heongCat, groupId, name) {
+  const items = subItemsOfCategory(heongCat.id);
+  return items.find(s => s.subGroupId === groupId && s.name === name)
+      || items.find(s => !s.subGroupId && s.name === name)
+      || null;
+}
+
+async function openBulkOfferSheet(dateStr) {
+  if (!getIsAdmin()) { showPasswordPrompt(() => openBulkOfferSheet(dateStr)); return; }
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+  if (!heongCat) { showToast('헌금 대분류가 없어요'); return; }
+  bulkOfferDate = dateStr || todayStr();
+  bulkGridData = {};
+  bulkManageRows = false;
+  bulkManageCols = false;
+  bulkHiddenCols = await getBulkHiddenCols();
+  renderBulkOfferSheet();
+  openSheet('bulkOfferSheet');
+}
+
+function renderBulkOfferSheet() {
+  const sheet = document.getElementById('bulkOfferSheet');
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+  if (!heongCat) { sheet.innerHTML = ''; return; }
+
+  const allGroups = subGroupsOfCategory(heongCat.id);
+  const groups = bulkVisibleGroups(heongCat);
+  const allCols = bulkColumnNames(heongCat);
+  const cols = allCols.filter(n => !bulkHiddenCols.includes(n));
+
+  // 합계 계산 (저장/표시는 원 단위, 셀 값은 천원 단위)
+  const cellVal = (gid, n) => (Number(bulkGridData[bulkCellKey(gid, n)]) || 0) * 1000;
+  const rowTotal = gid => cols.reduce((s, n) => s + cellVal(gid, n), 0);
+  const colTotal = n => groups.reduce((s, g) => s + cellVal(g.id, n), 0);
+  const grandTotal = () => groups.reduce((s, g) => s + rowTotal(g.id), 0);
+  const filledCount = () => groups.filter(g => rowTotal(g.id) > 0).length;
+
+  const toolbarHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <input type="date" id="bulkDate" class="dateinput" value="${bulkOfferDate}" style="flex:0 0 auto;width:150px;padding:9px 12px;">
+      <span style="font-size:12px;font-weight:700;color:var(--income);background:var(--income-light);border-radius:8px;padding:6px 10px;">단위: 천원 (1 = 1,000원)</span>
+      <button id="bulkManageRowsBtn" style="font-size:12px;font-weight:700;border-radius:8px;padding:6px 10px;${bulkManageRows ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text-2);'}">👥 교인 가리기</button>
+      <button id="bulkManageColsBtn" style="font-size:12px;font-weight:700;border-radius:8px;padding:6px 10px;${bulkManageCols ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text-2);'}">🏷️ 항목 가리기</button>
+    </div>`;
+
+  const rowManageHTML = `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">체크한 교인은 이 화면과 개별 헌금 입력 목록에서 숨겨져요. (명부의 "숨김"과 같은 설정이에요)</div>
+    <div style="border:1px solid var(--border);border-radius:12px;overflow-y:auto;flex:1;min-height:0;background:var(--card);">
+      ${allGroups.map(g => {
+        const person = (State.persons || []).find(p => p.id === g.id);
+        const hidden = !!(person && person.hidden);
+        return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);font-size:13.5px;cursor:pointer;">
+          <input type="checkbox" class="bulk-row-hide-toggle" data-id="${g.id}" data-name="${escapeHTML(g.name)}" ${hidden ? 'checked' : ''} style="accent-color:var(--primary);width:16px;height:16px;">
+          <span style="flex:1;${hidden ? 'color:var(--text-3);' : ''}">${hidden ? '🚫 ' : ''}${escapeHTML(g.name)}</span>
+        </label>`;
+      }).join('') || `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:12.5px;">교인이 없어요</div>`}
+    </div>`;
+
+  const colManageHTML = `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">체크한 헌금 종류는 이 일괄 입력 화면에서만 숨겨져요. (개별 입력 화면에는 그대로 보여요)</div>
+    <div style="border:1px solid var(--border);border-radius:12px;overflow-y:auto;flex:1;min-height:0;background:var(--card);">
+      ${allCols.map(n => {
+        const hidden = bulkHiddenCols.includes(n);
+        return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);font-size:13.5px;cursor:pointer;">
+          <input type="checkbox" class="bulk-col-hide-toggle" data-name="${escapeHTML(n)}" ${hidden ? 'checked' : ''} style="accent-color:var(--primary);width:16px;height:16px;">
+          <span style="flex:1;${hidden ? 'color:var(--text-3);' : ''}">${hidden ? '🚫 ' : ''}${escapeHTML(n)}</span>
+        </label>`;
+      }).join('') || `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:12.5px;">헌금 종류가 없어요</div>`}
+    </div>`;
+
+  const gridHTML = `
+    <div class="bulk-grid-wrap">
+      <table class="bulk-table">
+        <thead>
+          <tr>
+            <th class="bulk-name-col">이름</th>
+            ${cols.map(n => `<th>${escapeHTML(n)}</th>`).join('')}
+            <th class="bulk-total-col">합계</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${groups.map(g => `
+            <tr>
+              <td class="bulk-name-col">${escapeHTML(g.name)}</td>
+              ${cols.map(n => {
+                const v = Number(bulkGridData[bulkCellKey(g.id, n)]) || 0;
+                return `<td><input type="text" inputmode="numeric" class="bulk-cell-input" data-gid="${g.id}" data-col="${escapeHTML(n)}" value="${v ? v.toLocaleString('ko-KR') : ''}"></td>`;
+              }).join('')}
+              <td class="bulk-total-col tabular" data-row-total="${g.id}" style="text-align:right;">${rowTotal(g.id) ? fmtMoney(rowTotal(g.id)) : ''}</td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="bulk-name-col">합계</td>
+            ${cols.map(n => `<td class="tabular" data-col-total="${escapeHTML(n)}" style="text-align:right;">${colTotal(n) ? fmtMoney(colTotal(n)) : ''}</td>`).join('')}
+            <td class="bulk-total-col tabular" id="bulkGrandTotal" style="text-align:right;">${grandTotal() ? fmtMoney(grandTotal()) : ''}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  const saveBarHTML = `
+    <div style="padding-top:10px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <div style="flex:1;font-size:12.5px;color:var(--text-2);">
+        <b id="bulkFilledCount">${filledCount()}</b>명 · 총 <b id="bulkGrandLabel" class="tabular" style="color:var(--income);">${fmtMoney(grandTotal())}</b>원
+      </div>
+      <button id="bulkSaveBtn" class="btn-primary" style="flex:1.2;margin-top:0;padding:13px 0;">일괄 저장</button>
+    </div>`;
+
+  const gridEmptyMsg = groups.length === 0
+    ? '표시할 교인이 없어요.<br>[교인 가리기]에서 숨김을 해제하거나<br>명부 탭에서 교인을 추가해주세요.'
+    : '표시할 헌금 종류가 없어요.<br>[항목 가리기]에서 숨김을 해제해주세요.';
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button id="bulkClose" class="sheet-close-btn">${ICONS.close}닫기</button>
+      <h3>📊 헌금 일괄 입력</h3>
+      <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
+    </div>
+    <div class="sheet-body" style="display:flex;flex-direction:column;overflow:hidden;padding:8px 14px 16px;">
+      ${toolbarHTML}
+      ${bulkManageRows ? rowManageHTML : bulkManageCols ? colManageHTML : `
+        ${groups.length === 0 || cols.length === 0
+          ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;text-align:center;line-height:1.7;">${gridEmptyMsg}</div>`
+          : gridHTML}
+        ${saveBarHTML}
+      `}
+    </div>
+  `;
+
+  sheet.querySelector('#bulkClose').addEventListener('click', () => closeSheet('bulkOfferSheet'));
+  sheet.querySelector('#bulkDate').addEventListener('change', (e) => { bulkOfferDate = e.target.value || todayStr(); });
+  sheet.querySelector('#bulkManageRowsBtn').addEventListener('click', () => { bulkManageRows = !bulkManageRows; bulkManageCols = false; renderBulkOfferSheet(); });
+  sheet.querySelector('#bulkManageColsBtn').addEventListener('click', () => { bulkManageCols = !bulkManageCols; bulkManageRows = false; renderBulkOfferSheet(); });
+
+  // 교인 가리기 토글 — 개별 입력과 같은 persons.hidden 필드 사용
+  sheet.querySelectorAll('.bulk-row-hide-toggle').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      let p = await DB.get('persons', cb.dataset.id);
+      if (!p) {
+        // 명부에 아직 없는 이름이면 이 자리에서 새로 등록 (개별 입력 화면과 같은 처리)
+        p = {
+          id: cb.dataset.id, categoryId: heongCat.id, name: cb.dataset.name,
+          position: '성도', residentId: '', phone: '', address: '', memo: '',
+          hidden: false, createdAt: Date.now(), family: '', generation: '', headId: '',
+        };
+      }
+      p.hidden = cb.checked;
+      await DB.put('persons', p);
+      await reloadData();
+      renderBulkOfferSheet();
+    });
+  });
+
+  // 헌금종류 가리기 토글 — 이 일괄 입력 화면에만 적용 (settings에 저장)
+  sheet.querySelectorAll('.bulk-col-hide-toggle').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const name = cb.dataset.name;
+      bulkHiddenCols = cb.checked ? [...new Set([...bulkHiddenCols, name])] : bulkHiddenCols.filter(n => n !== name);
+      await setBulkHiddenCols(bulkHiddenCols);
+      renderBulkOfferSheet();
+    });
+  });
+
+  // 셀 입력 — 천원 단위 숫자만 입력. 입력할 때마다 행/열 합계를 갱신한다.
+  sheet.querySelectorAll('.bulk-cell-input').forEach(input => {
+    attachMoneyInputFormatter(input, (v) => {
+      const key = bulkCellKey(input.dataset.gid, input.dataset.col);
+      if (v === null) delete bulkGridData[key]; else bulkGridData[key] = v;
+      updateBulkTotals(sheet);
+    }, 9);
+    // Enter → 같은 열의 다음 행으로 이동 (엑셀처럼 세로 입력)
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const inputs = Array.from(sheet.querySelectorAll('.bulk-cell-input'));
+      const idx = inputs.indexOf(input);
+      const next = inputs[idx + cols.length];
+      (next || inputs[0]).focus();
+    });
+  });
+
+  sheet.querySelector('#bulkSaveBtn')?.addEventListener('click', saveBulkOffer);
+}
+
+// 셀 값이 바뀔 때 행 합계/열 합계/총합계만 부분 갱신 (전체 리렌더링으로 포커스가 날아가지 않게)
+function updateBulkTotals(sheet) {
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+  if (!heongCat) return;
+  const groups = bulkVisibleGroups(heongCat);
+  const cols = bulkColumnNames(heongCat).filter(n => !bulkHiddenCols.includes(n));
+  const cellVal = (gid, n) => (Number(bulkGridData[bulkCellKey(gid, n)]) || 0) * 1000;
+  groups.forEach(g => {
+    const el = sheet.querySelector(`[data-row-total="${g.id}"]`);
+    if (el) { const t = cols.reduce((s, n) => s + cellVal(g.id, n), 0); el.textContent = t ? fmtMoney(t) : ''; }
+  });
+  cols.forEach(n => {
+    const el = sheet.querySelector(`[data-col-total="${n}"]`);
+    if (el) { const t = groups.reduce((s, g) => s + cellVal(g.id, n), 0); el.textContent = t ? fmtMoney(t) : ''; }
+  });
+  const grand = groups.reduce((s, g) => s + cols.reduce((s2, n) => s2 + cellVal(g.id, n), 0), 0);
+  const gt = sheet.querySelector('#bulkGrandTotal'); if (gt) gt.textContent = grand ? fmtMoney(grand) : '';
+  const gl = sheet.querySelector('#bulkGrandLabel'); if (gl) gl.textContent = fmtMoney(grand);
+  const fc = sheet.querySelector('#bulkFilledCount');
+  if (fc) fc.textContent = groups.filter(g => cols.some(n => cellVal(g.id, n) > 0)).length;
+}
+
+async function saveBulkOffer() {
+  const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
+  if (!heongCat) return;
+  if (!bulkOfferDate) { showToast('날짜를 선택해주세요'); return; }
+  const groups = bulkVisibleGroups(heongCat);
+  const cols = bulkColumnNames(heongCat).filter(n => !bulkHiddenCols.includes(n));
+
+  // 교인별로 입력된 칸 모으기 (천원 → 원 변환)
+  const rows = groups.map(g => ({
+    g,
+    cells: cols.map(n => ({ name: n, amount: (Number(bulkGridData[bulkCellKey(g.id, n)]) || 0) * 1000 }))
+               .filter(c => c.amount > 0),
+  })).filter(r => r.cells.length > 0);
+
+  if (rows.length === 0) { showToast('금액을 1칸 이상 입력해주세요'); return; }
+
+  // 같은 날짜에 이미 헌금 내역이 있는 교인은 덮어쓸지 물어본다 (중복 입력 방지)
+  const existing = State.transactions.filter(t => t.type === 'income' && t.categoryId === heongCat.id && t.date === bulkOfferDate);
+  const conflictIds = new Set(rows.filter(r => existing.some(t => t.subGroupId === r.g.id)).map(r => r.g.id));
+  const skipIds = new Set();
+  if (conflictIds.size > 0) {
+    const overwrite = confirm(`이미 ${bulkOfferDate}에 헌금 내역이 있는 교인 ${conflictIds.size}명이 있습니다.\n\n[확인] 기존 내역을 지우고 새 값으로 덮어쓰기\n[취소] 해당 교인은 건너뛰기`);
+    if (overwrite) {
+      for (const t of existing.filter(t => conflictIds.has(t.subGroupId))) await DB.del('transactions', t.id);
+    } else {
+      conflictIds.forEach(id => skipIds.add(id));
+    }
+  }
+
+  let savedCount = 0;
+  for (const r of rows) {
+    if (skipIds.has(r.g.id)) continue;
+    const lines = [];
+    for (const c of r.cells) {
+      let si = bulkFindSubItem(heongCat, r.g.id, c.name);
+      if (!si) {
+        // 이 종류의 소분류가 아직 없으면 새로 만들어 저장.
+        // 교회 데이터 구조에 맞춰: 그룹별 전용 항목을 쓰는 구조면 그 교인 전용으로,
+        // 공통 항목만 쓰는 구조면 공통(subGroupId 없음)으로 만든다.
+        const hasDedicated = subItemsOfCategory(heongCat.id).some(s => s.subGroupId);
+        si = { id: uid(), categoryId: heongCat.id, subGroupId: hasDedicated ? r.g.id : null, name: c.name, order: State.subItems.length, budget: 0 };
+        await DB.put('subItems', si);
+      }
+      lines.push({ subItemId: si.id, amount: c.amount, subItemName: si.name });
+    }
+    const total = lines.reduce((s, l) => s + l.amount, 0);
+    // 개별 입력(saveTx)과 같은 형태: 교인 1명 = 거래 1건(lines[] 포함)
+    await DB.put('transactions', {
+      id: uid(),
+      type: 'income',
+      categoryId: heongCat.id,
+      subGroupId: r.g.id,
+      lines,
+      amount: total,
+      date: bulkOfferDate,
+      memo: '',
+      accountId: State.selectedAccountId || null,
+      createdAt: Date.now(),
+      categoryName: heongCat.name,
+      categoryIcon: heongCat.icon,
+      categoryColor: heongCat.color,
+      subGroupName: r.g.name,
+    });
+    savedCount++;
+  }
+
+  await reloadData();
+  bulkGridData = {};
+  renderBulkOfferSheet();
+  if (State.dayDetailDate) renderDayDetail(State.dayDetailDate);
+  renderCurrentPage();
+  showToast(`${savedCount}명의 헌금이 저장됐어요${skipIds.size ? ` (${skipIds.size}명은 건너뜀)` : ''}`);
+  if (USE_FIREBASE) syncToFirebase().catch(e => console.error('sync error:', e));
 }
 
 /* =========================================================

@@ -991,6 +991,38 @@ input,textarea,select{font-family:inherit; color:inherit;}
   .print-bar-pct { min-width: 26pt; text-align: right; color: #555; }
   .print-section-title { font-size: 11pt; font-weight: 800; margin-bottom: 5pt; margin-top: 7pt; }
 }
+
+/* ===== 헌금 일괄 입력 그리드 ===== */
+.bulk-grid-wrap{
+  flex:1; min-height:0; overflow:auto;
+  border:1px solid var(--border); border-radius:12px;
+  -webkit-overflow-scrolling:touch;
+  background:var(--card);
+}
+.bulk-table{border-collapse:separate; border-spacing:0; font-size:12.5px;}
+.bulk-table th, .bulk-table td{
+  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+  padding:5px 6px; background:var(--card); white-space:nowrap;
+}
+.bulk-table thead th{
+  position:sticky; top:0; z-index:3;
+  background:var(--bg); font-weight:700; text-align:center; font-size:12px;
+}
+.bulk-table .bulk-name-col{
+  position:sticky; left:0; z-index:2;
+  background:var(--card); font-weight:700; text-align:left;
+  max-width:110px; overflow:hidden; text-overflow:ellipsis;
+}
+.bulk-table thead .bulk-name-col{z-index:4; background:var(--bg);}
+.bulk-table tfoot td{position:sticky; bottom:0; z-index:2; background:var(--bg); font-weight:800;}
+.bulk-table tfoot .bulk-name-col{z-index:3; background:var(--bg);}
+.bulk-cell-input{
+  width:66px; border:none; outline:none; background:transparent;
+  text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:var(--text-1);
+}
+.bulk-cell-input:focus{background:var(--primary-light); border-radius:6px;}
+.bulk-table .bulk-total-col{font-weight:800; text-align:right; background:#FAFBFD;}
+.bulk-table tfoot .bulk-total-col{background:var(--bg);}
 </style>
 </head>
 <body>
