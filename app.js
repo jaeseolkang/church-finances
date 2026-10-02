@@ -8092,7 +8092,7 @@ async function runAutoBackup(manual = false) {
 
 async function pickAutoBackupFolder() {
   if (!window.showDirectoryPicker) {
-    showToast('이 기기에서는 폴더 지정이 지원되지 않아요 (iOS 미지원). 월요일에 자동 다운로드로 대신해요.');
+    showToast('이 기기(ios)에서는 iCloud Drive의 다운로드(Downloads)에 저장 됩니다');
     return;
   }
   try {
