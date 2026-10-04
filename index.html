@@ -1,9 +1,10 @@
-<!-- 2026-07-02 KST | 수정: 계정 탭 연도 선택 버튼 CSS 추가 -->
+<!-- 2026-10-05 KST | 수정: 모바일/태블릿 가상자판 대응 — 페이지를 자판 위 영역에 고정하고 시트 내부만 스크롤 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- interactive-widget=resizes-content: 안드로이드 크롬에서 자판이 올라올 때 레이아웃 뷰포트 자체를 줄여줌 (iOS는 app.js의 visualViewport 처리가 담당) -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>교회회계 프로그램</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2D6CDF">
@@ -53,6 +54,12 @@ html,body{
 body{
   position:fixed;
   inset:0;
+  /* 가상자판이 열리면 app.js가 --app-vh/--app-vt를 자판 위 보이는 영역으로 바꿔
+     페이지 전체를 그 영역에 고정한다. 그래서 페이지를 밀어 올려도 상단 제목이
+     가려지지 않고, 스크롤은 시트 내부(그리드)에서만 일어난다.
+     PC는 자판이 없어 변수가 바뀌지 않으므로 항상 전체 화면 그대로다. */
+  top:var(--app-vt, 0);
+  height:var(--app-vh, 100%);
   display:flex;
   flex-direction:column;
 }

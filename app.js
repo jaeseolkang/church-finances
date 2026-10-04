@@ -1,7 +1,7 @@
-// v4.107 | 2026-10-03 KST | 수정: 백업 위치 안내를 기기별(iOS/기타) 메시지 + 확인 버튼 대화상자로 변경 —
+// v4.108 | 2026-10-05 KST | 수정: 헌금 일괄 입력 — 모바일/태블릿에서 자판이 올라올 때 페이지를 자판 위 영역에 고정하고 시트 내부만 스크롤되도록 —
 
 'use strict';
-const APP_VERSION = 'v4.107 (cache v4107)';
+const APP_VERSION = 'v4.108 (cache v4108)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10434,6 +10434,12 @@ function renderBulkOfferSheet() {
       const next = inputs[idx + cols.length];
       (next || inputs[0]).focus();
     });
+    // 포커스된 셀이 자판이나 sticky 합계 행에 가려지지 않도록
+    // 자판 애니메이션이 끝난 뒤 그리드 내부에서만 살짝 스크롤한다.
+    // block:'nearest'라 페이지 통째 스크롤(상단 제목 가림)은 일어나지 않는다.
+    input.addEventListener('focus', () => {
+      setTimeout(() => input.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 350);
+    });
   });
 
   sheet.querySelector('#bulkSaveBtn')?.addEventListener('click', saveBulkOffer);
@@ -12469,6 +12475,39 @@ async function addSubOrPerson(sheet, categoryId, mode) {
 }
 
 /* =========================================================
+   VIEWPORT SYNC — 모바일/태블릿 가상자판 대응
+   자판이 올라오면 body를 자판 위의 보이는 영역(visualViewport)에 딱 맞춰
+   고정한다. 그러면 페이지 통째 스크롤이 사라지고 상단 제목·저장 버튼이
+   항상 보인 채로 시트 내부(그리드)만 스크롤된다.
+   PC는 자판이 없어 보이는 높이가 그대로라 아무 변화가 없고,
+   안드로이드 최신 크롬은 interactive-widget=resizes-content가 알아서
+   줄여주므로 이 코드는 iOS/구형 브라우저용 보험 역할을 한다.
+   ========================================================= */
+function syncAppViewport() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const ae = document.activeElement;
+  const editing = !!(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+  // '자판이 열렸다'고 판단하는 조건: 입력 칸에 포커스가 있고 보이는 높이가
+  // 충분히 줄었을 때뿐. (PC 브라우저 줌 등 다른 높이 변화와 구분하기 위해)
+  const kbOpen = editing && vv.height < window.innerHeight * 0.8;
+  const root = document.documentElement;
+  if (kbOpen) {
+    root.style.setProperty('--app-vh', vv.height + 'px');
+    root.style.setProperty('--app-vt', vv.offsetTop + 'px');
+  } else {
+    root.style.setProperty('--app-vh', '100%');
+    root.style.setProperty('--app-vt', '0px');
+  }
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncAppViewport);
+  window.visualViewport.addEventListener('scroll', syncAppViewport);
+}
+document.addEventListener('focusin', () => setTimeout(syncAppViewport, 60));
+document.addEventListener('focusout', () => setTimeout(syncAppViewport, 60));
+
+/* =========================================================
    INIT
    ========================================================= */
 async function initApp() {
@@ -12479,6 +12518,7 @@ async function initApp() {
   await reloadData();
   renderShell();
   switchTab('home');
+  syncAppViewport();
   // Firebase 관련은 렌더링 후 백그라운드 실행 (초기 로딩 속도 영향 없도록)
   setTimeout(async () => { await restoreAdminState(); applyLockState(); renderTabbar(); }, 500);
   setTimeout(() => checkMaturityAndNotify(false), 5000);
