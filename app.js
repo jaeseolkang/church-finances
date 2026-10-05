@@ -1,7 +1,7 @@
-// v4.109 | 2026-10-05 KST | 수정: 헌금 일괄 입력 — 네이티브 자판 대신 2단 커스텀 숫자 패드, 일괄저장 버튼을 도구줄로 이동해 시트 영역 확대 —
+// v4.110 | 2026-10-05 KST | 수정: 헌금 일괄 입력 — 시트를 항상 전체 높이로 고정(배경 터치로 닫힘 방지) + 셀 터치 영역을 칸 전체로 확대 —
 
 'use strict';
-const APP_VERSION = 'v4.109 (cache v4109)';
+const APP_VERSION = 'v4.110 (cache v4110)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -1561,7 +1561,7 @@ function renderShell() {
     <div class="sheet" id="excelRangeSheet"></div>
     <div class="sheet" id="backupRangeSheet"></div>
     <div class="sheet" id="maturitySheet"></div>
-    <div class="sheet" id="bulkOfferSheet" style="max-height:100%;border-radius:0;z-index:96;"></div>
+    <div class="sheet" id="bulkOfferSheet" style="height:100%;max-height:100%;border-radius:0;z-index:96;"></div>
     <div class="toast" id="toast"></div>
   `;
   renderTabbar();
@@ -10349,7 +10349,7 @@ function renderBulkOfferSheet() {
                 const v = Number(bulkGridData[bulkCellKey(g.id, n)]) || 0;
                 // inputmode="none": 모바일 네이티브 자판을 띄우지 않고 아래 커스텀 패드를 쓴다.
                 // PC 물리 키보드 입력은 inputmode와 무관하게 그대로 동작한다.
-                return `<td><input type="text" inputmode="none" class="bulk-cell-input" data-gid="${g.id}" data-col="${escapeHTML(n)}" value="${v ? v.toLocaleString('ko-KR') : ''}"></td>`;
+                return `<td class="bulk-cell-td"><input type="text" inputmode="none" class="bulk-cell-input" data-gid="${g.id}" data-col="${escapeHTML(n)}" value="${v ? v.toLocaleString('ko-KR') : ''}"></td>`;
               }).join('')}
               <td class="bulk-total-col tabular" data-row-total="${g.id}" style="text-align:right;">${rowTotal(g.id) ? fmtMoney(rowTotal(g.id)) : ''}</td>
             </tr>`).join('')}

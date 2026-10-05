@@ -1,4 +1,4 @@
-<!-- 2026-10-05 KST | 수정: 모바일/태블릿 가상자판 대응 — 페이지를 자판 위 영역에 고정하고 시트 내부만 스크롤 -->
+<!-- 2026-10-05 KST | 수정: 일괄 입력 시트 전체 높이 고정 + 셀/패드 터치 영역 정합화 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -1023,9 +1023,14 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .bulk-table thead .bulk-name-col{z-index:4; background:var(--bg);}
 .bulk-table tfoot td{position:sticky; bottom:0; z-index:2; background:var(--bg); font-weight:800;}
 .bulk-table tfoot .bulk-name-col{z-index:3; background:var(--bg);}
+/* 터치 영역 = 보이는 칸 전체. input이 셀 안쪽 일부만 차지하면
+   셀 바깥을 눌렀을 때 아무 반응이 없는 데드존이 생기므로 꽉 채운다. */
+.bulk-table td.bulk-cell-td{padding:0;}
 .bulk-cell-input{
-  width:66px; border:none; outline:none; background:transparent;
+  display:block; width:100%; min-width:66px; height:100%; padding:6px;
+  border:none; outline:none; background:transparent;
   text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:var(--text-1);
+  -webkit-tap-highlight-color:transparent;
 }
 .bulk-cell-input:focus{background:var(--primary-light); border-radius:6px;}
 .bulk-table .bulk-total-col{font-weight:800; text-align:right; background:#FAFBFD;}
@@ -1042,6 +1047,7 @@ input,textarea,select{font-family:inherit; color:inherit;}
   font-size:18px; font-weight:700; color:var(--text-1);
   display:flex; align-items:center; justify-content:center;
   touch-action:manipulation; user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
 }
 .bulk-key:active{background:var(--primary-light); color:var(--primary);}
 .bulk-key[data-key="⌫"], .bulk-key[data-key="완료"]{font-size:13px; color:var(--text-2);}
