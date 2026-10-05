@@ -1,7 +1,7 @@
-// v4.108 | 2026-10-05 KST | 수정: 헌금 일괄 입력 — 모바일/태블릿에서 자판이 올라올 때 페이지를 자판 위 영역에 고정하고 시트 내부만 스크롤되도록 —
+// v4.109 | 2026-10-05 KST | 수정: 헌금 일괄 입력 — 네이티브 자판 대신 2단 커스텀 숫자 패드, 일괄저장 버튼을 도구줄로 이동해 시트 영역 확대 —
 
 'use strict';
-const APP_VERSION = 'v4.108 (cache v4108)';
+const APP_VERSION = 'v4.109 (cache v4109)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10290,12 +10290,20 @@ function renderBulkOfferSheet() {
   const grandTotal = () => groups.reduce((s, g) => s + rowTotal(g.id), 0);
   const filledCount = () => groups.filter(g => rowTotal(g.id) > 0).length;
 
+  // 버튼·여백을 최소화해 그리드(시트)가 차지하는 공간을 최대한 넓힌다.
+  // 저장 버튼은 가리기 버튼줄 오른쪽에 같은 크기로 배치하고,
+  // 요약(N명·총액)은 날짜줄 오른쪽에 작게 표시한다.
+  const manageBtnStyle = on => `flex:1;font-size:12px;font-weight:700;border-radius:10px;padding:10px 0;white-space:nowrap;${on ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text-2);'}`;
   const toolbarHTML = `
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-      <input type="date" id="bulkDate" class="dateinput" value="${bulkOfferDate}" style="flex:0 0 auto;width:150px;padding:9px 12px;">
-      <span style="font-size:12px;font-weight:700;color:var(--income);background:var(--income-light);border-radius:8px;padding:6px 10px;">단위: 천원 (1 = 1,000원)</span>
-      <button id="bulkManageRowsBtn" style="font-size:12px;font-weight:700;border-radius:8px;padding:6px 10px;${bulkManageRows ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text-2);'}">👥 교인 가리기</button>
-      <button id="bulkManageColsBtn" style="font-size:12px;font-weight:700;border-radius:8px;padding:6px 10px;${bulkManageCols ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text-2);'}">🏷️ 항목 가리기</button>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <input type="date" id="bulkDate" class="dateinput" value="${bulkOfferDate}" style="flex:0 0 auto;width:136px;padding:8px 10px;font-size:13px;">
+      <span style="font-size:11.5px;font-weight:700;color:var(--income);background:var(--income-light);border-radius:8px;padding:6px 8px;white-space:nowrap;">단위: 천원</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--text-2);white-space:nowrap;"><b id="bulkFilledCount">${filledCount()}</b>명 · 총 <b id="bulkGrandLabel" class="tabular" style="color:var(--income);">${fmtMoney(grandTotal())}</b>원</span>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <button id="bulkManageRowsBtn" style="${manageBtnStyle(bulkManageRows)}">👥 교인 가리기</button>
+      <button id="bulkManageColsBtn" style="${manageBtnStyle(bulkManageCols)}">🏷️ 항목 가리기</button>
+      <button id="bulkSaveBtn" class="btn-primary" style="flex:1;margin-top:0;padding:10px 0;font-size:12.5px;border-radius:10px;white-space:nowrap;">일괄 저장</button>
     </div>`;
 
   const rowManageHTML = `
@@ -10339,7 +10347,9 @@ function renderBulkOfferSheet() {
               <td class="bulk-name-col">${escapeHTML(g.name)}</td>
               ${cols.map(n => {
                 const v = Number(bulkGridData[bulkCellKey(g.id, n)]) || 0;
-                return `<td><input type="text" inputmode="numeric" class="bulk-cell-input" data-gid="${g.id}" data-col="${escapeHTML(n)}" value="${v ? v.toLocaleString('ko-KR') : ''}"></td>`;
+                // inputmode="none": 모바일 네이티브 자판을 띄우지 않고 아래 커스텀 패드를 쓴다.
+                // PC 물리 키보드 입력은 inputmode와 무관하게 그대로 동작한다.
+                return `<td><input type="text" inputmode="none" class="bulk-cell-input" data-gid="${g.id}" data-col="${escapeHTML(n)}" value="${v ? v.toLocaleString('ko-KR') : ''}"></td>`;
               }).join('')}
               <td class="bulk-total-col tabular" data-row-total="${g.id}" style="text-align:right;">${rowTotal(g.id) ? fmtMoney(rowTotal(g.id)) : ''}</td>
             </tr>`).join('')}
@@ -10354,12 +10364,10 @@ function renderBulkOfferSheet() {
       </table>
     </div>`;
 
-  const saveBarHTML = `
-    <div style="padding-top:10px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-      <div style="flex:1;font-size:12.5px;color:var(--text-2);">
-        <b id="bulkFilledCount">${filledCount()}</b>명 · 총 <b id="bulkGrandLabel" class="tabular" style="color:var(--income);">${fmtMoney(grandTotal())}</b>원
-      </div>
-      <button id="bulkSaveBtn" class="btn-primary" style="flex:1.2;margin-top:0;padding:13px 0;">일괄 저장</button>
+  // 커스텀 숫자 패드 — 네이티브 가상자판 대신 시트 맨 아래에 2단으로 표시
+  const keypadHTML = `
+    <div id="bulkKeypad" class="bulk-keypad" style="display:none;">
+      ${['1','2','3','4','5','⌫','6','7','8','9','0','완료'].map(k => `<button type="button" class="bulk-key" data-key="${k}">${k}</button>`).join('')}
     </div>`;
 
   const gridEmptyMsg = groups.length === 0
@@ -10373,13 +10381,13 @@ function renderBulkOfferSheet() {
       <h3>📊 헌금 일괄 입력</h3>
       <button class="sheet-close-btn" style="visibility:hidden;">${ICONS.close}닫기</button>
     </div>
-    <div class="sheet-body" style="display:flex;flex-direction:column;overflow:hidden;padding:8px 14px 16px;">
+    <div class="sheet-body" style="display:flex;flex-direction:column;overflow:hidden;padding:4px 14px 12px;">
       ${toolbarHTML}
       ${bulkManageRows ? rowManageHTML : bulkManageCols ? colManageHTML : `
         ${groups.length === 0 || cols.length === 0
           ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;text-align:center;line-height:1.7;">${gridEmptyMsg}</div>`
           : gridHTML}
-        ${saveBarHTML}
+        ${keypadHTML}
       `}
     </div>
   `;
@@ -10419,6 +10427,10 @@ function renderBulkOfferSheet() {
   });
 
   // 셀 입력 — 천원 단위 숫자만 입력. 입력할 때마다 행/열 합계를 갱신한다.
+  // 커스텀 숫자 패드: 터치 기기에서만 표시. PC는 물리 키보드로 그대로 입력한다.
+  const keypad = sheet.querySelector('#bulkKeypad');
+  const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+  let bulkLastCell = null;
   sheet.querySelectorAll('.bulk-cell-input').forEach(input => {
     attachMoneyInputFormatter(input, (v) => {
       const key = bulkCellKey(input.dataset.gid, input.dataset.col);
@@ -10434,13 +10446,44 @@ function renderBulkOfferSheet() {
       const next = inputs[idx + cols.length];
       (next || inputs[0]).focus();
     });
-    // 포커스된 셀이 자판이나 sticky 합계 행에 가려지지 않도록
-    // 자판 애니메이션이 끝난 뒤 그리드 내부에서만 살짝 스크롤한다.
-    // block:'nearest'라 페이지 통째 스크롤(상단 제목 가림)은 일어나지 않는다.
+    // 포커스된 셀이 패드나 sticky 합계 행에 가려지지 않도록
+    // 그리드 내부에서만 살짝 스크롤한다 (페이지 통째 스크롤 방지).
     input.addEventListener('focus', () => {
-      setTimeout(() => input.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 350);
+      bulkLastCell = input;
+      if (keypad && isTouch) keypad.style.display = 'grid';
+      setTimeout(() => input.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 80);
+    });
+    input.addEventListener('blur', () => {
+      // 다른 셀로 포커스가 옮겨가는 중이면 패드를 유지한다
+      setTimeout(() => {
+        const ae = document.activeElement;
+        if (keypad && (!ae || !ae.classList || !ae.classList.contains('bulk-cell-input'))) keypad.style.display = 'none';
+      }, 120);
     });
   });
+
+  // 패드 키 처리 — 포커스된 셀에 숫자를 넣고 input 이벤트를 발생시켜
+  // 기존 금액 포맷터(콤마·합계 갱신)가 그대로 동작하게 한다.
+  if (keypad) {
+    keypad.querySelectorAll('.bulk-key').forEach(btn => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); // 셀 포커스 유지 (blur → 패드 닫힘 방지)
+        const key = btn.dataset.key;
+        if (key === '완료') {
+          keypad.style.display = 'none';
+          if (bulkLastCell) bulkLastCell.blur();
+          return;
+        }
+        const ae = document.activeElement;
+        const input = (ae && ae.classList && ae.classList.contains('bulk-cell-input')) ? ae : bulkLastCell;
+        if (!input) return;
+        let digits = rawDigits(input.value);
+        digits = key === '⌫' ? digits.slice(0, -1) : (digits + key).slice(0, 9);
+        input.value = digits;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  }
 
   sheet.querySelector('#bulkSaveBtn')?.addEventListener('click', saveBulkOffer);
 }

@@ -1030,6 +1030,21 @@ input,textarea,select{font-family:inherit; color:inherit;}
 .bulk-cell-input:focus{background:var(--primary-light); border-radius:6px;}
 .bulk-table .bulk-total-col{font-weight:800; text-align:right; background:#FAFBFD;}
 .bulk-table tfoot .bulk-total-col{background:var(--bg);}
+/* ===== 헌금 일괄 입력 커스텀 숫자 패드 =====
+   네이티브 가상자판(거의 화면 절반)을 대체하는 2단 배열 패드.
+   시트 맨 아래에 붙어서 그리드가 최대한 넓게 보이도록 한다. */
+.bulk-keypad{
+  grid-template-columns:repeat(6,1fr); gap:6px;
+  padding-top:8px; flex-shrink:0;
+}
+.bulk-key{
+  height:44px; border-radius:10px; background:var(--bg);
+  font-size:18px; font-weight:700; color:var(--text-1);
+  display:flex; align-items:center; justify-content:center;
+  touch-action:manipulation; user-select:none; -webkit-user-select:none;
+}
+.bulk-key:active{background:var(--primary-light); color:var(--primary);}
+.bulk-key[data-key="⌫"], .bulk-key[data-key="완료"]{font-size:13px; color:var(--text-2);}
 </style>
 </head>
 <body>
