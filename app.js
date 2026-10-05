@@ -1,7 +1,7 @@
-// v4.113 | 2026-10-05 KST | 수정: 일괄 입력 셀의 input 제거 — iOS 스크롤 컨테이너 캐럿 위치 버그 원천 차단, 패드/키보드 입력은 선택 셀에 직접 반영 —
+// v4.114 | 2026-10-05 KST | 수정: 일괄 입력 임시저장 — 일괄 저장 전까지 입력값을 기기에 자동 보관·복원, [입력삭제] 버튼 추가, 저장 시에만 초기화 —
 
 'use strict';
-const APP_VERSION = 'v4.113 (cache v4113)';
+const APP_VERSION = 'v4.114 (cache v4114)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10231,6 +10231,21 @@ async function setBulkHiddenCols(v) {
   await DB.put('settings', { key: 'bulkOfferHiddenCols', value: v });
 }
 
+// 입력 중인 그리드 값(임시저장) — 일괄 저장 전까지 기기(settings)에 보관해
+// 시트를 닫거나 앱을 껐다 켜도 그대로 복원된다. 일괄 저장/입력삭제 시에만 지운다.
+async function getBulkDraft() {
+  const rec = await DB.get('settings', 'bulkOfferDraft');
+  return rec && rec.value && typeof rec.value === 'object' ? rec.value : { date: null, data: {} };
+}
+let bulkDraftTimer = null;
+function queueBulkDraftSave() {
+  clearTimeout(bulkDraftTimer);
+  bulkDraftTimer = setTimeout(() => {
+    DB.put('settings', { key: 'bulkOfferDraft', value: { date: bulkOfferDate, data: bulkGridData } })
+      .catch(e => console.error('draft save error:', e));
+  }, 300);
+}
+
 // 일괄 입력에 보여줄 교인(중분류) 목록 — 개별 입력과 같은 방식으로
 // 명부(persons)에서 숨김 처리된 교인은 제외한다.
 function bulkVisibleGroups(heongCat) {
@@ -10265,7 +10280,10 @@ async function openBulkOfferSheet(dateStr) {
   const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
   if (!heongCat) { showToast('헌금 대분류가 없어요'); return; }
   bulkOfferDate = dateStr || todayStr();
-  bulkGridData = {};
+  // 저장하지 않고 닫은 입력값이 있으면 그대로 복원한다 (일괄 저장 전에는 지우지 않음)
+  const draft = await getBulkDraft();
+  bulkGridData = draft.data || {};
+  if (draft.date && Object.keys(bulkGridData).length > 0) bulkOfferDate = draft.date;
   bulkManageRows = false;
   bulkManageCols = false;
   bulkHiddenCols = await getBulkHiddenCols();
@@ -10303,6 +10321,7 @@ function renderBulkOfferSheet() {
     <div style="display:flex;gap:6px;margin-bottom:8px;">
       <button id="bulkManageRowsBtn" style="${manageBtnStyle(bulkManageRows)}">👥 교인 가리기</button>
       <button id="bulkManageColsBtn" style="${manageBtnStyle(bulkManageCols)}">🏷️ 항목 가리기</button>
+      <button id="bulkClearBtn" style="${manageBtnStyle(false)}">🗑️ 입력삭제</button>
       <button id="bulkSaveBtn" class="btn-primary" style="flex:1;margin-top:0;padding:10px 0;font-size:12.5px;border-radius:10px;white-space:nowrap;">일괄 저장</button>
     </div>`;
 
@@ -10394,7 +10413,7 @@ function renderBulkOfferSheet() {
   `;
 
   sheet.querySelector('#bulkClose').addEventListener('click', () => closeSheet('bulkOfferSheet'));
-  sheet.querySelector('#bulkDate').addEventListener('change', (e) => { bulkOfferDate = e.target.value || todayStr(); });
+  sheet.querySelector('#bulkDate').addEventListener('change', (e) => { bulkOfferDate = e.target.value || todayStr(); queueBulkDraftSave(); });
   sheet.querySelector('#bulkManageRowsBtn').addEventListener('click', () => { bulkManageRows = !bulkManageRows; bulkManageCols = false; renderBulkOfferSheet(); });
   sheet.querySelector('#bulkManageColsBtn').addEventListener('click', () => { bulkManageCols = !bulkManageCols; bulkManageRows = false; renderBulkOfferSheet(); });
 
@@ -10443,6 +10462,7 @@ function renderBulkOfferSheet() {
     if (digits === '') delete bulkGridData[key]; else bulkGridData[key] = Number(digits);
     cell.textContent = digits === '' ? '' : Number(digits).toLocaleString('ko-KR');
     updateBulkTotals(sheet);
+    queueBulkDraftSave();   // 입력값을 기기에 자동 임시저장
   };
   const selectCell = cell => {
     if (selCell) selCell.classList.remove('sel');
@@ -10500,6 +10520,16 @@ function renderBulkOfferSheet() {
   }
 
   sheet.querySelector('#bulkSaveBtn')?.addEventListener('click', saveBulkOffer);
+
+  // 입력삭제 — 저장하지 않고 현재 입력값만 모두 지운다 (한 번 더 확인 후 실행)
+  sheet.querySelector('#bulkClearBtn')?.addEventListener('click', async () => {
+    if (Object.keys(bulkGridData).length === 0) { showToast('삭제할 입력 내용이 없어요'); return; }
+    if (!confirm('저장하지 않은 입력 내용을 모두 삭제할까요?\n삭제 후에는 복구할 수 없어요.')) return;
+    bulkGridData = {};
+    await DB.del('settings', 'bulkOfferDraft');
+    renderBulkOfferSheet();
+    showToast('입력 내용을 모두 삭제했어요');
+  });
 }
 
 // 셀 값이 바뀔 때 행 합계/열 합계/총합계만 부분 갱신 (전체 리렌더링으로 포커스가 날아가지 않게)
@@ -10592,6 +10622,7 @@ async function saveBulkOffer() {
 
   await reloadData();
   bulkGridData = {};
+  await DB.del('settings', 'bulkOfferDraft');   // 저장 완료 시에만 임시저장 값 초기화
   renderBulkOfferSheet();
   if (State.dayDetailDate) renderDayDetail(State.dayDetailDate);
   renderCurrentPage();
