@@ -1,7 +1,7 @@
-// v4.112 | 2026-10-05 KST | 수정: iOS 터치 영역 밀림 해결 — 셀 글꼴 16px로 포커스 자동확대 차단 + visualViewport 고정 로직 제거 —
+// v4.113 | 2026-10-05 KST | 수정: 일괄 입력 셀의 input 제거 — iOS 스크롤 컨테이너 캐럿 위치 버그 원천 차단, 패드/키보드 입력은 선택 셀에 직접 반영 —
 
 'use strict';
-const APP_VERSION = 'v4.112 (cache v4112)';
+const APP_VERSION = 'v4.113 (cache v4113)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10347,9 +10347,10 @@ function renderBulkOfferSheet() {
               <td class="bulk-name-col">${escapeHTML(g.name)}</td>
               ${cols.map(n => {
                 const v = Number(bulkGridData[bulkCellKey(g.id, n)]) || 0;
-                // inputmode="none": 모바일 네이티브 자판을 띄우지 않고 아래 커스텀 패드를 쓴다.
-                // PC 물리 키보드 입력은 inputmode와 무관하게 그대로 동작한다.
-                return `<td class="bulk-cell-td"><input type="text" inputmode="none" class="bulk-cell-input" data-gid="${g.id}" data-col="${escapeHTML(n)}" value="${v ? v.toLocaleString('ko-KR') : ''}"></td>`;
+                // 진짜 <input>을 쓰지 않는다: iOS는 스크롤 컨테이너 안의 input 커서(캐럿)를
+                // 엉뚱한 위치에 그리는 WebKit 버그가 있어, 탭한 칸과 입력되는 칸이 어긋난다.
+                // 표시 전용 칸 + 커스텀 패드/키보드 직접 반영으로 아이폰·안드로이드·PC 동작을 통일한다.
+                return `<td class="bulk-cell-td"><div class="bulk-cell" role="textbox" tabindex="0" data-gid="${g.id}" data-col="${escapeHTML(n)}">${v ? v.toLocaleString('ko-KR') : ''}</div></td>`;
               }).join('')}
               <td class="bulk-total-col tabular" data-row-total="${g.id}" style="text-align:right;">${rowTotal(g.id) ? fmtMoney(rowTotal(g.id)) : ''}</td>
             </tr>`).join('')}
@@ -10426,61 +10427,74 @@ function renderBulkOfferSheet() {
     });
   });
 
-  // 셀 입력 — 천원 단위 숫자만 입력. 입력할 때마다 행/열 합계를 갱신한다.
-  // 커스텀 숫자 패드: 터치 기기에서만 표시. PC는 물리 키보드로 그대로 입력한다.
+  // ── 셀 선택/입력 모델 ──
+  // 셀은 표시 전용 <div>이고, 값은 bulkGridData가 진실의 원천이다.
+  // 탭(터치) 또는 Tab/클릭(포커스)으로 셀을 선택하고,
+  // 커스텀 패드(모바일) 또는 물리 키보드(PC)로 선택된 셀에 숫자를 넣는다.
+  const wrap = sheet.querySelector('.bulk-grid-wrap');
   const keypad = sheet.querySelector('#bulkKeypad');
   const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-  let bulkLastCell = null;
-  sheet.querySelectorAll('.bulk-cell-input').forEach(input => {
-    attachMoneyInputFormatter(input, (v) => {
-      const key = bulkCellKey(input.dataset.gid, input.dataset.col);
-      if (v === null) delete bulkGridData[key]; else bulkGridData[key] = v;
-      updateBulkTotals(sheet);
-    }, 9);
-    // Enter → 같은 열의 다음 행으로 이동 (엑셀처럼 세로 입력)
-    input.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const inputs = Array.from(sheet.querySelectorAll('.bulk-cell-input'));
-      const idx = inputs.indexOf(input);
-      const next = inputs[idx + cols.length];
-      (next || inputs[0]).focus();
-    });
-    // 포커스된 셀이 패드나 sticky 합계 행에 가려지지 않도록
-    // 그리드 내부에서만 살짝 스크롤한다 (페이지 통째 스크롤 방지).
-    input.addEventListener('focus', () => {
-      bulkLastCell = input;
-      if (keypad && isTouch) keypad.style.display = 'grid';
-      setTimeout(() => input.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 80);
-    });
-    input.addEventListener('blur', () => {
-      // 다른 셀로 포커스가 옮겨가는 중이면 패드를 유지한다
-      setTimeout(() => {
-        const ae = document.activeElement;
-        if (keypad && (!ae || !ae.classList || !ae.classList.contains('bulk-cell-input'))) keypad.style.display = 'none';
-      }, 120);
-    });
-  });
+  let selCell = null;
 
-  // 패드 키 처리 — 포커스된 셀에 숫자를 넣고 input 이벤트를 발생시켜
-  // 기존 금액 포맷터(콤마·합계 갱신)가 그대로 동작하게 한다.
+  const cellDigits = cell => rawDigits(cell.textContent);
+  const applyDigits = (cell, digits) => {
+    digits = digits.slice(0, 9);
+    const key = bulkCellKey(cell.dataset.gid, cell.dataset.col);
+    if (digits === '') delete bulkGridData[key]; else bulkGridData[key] = Number(digits);
+    cell.textContent = digits === '' ? '' : Number(digits).toLocaleString('ko-KR');
+    updateBulkTotals(sheet);
+  };
+  const selectCell = cell => {
+    if (selCell) selCell.classList.remove('sel');
+    selCell = cell;
+    if (!cell) return;
+    cell.classList.add('sel');
+    if (keypad && isTouch) keypad.style.display = 'grid';
+    // 선택된 셀이 패드나 sticky 합계 행에 가려지지 않도록 그리드 내부에서만 스크롤
+    setTimeout(() => cell.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 60);
+  };
+
+  if (wrap) {
+    sheet.querySelectorAll('.bulk-cell').forEach(cell => {
+      cell.addEventListener('click', () => selectCell(cell));
+      cell.addEventListener('focus', () => selectCell(cell));
+    });
+    // PC 물리 키보드 — 선택된 셀에 직접 반영 (숫자/백스페이스/Enter/Esc)
+    wrap.addEventListener('keydown', (e) => {
+      if (!selCell) return;
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        applyDigits(selCell, cellDigits(selCell) + e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        applyDigits(selCell, cellDigits(selCell).slice(0, -1));
+      } else if (e.key === 'Enter') {
+        // Enter → 같은 열의 다음 행으로 이동 (엑셀처럼 세로 입력)
+        e.preventDefault();
+        const cells = Array.from(sheet.querySelectorAll('.bulk-cell'));
+        const idx = cells.indexOf(selCell);
+        (cells[idx + cols.length] || cells[0]).focus();
+      } else if (e.key === 'Escape') {
+        selCell.blur();
+      }
+    });
+  }
+
+  // 패드 키 — 선택된 셀의 숫자를 직접 갱신한다.
+  // 커서가 없는 구조라 어느 기기든 '보이는 칸 = 입력되는 칸'이 보장된다.
   if (keypad) {
     keypad.querySelectorAll('.bulk-key').forEach(btn => {
-      btn.addEventListener('pointerdown', (e) => {
-        e.preventDefault(); // 셀 포커스 유지 (blur → 패드 닫힘 방지)
+      btn.addEventListener('click', () => {
         const key = btn.dataset.key;
         if (key === '완료') {
           keypad.style.display = 'none';
-          if (bulkLastCell) bulkLastCell.blur();
+          if (selCell) { selCell.classList.remove('sel'); selCell = null; }
           return;
         }
-        const ae = document.activeElement;
-        const input = (ae && ae.classList && ae.classList.contains('bulk-cell-input')) ? ae : bulkLastCell;
-        if (!input) return;
-        let digits = rawDigits(input.value);
-        digits = key === '⌫' ? digits.slice(0, -1) : (digits + key).slice(0, 9);
-        input.value = digits;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+        if (!selCell) return;
+        let digits = cellDigits(selCell);
+        digits = key === '⌫' ? digits.slice(0, -1) : digits + key;
+        applyDigits(selCell, digits);
       });
     });
   }

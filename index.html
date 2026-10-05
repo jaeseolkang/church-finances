@@ -80,7 +80,7 @@ input,textarea,select{font-family:inherit; color:inherit;}
    iOS Safari는 버튼·링크를 누르면 그 자리에 회색 하이라이트를 띄우고,
    길게 누르면 텍스트 선택/콜아웃이 떠서 위치가 어긋나 보인다.
    모든 버튼·입력 칸·패드 키에서 그 효과를 없앤다. */
-button, .bulk-cell-input, .bulk-key, label {
+button, .bulk-cell, .bulk-key, label {
   -webkit-tap-highlight-color:transparent;
   -webkit-touch-callout:none;
 }
@@ -1030,18 +1030,20 @@ button, .bulk-key {
 .bulk-table thead .bulk-name-col{z-index:4; background:var(--bg);}
 .bulk-table tfoot td{position:sticky; bottom:0; z-index:2; background:var(--bg); font-weight:800;}
 .bulk-table tfoot .bulk-name-col{z-index:3; background:var(--bg);}
-/* 터치 영역 = 보이는 칸 전체. input이 셀 안쪽 일부만 차지하면
-   셀 바깥을 눌렀을 때 아무 반응이 없는 데드존이 생기므로 꽉 채운다.
-   font-size는 반드시 16px 이상 — iOS는 16px 미만 입력 칸을 터치하면
-   화면을 자동 확대하는데, 그때 fixed 요소의 터치 판정 위치가 어긋난다. */
+/* 터치 영역 = 보이는 칸 전체. 셀은 <input>이 아니라 표시 전용 <div>다.
+   iOS는 스크롤 컨테이너 안 input의 커서를 엉뚱한 위치에 그리는 버그가 있어서
+   진짜 입력 칸을 두면 '탭한 칸 ≠ 입력되는 칸'이 된다. 그래서 커서를 없애고
+   선택 표시(.sel)만 보여주며, 값은 커스텀 패드/키보드가 직접 넣는다. */
 .bulk-table td.bulk-cell-td{padding:0;}
-.bulk-cell-input{
-  display:block; width:100%; min-width:66px; height:100%; padding:6px 4px;
-  border:none; outline:none; background:transparent;
-  text-align:right; font-size:16px; font-variant-numeric:tabular-nums; color:var(--text-1);
+.bulk-cell{
+  width:100%; min-width:66px; height:100%; min-height:38px; padding:6px 6px;
+  display:flex; align-items:center; justify-content:flex-end;
+  text-align:right; font-size:14px; font-variant-numeric:tabular-nums; color:var(--text-1);
+  outline:none; cursor:pointer;
+  user-select:none; -webkit-user-select:none;
   -webkit-tap-highlight-color:transparent;
 }
-.bulk-cell-input:focus{background:var(--primary-light); border-radius:6px;}
+.bulk-cell.sel{background:var(--primary-light); border-radius:6px;}
 .bulk-table .bulk-total-col{font-weight:800; text-align:right; background:#FAFBFD;}
 .bulk-table tfoot .bulk-total-col{background:var(--bg);}
 /* ===== 헌금 일괄 입력 커스텀 숫자 패드 =====
