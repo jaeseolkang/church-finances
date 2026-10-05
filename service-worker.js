@@ -1,11 +1,11 @@
-// 2026-10-05 KST | CACHE_NAME v4110 (일괄 입력 시트 전체 높이 고정 + 터치 영역 정합화)
+// 2026-10-05 KST | CACHE_NAME v4111 (iOS 터치 하이라이트·콜아웃 제거)
 // 캐시 이름에 SW scope(저장소 경로)를 자동 포함시켜, 같은 오리진
 // (jaeseolkang.github.io)을 쓰는 여러 교회 저장소가 activate 시
 // 서로의 캐시를 지우지 않도록 함. 이 값은 모든 교회 저장소에서
-// 그대로 두면 되고, 버전 문자열('v4110')만 배포 시 올리면 됨.
+// 그대로 두면 되고, 버전 문자열('v4111')만 배포 시 올리면 됨.
 'use strict';
 const CACHE_PREFIX = 'gaegyebu-' + self.registration.scope;
-const CACHE_NAME = CACHE_PREFIX + '-v4110';
+const CACHE_NAME = CACHE_PREFIX + '-v4111';
 const ASSETS = ['./', './index.html', './app.js', './xlsx-js-style.min.js', './jspdf.umd.min.js', './html2canvas.min.js', './manifest.json'];
 // caches.addAll()은 내부적으로 일반 fetch()를 쓰기 때문에 브라우저의 HTTP 캐시를
 // 그대로 따른다. 즉 SW 캐시 이름(v4103)을 새로 올려도 서버의 Cache-Control

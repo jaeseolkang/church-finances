@@ -82,6 +82,19 @@ input,textarea,select{font-family:inherit; color:inherit;}
   overflow:hidden;
 }
 
+/* ===== iOS 터치 정합성 =====
+   iOS Safari는 버튼·링크를 누르면 그 자리에 회색 하이라이트를 띄우고,
+   길게 누르면 텍스트 선택/콜아웃이 떠서 위치가 어긋나 보인다.
+   모든 버튼·입력 칸·패드 키에서 그 효과를 없앤다. */
+button, .bulk-cell-input, .bulk-key, label {
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+}
+button, .bulk-key {
+  touch-action:manipulation;
+  user-select:none; -webkit-user-select:none;
+}
+
 /* ===== Top App Bar ===== */
 .appbar{
   padding: calc(14px + var(--safe-top)) 20px 14px;
