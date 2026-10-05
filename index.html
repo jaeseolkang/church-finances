@@ -54,12 +54,6 @@ html,body{
 body{
   position:fixed;
   inset:0;
-  /* 가상자판이 열리면 app.js가 --app-vh/--app-vt를 자판 위 보이는 영역으로 바꿔
-     페이지 전체를 그 영역에 고정한다. 그래서 페이지를 밀어 올려도 상단 제목이
-     가려지지 않고, 스크롤은 시트 내부(그리드)에서만 일어난다.
-     PC는 자판이 없어 변수가 바뀌지 않으므로 항상 전체 화면 그대로다. */
-  top:var(--app-vt, 0);
-  height:var(--app-vh, 100%);
   display:flex;
   flex-direction:column;
 }
@@ -1037,12 +1031,14 @@ button, .bulk-key {
 .bulk-table tfoot td{position:sticky; bottom:0; z-index:2; background:var(--bg); font-weight:800;}
 .bulk-table tfoot .bulk-name-col{z-index:3; background:var(--bg);}
 /* 터치 영역 = 보이는 칸 전체. input이 셀 안쪽 일부만 차지하면
-   셀 바깥을 눌렀을 때 아무 반응이 없는 데드존이 생기므로 꽉 채운다. */
+   셀 바깥을 눌렀을 때 아무 반응이 없는 데드존이 생기므로 꽉 채운다.
+   font-size는 반드시 16px 이상 — iOS는 16px 미만 입력 칸을 터치하면
+   화면을 자동 확대하는데, 그때 fixed 요소의 터치 판정 위치가 어긋난다. */
 .bulk-table td.bulk-cell-td{padding:0;}
 .bulk-cell-input{
-  display:block; width:100%; min-width:66px; height:100%; padding:6px;
+  display:block; width:100%; min-width:66px; height:100%; padding:6px 4px;
   border:none; outline:none; background:transparent;
-  text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:var(--text-1);
+  text-align:right; font-size:16px; font-variant-numeric:tabular-nums; color:var(--text-1);
   -webkit-tap-highlight-color:transparent;
 }
 .bulk-cell-input:focus{background:var(--primary-light); border-radius:6px;}

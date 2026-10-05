@@ -1,7 +1,7 @@
-// v4.111 | 2026-10-05 KST | 수정: iOS 터치 하이라이트·콜아웃 제거로 버튼 위치 정합성 확보 —
+// v4.112 | 2026-10-05 KST | 수정: iOS 터치 영역 밀림 해결 — 셀 글꼴 16px로 포커스 자동확대 차단 + visualViewport 고정 로직 제거 —
 
 'use strict';
-const APP_VERSION = 'v4.111 (cache v4111)';
+const APP_VERSION = 'v4.112 (cache v4112)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -12518,37 +12518,14 @@ async function addSubOrPerson(sheet, categoryId, mode) {
 }
 
 /* =========================================================
-   VIEWPORT SYNC — 모바일/태블릿 가상자판 대응
-   자판이 올라오면 body를 자판 위의 보이는 영역(visualViewport)에 딱 맞춰
-   고정한다. 그러면 페이지 통째 스크롤이 사라지고 상단 제목·저장 버튼이
-   항상 보인 채로 시트 내부(그리드)만 스크롤된다.
-   PC는 자판이 없어 보이는 높이가 그대로라 아무 변화가 없고,
-   안드로이드 최신 크롬은 interactive-widget=resizes-content가 알아서
-   줄여주므로 이 코드는 iOS/구형 브라우저용 보험 역할을 한다.
+   VIEWPORT — 과거에는 여기서 visualViewport로 body를 자판 위 영역에
+   고정했지만, iOS는 fixed 요소의 '그려지는 위치'와 '터치 판정 위치'를
+   따로 계산해서 이 고정이 걸리는 순간 버튼의 실제 터치 영역이 아래로
+   밀렸다. 게다가 iOS가 16px 미만 입력 칸 터치 시 화면을 자동 확대하면
+   그 확대를 자판으로 오인해 고정이 잘못 발동했다.
+   지금은 일괄 입력에 커스텀 숫자 패드를 쓰므로 네이티브 자판이 뜨지
+   않아 이런 고정 자체가 필요 없다. (셀 글꼴 16px로 자동확대도 차단)
    ========================================================= */
-function syncAppViewport() {
-  const vv = window.visualViewport;
-  if (!vv) return;
-  const ae = document.activeElement;
-  const editing = !!(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
-  // '자판이 열렸다'고 판단하는 조건: 입력 칸에 포커스가 있고 보이는 높이가
-  // 충분히 줄었을 때뿐. (PC 브라우저 줌 등 다른 높이 변화와 구분하기 위해)
-  const kbOpen = editing && vv.height < window.innerHeight * 0.8;
-  const root = document.documentElement;
-  if (kbOpen) {
-    root.style.setProperty('--app-vh', vv.height + 'px');
-    root.style.setProperty('--app-vt', vv.offsetTop + 'px');
-  } else {
-    root.style.setProperty('--app-vh', '100%');
-    root.style.setProperty('--app-vt', '0px');
-  }
-}
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', syncAppViewport);
-  window.visualViewport.addEventListener('scroll', syncAppViewport);
-}
-document.addEventListener('focusin', () => setTimeout(syncAppViewport, 60));
-document.addEventListener('focusout', () => setTimeout(syncAppViewport, 60));
 
 /* =========================================================
    INIT
@@ -12561,7 +12538,6 @@ async function initApp() {
   await reloadData();
   renderShell();
   switchTab('home');
-  syncAppViewport();
   // Firebase 관련은 렌더링 후 백그라운드 실행 (초기 로딩 속도 영향 없도록)
   setTimeout(async () => { await restoreAdminState(); applyLockState(); renderTabbar(); }, 500);
   setTimeout(() => checkMaturityAndNotify(false), 5000);
