@@ -1,7 +1,7 @@
-// v4.117 | 2026-10-06 KST | 수정: 일반 버전(USE_FIREBASE=false)은 일괄 입력 진입에도 로그인 필요로 복원 —
+// v4.118 | 2026-10-06 KST | 수정: 입력삭제/일괄 저장 시 다른 기기의 화면·로컬 초안도 클라우드 삭제 감지로 초기화 —
 
 'use strict';
-const APP_VERSION = 'v4.117 (cache v4117)';
+const APP_VERSION = 'v4.118 (cache v4118)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -10291,7 +10291,17 @@ function startBulkDraftPoll() {
     const sheet = document.getElementById('bulkOfferSheet');
     if (!sheet || !sheet.classList.contains('show')) { stopBulkDraftPoll(); return; }
     const remote = await fbGetBulkDraft();
-    if (!remote) return;
+    if (!remote) {
+      // 클라우드 초안이 삭제됨 — 다른 기기에서 입력삭제/일괄 저장을 실행한 것.
+      // 이 기기에 남아 있는 미저장 입력값과 화면도 함께 초기화한다.
+      if (Object.keys(bulkGridData).length > 0) {
+        bulkGridData = {};
+        DB.del('settings', 'bulkOfferDraft').catch(e => console.error('draft clear error:', e));
+        renderBulkOfferSheet();
+        showToast('☁️ 다른 기기에서 입력 내용이 저장/삭제되어 초기화됐어요');
+      }
+      return;
+    }
     const local = await getBulkDraft();
     if ((remote.updatedAt || 0) <= (local.updatedAt || 0)) return;
     if (sheet.querySelector('.bulk-cell.sel')) return;
@@ -10348,12 +10358,19 @@ async function openBulkOfferSheet(dateStr) {
   bulkOfferDate = dateStr || todayStr();
   // 저장하지 않고 닫은 입력값이 있으면 그대로 복원한다 (일괄 저장 전에는 지우지 않음)
   // 클라우드 초안과 비교해 더 최신 쪽을 쓴다 — 다른 기기에서 입력한 내용도 보인다.
+  // 클라우드가 비어 있으면 다른 기기가 저장/삭제한 것이므로 이 기기의 초안도 지운다.
   const localDraft = await getBulkDraft();
   const remoteDraft = await fbGetBulkDraft();
-  const draft = (remoteDraft && (remoteDraft.updatedAt || 0) > (localDraft.updatedAt || 0)) ? remoteDraft : localDraft;
-  if (draft === remoteDraft) {
-    DB.put('settings', { key: 'bulkOfferDraft', value: remoteDraft })
-      .catch(e => console.error('draft save error:', e));
+  let draft = localDraft;
+  if (remoteDraft) {
+    if ((remoteDraft.updatedAt || 0) > (localDraft.updatedAt || 0)) {
+      draft = remoteDraft;
+      DB.put('settings', { key: 'bulkOfferDraft', value: remoteDraft })
+        .catch(e => console.error('draft save error:', e));
+    }
+  } else if (USE_FIREBASE && Object.keys(localDraft.data || {}).length > 0) {
+    draft = { date: null, data: {}, updatedAt: 0 };
+    DB.del('settings', 'bulkOfferDraft').catch(e => console.error('draft clear error:', e));
   }
   bulkGridData = draft.data || {};
   if (draft.date && Object.keys(bulkGridData).length > 0) bulkOfferDate = draft.date;
