@@ -1,7 +1,7 @@
-// v4.118 | 2026-10-06 KST | 수정: 입력삭제/일괄 저장 시 다른 기기의 화면·로컬 초안도 클라우드 삭제 감지로 초기화 —
+// v4.116 | 2026-10-11 21:14 KST | 수정: 계정 상세(계정→일반계정→건축 등) 거래 리스트에서 항목을 누르면 해당 거래 수정/삭제 시트 열기, 닫으면 계정 상세로 복귀
 
 'use strict';
-const APP_VERSION = 'v4.118 (cache v4118)';
+const APP_VERSION = 'v4.116 (cache v4116)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -559,6 +559,7 @@ const State = {
   formAmounts: {}, // { subItemId: amountNumber }
   formAccountId: null, // 현재 거래 입력 시 선택된 계좌 id
   dayDetailDate: null, // 현재 열려있는 '일별 상세' 시트의 날짜 (null이면 닫힌 상태)
+  acctDetailId: null, // 현재 열려있는 '계정 상세' 시트의 계좌 id (null이면 닫힌 상태)
   catStatDetailId: null, // 현재 열려있는 '통계 항목 상세' 시트의 categoryId (null이면 닫힌 상태)
   subStatDetailKey: null, // 현재 열려있는 '내용 탭 집계 상세' 시트의 key (null이면 닫힌 상태)
   interestDetailKey: null, // 현재 열려있는 '이자 탭 계정 상세' 시트의 key (null이면 닫힌 상태)
@@ -6124,6 +6125,7 @@ function openAccountsYearPopup() {
    재정→계정 이체(예금) + 계정→재정 반환(통장이동) + accountId 직접 태깅 거래
    ========================================================= */
 function openAcctDetail(acct) {
+  State.acctDetailId = acct.id;
   renderAcctDetail(acct);
   openSheet('acctDetailSheet');
 }
@@ -6191,7 +6193,7 @@ function renderAcctDetail(acct) {
       label = cat ? cat.name : '기타';
       if (item.memo) label += ' · ' + item.memo;
     }
-    return `<div class="acct-ledger-row">
+    return `<div class="acct-ledger-row" data-txid="${escapeHTML(String(item.tx.id))}" style="cursor:pointer;">
       <div class="acct-ledger-date">${item.date.slice(5).replace('-','/')}</div>
       <div class="acct-ledger-label">${escapeHTML(label)}</div>
       <div class="acct-ledger-amt" style="color:${amtColor}">${sign}${item.amount.toLocaleString('ko-KR')}</div>
@@ -6220,6 +6222,8 @@ function renderAcctDetail(acct) {
         <span>지출 <b class="expense">${totalExpense.toLocaleString('ko-KR')}</b></span>
         <span>잔액 <b style="color:${net>=0?'var(--primary)':'var(--expense)'}">${net.toLocaleString('ko-KR')}</b></span>
       </div>
+      <style>.acct-ledger-row[data-txid]:active{background:var(--primary-light);}</style>
+      <div style="font-size:12px;color:var(--text-3);padding:2px 2px 8px;">💡 내역을 누르면 수정·삭제할 수 있어요</div>
       <div class="acct-ledger-header">
         <span>날짜</span><span>내용</span><span>금액</span><span>잔액</span>
       </div>
@@ -6231,7 +6235,22 @@ function renderAcctDetail(acct) {
     </div>
   `;
 
-  sheet.querySelector('#adClose').addEventListener('click', () => closeSheet('acctDetailSheet'));
+  sheet.querySelector('#adClose').addEventListener('click', () => {
+    State.acctDetailId = null;
+    closeSheet('acctDetailSheet');
+  });
+  // 리스트의 날짜/내용을 누르면 해당 거래의 수정·삭제 시트를 연다 (수정 시트를 닫으면 이 화면으로 복귀)
+  const editFromAcctDetail = (txId) => {
+    document.getElementById('acctDetailSheet').classList.remove('show');
+    openTxSheet(txId);
+  };
+  sheet.querySelectorAll('.acct-ledger-row[data-txid]').forEach(el => {
+    el.addEventListener('click', () => {
+      const txId = el.dataset.txid;
+      if (!getIsAdmin()) { showPasswordPrompt(() => editFromAcctDetail(txId)); return; }
+      editFromAcctDetail(txId);
+    });
+  });
   sheet.querySelector('#adPrint').addEventListener('click', () => printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, shortName));
   sheet.querySelector('#adExcel').addEventListener('click', () => exportAcctDetailToExcel(acct, txList, carry, totalIncome, totalExpense, net, shortName));
 }
@@ -9041,6 +9060,7 @@ function closeAllSheets() {
   document.getElementById('sheetBackdrop').classList.remove('show');
   document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show'));
   State.dayDetailDate = null;
+  State.acctDetailId = null;
   State.catStatDetailId = null;
   State.subStatDetailKey = null;
   State.interestDetailKey = null;
@@ -9064,7 +9084,13 @@ function closeSheet(id) {
 
 // 거래입력 시트(txSheet)만 닫기: 일별상세/통계항목상세에서 열렸으면 그 화면으로 복귀, 아니면 전체 닫기
 function closeTxSheet() {
-  if (State.dayDetailDate) {
+  if (State.acctDetailId) {
+    // 계정 상세 리스트에서 열렸으면 최신 데이터로 계정 상세로 복귀
+    document.getElementById('txSheet').classList.remove('show');
+    const acct = (State.linkedAccounts || []).find(a => a.id === State.acctDetailId);
+    if (acct) openAcctDetail(acct);
+    else closeAllSheets();
+  } else if (State.dayDetailDate) {
     document.getElementById('txSheet').classList.remove('show');
     // selectedAccountId는 유지한 채로 복귀 (계정 선택 상태 보존)
     openDayDetail(State.dayDetailDate);
@@ -10232,91 +10258,19 @@ async function setBulkHiddenCols(v) {
   await DB.put('settings', { key: 'bulkOfferHiddenCols', value: v });
 }
 
-// 입력 중인 그리드 값(임시저장) — 일괄 저장 전까지 보관해 시트를 닫거나
-// 앱을 껐다 켜도 그대로 복원된다. 일괄 저장/입력삭제 시에만 지운다.
-// Firebase(bulkOfferDraft 경로)에도 함께 올려, 로그인하지 않은 기기에서
-// 입력한 내용을 모든 기기에서 볼 수 있게 한다 (마지막 수정 쪽이 우선).
+// 입력 중인 그리드 값(임시저장) — 일괄 저장 전까지 기기(settings)에 보관해
+// 시트를 닫거나 앱을 껐다 켜도 그대로 복원된다. 일괄 저장/입력삭제 시에만 지운다.
 async function getBulkDraft() {
   const rec = await DB.get('settings', 'bulkOfferDraft');
-  return rec && rec.value && typeof rec.value === 'object'
-    ? { date: null, data: {}, updatedAt: 0, ...rec.value }
-    : { date: null, data: {}, updatedAt: 0 };
+  return rec && rec.value && typeof rec.value === 'object' ? rec.value : { date: null, data: {} };
 }
 let bulkDraftTimer = null;
-let bulkDraftLastLocalEdit = 0;   // 이 기기에서 마지막으로 값을 고친 시각 (폴링 덮어쓰기 방지용)
 function queueBulkDraftSave() {
-  bulkDraftLastLocalEdit = Date.now();
   clearTimeout(bulkDraftTimer);
   bulkDraftTimer = setTimeout(() => {
-    const draft = { date: bulkOfferDate, data: bulkGridData, updatedAt: Date.now() };
-    DB.put('settings', { key: 'bulkOfferDraft', value: draft })
+    DB.put('settings', { key: 'bulkOfferDraft', value: { date: bulkOfferDate, data: bulkGridData } })
       .catch(e => console.error('draft save error:', e));
-    fbSetBulkDraft(draft);
-  }, 500);
-}
-
-// 임시저장 값을 클라우드에 올린다. 이 경로는 실제 장부(churchData)가 아니라
-// "입력 중인 초안"이므로 로그인하지 않은 기기도 쓸 수 있다.
-async function fbSetBulkDraft(draft) {
-  if (!USE_FIREBASE) return;
-  try { await fbSet('bulkOfferDraft', draft); }
-  catch (e) { console.error('draft upload error:', e); }
-}
-
-// 클라우드의 임시저장 값을 가져온다 (없거나 오프라인이면 null)
-async function fbGetBulkDraft() {
-  if (!USE_FIREBASE) return null;
-  try {
-    const d = await fbGet('bulkOfferDraft');
-    return d && typeof d === 'object' ? { date: null, data: {}, updatedAt: 0, ...d } : null;
-  } catch (e) { return null; }
-}
-
-// 임시저장 값을 기기+클라우드 모두에서 지운다 (일괄 저장/입력삭제 시)
-async function clearBulkDraftEverywhere() {
-  await DB.del('settings', 'bulkOfferDraft');
-  if (USE_FIREBASE) {
-    try { await fbSet('bulkOfferDraft', null); }   // PUT null = 해당 경로 삭제
-    catch (e) { console.error('draft clear error:', e); }
-  }
-}
-
-// 시트가 열려 있는 동안 주기적으로 클라우드 초안을 확인해,
-// 다른 기기에서 더 새로 입력한 내용이 있으면 가져온다.
-// 이 기기에서 입력 중(셀 선택됨 또는 5초 이내 수정)이면 덮어쓰지 않고 건너뛴다.
-let bulkDraftPollTimer = null;
-function startBulkDraftPoll() {
-  stopBulkDraftPoll();
-  bulkDraftPollTimer = setInterval(async () => {
-    const sheet = document.getElementById('bulkOfferSheet');
-    if (!sheet || !sheet.classList.contains('show')) { stopBulkDraftPoll(); return; }
-    const remote = await fbGetBulkDraft();
-    if (!remote) {
-      // 클라우드 초안이 삭제됨 — 다른 기기에서 입력삭제/일괄 저장을 실행한 것.
-      // 이 기기에 남아 있는 미저장 입력값과 화면도 함께 초기화한다.
-      if (Object.keys(bulkGridData).length > 0) {
-        bulkGridData = {};
-        DB.del('settings', 'bulkOfferDraft').catch(e => console.error('draft clear error:', e));
-        renderBulkOfferSheet();
-        showToast('☁️ 다른 기기에서 입력 내용이 저장/삭제되어 초기화됐어요');
-      }
-      return;
-    }
-    const local = await getBulkDraft();
-    if ((remote.updatedAt || 0) <= (local.updatedAt || 0)) return;
-    if (sheet.querySelector('.bulk-cell.sel')) return;
-    if (Date.now() - bulkDraftLastLocalEdit < 5000) return;
-    bulkGridData = remote.data || {};
-    if (remote.date) bulkOfferDate = remote.date;
-    DB.put('settings', { key: 'bulkOfferDraft', value: remote })
-      .catch(e => console.error('draft save error:', e));
-    renderBulkOfferSheet();
-    showToast('☁️ 다른 기기에서 입력한 내용을 불러왔어요');
-  }, 15000);
-}
-function stopBulkDraftPoll() {
-  clearInterval(bulkDraftPollTimer);
-  bulkDraftPollTimer = null;
+  }, 300);
 }
 
 // 일괄 입력에 보여줄 교인(중분류) 목록 — 개별 입력과 같은 방식으로
@@ -10349,29 +10303,12 @@ function bulkFindSubItem(heongCat, groupId, name) {
 }
 
 async function openBulkOfferSheet(dateStr) {
-  // 일반 버전(Firebase 미사용)은 기존처럼 입력 자체에 로그인이 필요하다.
-  if (!USE_FIREBASE && !getIsAdmin()) { showPasswordPrompt(() => openBulkOfferSheet(dateStr)); return; }
-  // Firebase 버전은 로그인하지 않은 기기도 일괄 입력 화면을 열어 입력할 수 있다.
-  // 일괄 저장(saveBulkOffer)만 로그인이 필요하다.
+  if (!getIsAdmin()) { showPasswordPrompt(() => openBulkOfferSheet(dateStr)); return; }
   const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
   if (!heongCat) { showToast('헌금 대분류가 없어요'); return; }
   bulkOfferDate = dateStr || todayStr();
   // 저장하지 않고 닫은 입력값이 있으면 그대로 복원한다 (일괄 저장 전에는 지우지 않음)
-  // 클라우드 초안과 비교해 더 최신 쪽을 쓴다 — 다른 기기에서 입력한 내용도 보인다.
-  // 클라우드가 비어 있으면 다른 기기가 저장/삭제한 것이므로 이 기기의 초안도 지운다.
-  const localDraft = await getBulkDraft();
-  const remoteDraft = await fbGetBulkDraft();
-  let draft = localDraft;
-  if (remoteDraft) {
-    if ((remoteDraft.updatedAt || 0) > (localDraft.updatedAt || 0)) {
-      draft = remoteDraft;
-      DB.put('settings', { key: 'bulkOfferDraft', value: remoteDraft })
-        .catch(e => console.error('draft save error:', e));
-    }
-  } else if (USE_FIREBASE && Object.keys(localDraft.data || {}).length > 0) {
-    draft = { date: null, data: {}, updatedAt: 0 };
-    DB.del('settings', 'bulkOfferDraft').catch(e => console.error('draft clear error:', e));
-  }
+  const draft = await getBulkDraft();
   bulkGridData = draft.data || {};
   if (draft.date && Object.keys(bulkGridData).length > 0) bulkOfferDate = draft.date;
   bulkManageRows = false;
@@ -10384,7 +10321,6 @@ async function openBulkOfferSheet(dateStr) {
   } catch (e) { console.error('tpl load error:', e); }
   renderBulkOfferSheet();
   openSheet('bulkOfferSheet');
-  startBulkDraftPoll();
 }
 
 function renderBulkOfferSheet() {
@@ -10409,7 +10345,6 @@ function renderBulkOfferSheet() {
   // 요약(N명·총액)은 날짜줄 오른쪽에 작게 표시한다.
   const manageBtnStyle = on => `flex:1;font-size:12px;font-weight:700;border-radius:10px;padding:10px 0;white-space:nowrap;${on ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text-2);'}`;
   const anyTpl = groups.some(g => bulkTplMap[g.id]);
-  const isAdmin = getIsAdmin();
   const toolbarHTML = `
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
       <input type="date" id="bulkDate" class="dateinput" value="${bulkOfferDate}" style="flex:0 0 auto;width:136px;padding:8px 10px;font-size:13px;">
@@ -10421,9 +10356,8 @@ function renderBulkOfferSheet() {
       <button id="bulkManageRowsBtn" style="${manageBtnStyle(bulkManageRows)}">👥 교인 가리기</button>
       <button id="bulkManageColsBtn" style="${manageBtnStyle(bulkManageCols)}">🏷️ 항목 가리기</button>
       <button id="bulkClearBtn" style="${manageBtnStyle(false)}">🗑️ 입력삭제</button>
-      <button id="bulkSaveBtn" class="btn-primary" style="flex:1;margin-top:0;padding:10px 0;font-size:12.5px;border-radius:10px;white-space:nowrap;">${isAdmin ? '일괄 저장' : '🔒 일괄 저장'}</button>
-    </div>
-    ${isAdmin ? '' : `<div style="font-size:11.5px;color:var(--text-3);margin:-2px 0 8px;line-height:1.5;">여기에 입력한 내용은 모든 기기에 공유돼요. 저장은 로그인한 기기에서만 할 수 있어요.</div>`}`;
+      <button id="bulkSaveBtn" class="btn-primary" style="flex:1;margin-top:0;padding:10px 0;font-size:12.5px;border-radius:10px;white-space:nowrap;">일괄 저장</button>
+    </div>`;
 
   const rowManageHTML = `
     <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">체크한 교인은 이 화면과 개별 헌금 입력 목록에서 숨겨져요. (명부의 "숨김"과 같은 설정이에요)</div>
@@ -10619,11 +10553,7 @@ function renderBulkOfferSheet() {
     });
   }
 
-  // 일괄 저장은 로그인(관리자) 기기만 가능 — 비로그인이면 먼저 로그인
-  sheet.querySelector('#bulkSaveBtn')?.addEventListener('click', () => {
-    if (!getIsAdmin()) { showPasswordPrompt(() => saveBulkOffer()); return; }
-    saveBulkOffer();
-  });
+  sheet.querySelector('#bulkSaveBtn')?.addEventListener('click', saveBulkOffer);
 
   // 파란 이름(반복 등록된 교인) 탭 → 반복 금액을 그 행에 채운다
   sheet.querySelectorAll('.bulk-name-tpl').forEach(td => {
@@ -10635,7 +10565,7 @@ function renderBulkOfferSheet() {
     if (Object.keys(bulkGridData).length === 0) { showToast('삭제할 입력 내용이 없어요'); return; }
     if (!confirm('저장하지 않은 입력 내용을 모두 삭제할까요?\n삭제 후에는 복구할 수 없어요.')) return;
     bulkGridData = {};
-    await clearBulkDraftEverywhere();
+    await DB.del('settings', 'bulkOfferDraft');
     renderBulkOfferSheet();
     showToast('입력 내용을 모두 삭제했어요');
   });
@@ -10687,8 +10617,6 @@ function applyBulkTplToRow(sheet, gid) {
 }
 
 async function saveBulkOffer() {
-  // 저장은 로그인(관리자) 기기만 가능 — 비로그인 기기는 입력까지만 할 수 있다.
-  if (!getIsAdmin()) { showPasswordPrompt(() => saveBulkOffer()); return; }
   const heongCat = State.categories.find(c => c.name === '헌금' && c.type === 'income');
   if (!heongCat) return;
   if (!bulkOfferDate) { showToast('날짜를 선택해주세요'); return; }
@@ -10756,7 +10684,7 @@ async function saveBulkOffer() {
 
   await reloadData();
   bulkGridData = {};
-  await clearBulkDraftEverywhere();   // 저장 완료 시에만 임시저장 값 초기화 (기기+클라우드)
+  await DB.del('settings', 'bulkOfferDraft');   // 저장 완료 시에만 임시저장 값 초기화
   renderBulkOfferSheet();
   if (State.dayDetailDate) renderDayDetail(State.dayDetailDate);
   renderCurrentPage();
