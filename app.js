@@ -1,7 +1,7 @@
-// v4.115 | 2026-10-05 KST | 수정: 일괄 입력 반복적용 연동 — 반복등록 교인 이름 파랑 표시, 이름 탭하면 반복 금액 자동 채움 —
+// v4.117 | 2026-10-14 16:35 KST | 수정: Firebase 이메일/비밀번호 로그인(회계 담당자 전용) 추가 — 클라우드 쓰기(PUT/PATCH)에 auth 토큰 적용, 조회는 기존대로 비로그인 허용, 설정에 클라우드 로그인/로그아웃 행 추가
 
 'use strict';
-const APP_VERSION = 'v4.115 (cache v4115)';
+const APP_VERSION = 'v4.117 (cache v4119)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -152,14 +152,132 @@ function fbPath(path) {
   return `churches/${CHURCH_ID}/${path}`;
 }
 
+/* ---------- Firebase 로그인 (회계 담당자 전용, Auth REST) ----------
+   - 조회(다운로드)는 기존대로 비로그인 사용자(교인 등)도 가능하다.
+   - 클라우드에 '쓰기'(업로드·비밀번호 저장)는 이메일/비밀번호 로그인 후 받은 토큰이 있어야 한다.
+   - refreshToken만 localStorage에 저장하고, idToken은 메모리에 두며 만료 전에 자동 갱신한다. */
+const FB_AUTH_KEY = 'fbAuthV1_' + CHURCH_ID;
+let _fbIdToken = null;
+let _fbIdTokenExp = 0;
+
+function fbAuthLoad() {
+  try { return JSON.parse(localStorage.getItem(FB_AUTH_KEY) || 'null'); } catch (e) { return null; }
+}
+function fbIsLoggedIn() { const a = fbAuthLoad(); return !!(a && a.refreshToken); }
+function fbLoggedInEmail() { const a = fbAuthLoad(); return a && a.email ? a.email : ''; }
+function fbLogout() {
+  localStorage.removeItem(FB_AUTH_KEY);
+  _fbIdToken = null;
+  _fbIdTokenExp = 0;
+}
+
+async function fbSignIn(email, password) {
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_CONFIG.apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true })
+  });
+  const j = await res.json();
+  if (!res.ok) throw new Error((j.error && j.error.message) || 'UNKNOWN');
+  _fbIdToken = j.idToken;
+  _fbIdTokenExp = Date.now() + (parseInt(j.expiresIn, 10) - 60) * 1000;
+  localStorage.setItem(FB_AUTH_KEY, JSON.stringify({ email, refreshToken: j.refreshToken }));
+}
+
+// 유효한 idToken 반환 (만료됐으면 refreshToken으로 갱신). 로그인 안 됐으면 null.
+async function fbGetIdToken() {
+  if (_fbIdToken && Date.now() < _fbIdTokenExp) return _fbIdToken;
+  const a = fbAuthLoad();
+  if (!a || !a.refreshToken) return null;
+  const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_CONFIG.apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(a.refreshToken)
+  });
+  if (!res.ok) {
+    // 계정 삭제/비밀번호 변경 등으로 토큰이 무효화된 경우에만 로그아웃 처리
+    if (res.status === 400) fbLogout();
+    return null;
+  }
+  const j = await res.json();
+  _fbIdToken = j.id_token;
+  _fbIdTokenExp = Date.now() + (parseInt(j.expires_in, 10) - 60) * 1000;
+  localStorage.setItem(FB_AUTH_KEY, JSON.stringify({ email: a.email, refreshToken: j.refresh_token || a.refreshToken }));
+  return _fbIdToken;
+}
+
+// DB 호출용 ?auth= 쿼리. required=true(쓰기)면 로그인 안 된 경우 에러, false(조회)면 빈 문자열.
+async function fbAuthParam(required) {
+  let token = null;
+  try { token = await fbGetIdToken(); } catch (e) { token = null; }
+  if (!token && required) throw new Error('FB_NOT_LOGGED_IN');
+  return token ? `?auth=${encodeURIComponent(token)}` : '';
+}
+
+function showFirebaseLoginPrompt(onSuccess) {
+  const existing = document.getElementById('fbLoginOverlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'fbLoginOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--card);border-radius:20px;padding:28px 24px;width:320px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.3);text-align:center;">
+      <div style="font-size:32px;margin-bottom:8px;">☁️</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px;">클라우드 로그인</div>
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:16px;">회계 담당자 계정으로 로그인하세요</div>
+      <input type="email" id="fbEmail" autocomplete="username" placeholder="이메일"
+        style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:12px;font-size:16px;margin-bottom:8px;box-sizing:border-box;">
+      <input type="password" id="fbPw" autocomplete="current-password" placeholder="비밀번호"
+        style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:12px;font-size:16px;margin-bottom:8px;box-sizing:border-box;">
+      <div id="fbLoginError" style="color:#e53e3e;font-size:12px;margin-bottom:12px;min-height:16px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="fbLoginCancel" style="flex:1;padding:12px;border-radius:12px;background:var(--surface-2);font-size:14px;font-weight:600;border:none;">취소</button>
+        <button id="fbLoginConfirm" style="flex:1;padding:12px;border-radius:12px;background:var(--primary);color:#fff;font-size:14px;font-weight:700;border:none;">로그인</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const emailEl = overlay.querySelector('#fbEmail');
+  const pwEl = overlay.querySelector('#fbPw');
+  const errEl = overlay.querySelector('#fbLoginError');
+  const btn = overlay.querySelector('#fbLoginConfirm');
+  setTimeout(() => emailEl.focus(), 100);
+
+  const doLogin = async () => {
+    const email = emailEl.value.trim();
+    const pw = pwEl.value;
+    if (!email || !pw) { errEl.textContent = '이메일과 비밀번호를 입력해주세요'; return; }
+    btn.disabled = true;
+    errEl.textContent = '';
+    try {
+      await fbSignIn(email, pw);
+      overlay.remove();
+      showToast('☁️ 클라우드 로그인 완료');
+      onSuccess && onSuccess();
+    } catch (e) {
+      const m = String(e && e.message || '');
+      if (/EMAIL_NOT_FOUND|INVALID_PASSWORD|INVALID_LOGIN_CREDENTIALS|INVALID_EMAIL/.test(m)) errEl.textContent = '이메일 또는 비밀번호가 맞지 않아요';
+      else if (/TOO_MANY_ATTEMPTS/.test(m)) errEl.textContent = '시도가 너무 많아요. 잠시 후 다시 해주세요';
+      else if (/USER_DISABLED/.test(m)) errEl.textContent = '사용이 중지된 계정이에요';
+      else errEl.textContent = '로그인 실패 — 네트워크를 확인해주세요';
+      pwEl.value = '';
+      btn.disabled = false;
+    }
+  };
+  btn.addEventListener('click', doLogin);
+  overlay.querySelector('#fbLoginCancel').addEventListener('click', () => overlay.remove());
+  pwEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+}
+
 async function fbGet(path) {
-  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`);
+  const q = await fbAuthParam(false);
+  const res = await fetch(`${FB_URL}/${fbPath(path)}.json${q}`);
   if (!res.ok) throw new Error('FB GET failed: ' + res.status);
   return res.json();
 }
 
 async function fbSet(path, data) {
-  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`, {
+  const q = await fbAuthParam(true);
+  const res = await fetch(`${FB_URL}/${fbPath(path)}.json${q}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -172,7 +290,8 @@ async function fbSet(path, data) {
 // PUT은 해당 경로를 통째로 덮어써서 명시하지 않은 하위 필드를 전부 삭제하므로,
 // churchData처럼 여러 종류의 데이터가 함께 있는 경로에는 반드시 PATCH를 써야 한다.
 async function fbUpdate(path, data) {
-  const res = await fetch(`${FB_URL}/${fbPath(path)}.json`, {
+  const q = await fbAuthParam(true);
+  const res = await fetch(`${FB_URL}/${fbPath(path)}.json${q}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -188,6 +307,17 @@ async function syncToFirebase() {
   // 클라우드 데이터를 덮어쓰는 것을 원천 차단한다.
   if (!getIsAdmin()) {
     console.warn('Firebase sync 차단: 로그인되지 않은 기기의 업로드 시도');
+    return false;
+  }
+  // 클라우드 쓰기에는 클라우드 로그인(회계 담당자 계정)이 필요하다.
+  // 이 세션에서 처음이면 로그인 창을 띄우고, 이후에는 안내 토스트만 보여준다.
+  if (!fbIsLoggedIn()) {
+    if (!sessionStorage.getItem('fbLoginAsked')) {
+      sessionStorage.setItem('fbLoginAsked', '1');
+      showFirebaseLoginPrompt(() => { syncToFirebase().catch(e => console.error('sync error:', e)); });
+    } else {
+      showToast('☁️ 클라우드 로그인이 안 되어 업로드하지 못했어요 (설정 → 클라우드 로그인)');
+    }
     return false;
   }
   try {
@@ -559,6 +689,7 @@ const State = {
   formAmounts: {}, // { subItemId: amountNumber }
   formAccountId: null, // 현재 거래 입력 시 선택된 계좌 id
   dayDetailDate: null, // 현재 열려있는 '일별 상세' 시트의 날짜 (null이면 닫힌 상태)
+  acctDetailId: null, // 현재 열려있는 '계정 상세' 시트의 계좌 id (null이면 닫힌 상태)
   catStatDetailId: null, // 현재 열려있는 '통계 항목 상세' 시트의 categoryId (null이면 닫힌 상태)
   subStatDetailKey: null, // 현재 열려있는 '내용 탭 집계 상세' 시트의 key (null이면 닫힌 상태)
   interestDetailKey: null, // 현재 열려있는 '이자 탭 계정 상세' 시트의 key (null이면 닫힌 상태)
@@ -6124,6 +6255,7 @@ function openAccountsYearPopup() {
    재정→계정 이체(예금) + 계정→재정 반환(통장이동) + accountId 직접 태깅 거래
    ========================================================= */
 function openAcctDetail(acct) {
+  State.acctDetailId = acct.id;
   renderAcctDetail(acct);
   openSheet('acctDetailSheet');
 }
@@ -6191,7 +6323,7 @@ function renderAcctDetail(acct) {
       label = cat ? cat.name : '기타';
       if (item.memo) label += ' · ' + item.memo;
     }
-    return `<div class="acct-ledger-row">
+    return `<div class="acct-ledger-row" data-txid="${escapeHTML(String(item.tx.id))}" style="cursor:pointer;">
       <div class="acct-ledger-date">${item.date.slice(5).replace('-','/')}</div>
       <div class="acct-ledger-label">${escapeHTML(label)}</div>
       <div class="acct-ledger-amt" style="color:${amtColor}">${sign}${item.amount.toLocaleString('ko-KR')}</div>
@@ -6220,6 +6352,8 @@ function renderAcctDetail(acct) {
         <span>지출 <b class="expense">${totalExpense.toLocaleString('ko-KR')}</b></span>
         <span>잔액 <b style="color:${net>=0?'var(--primary)':'var(--expense)'}">${net.toLocaleString('ko-KR')}</b></span>
       </div>
+      <style>.acct-ledger-row[data-txid]:active{background:var(--primary-light);}</style>
+      <div style="font-size:12px;color:var(--text-3);padding:2px 2px 8px;">💡 내역을 누르면 수정·삭제할 수 있어요</div>
       <div class="acct-ledger-header">
         <span>날짜</span><span>내용</span><span>금액</span><span>잔액</span>
       </div>
@@ -6231,7 +6365,22 @@ function renderAcctDetail(acct) {
     </div>
   `;
 
-  sheet.querySelector('#adClose').addEventListener('click', () => closeSheet('acctDetailSheet'));
+  sheet.querySelector('#adClose').addEventListener('click', () => {
+    State.acctDetailId = null;
+    closeSheet('acctDetailSheet');
+  });
+  // 리스트의 날짜/내용을 누르면 해당 거래의 수정·삭제 시트를 연다 (수정 시트를 닫으면 이 화면으로 복귀)
+  const editFromAcctDetail = (txId) => {
+    document.getElementById('acctDetailSheet').classList.remove('show');
+    openTxSheet(txId);
+  };
+  sheet.querySelectorAll('.acct-ledger-row[data-txid]').forEach(el => {
+    el.addEventListener('click', () => {
+      const txId = el.dataset.txid;
+      if (!getIsAdmin()) { showPasswordPrompt(() => editFromAcctDetail(txId)); return; }
+      editFromAcctDetail(txId);
+    });
+  });
   sheet.querySelector('#adPrint').addEventListener('click', () => printAcctDetail(acct, txList, carry, totalIncome, totalExpense, net, shortName));
   sheet.querySelector('#adExcel').addEventListener('click', () => exportAcctDetailToExcel(acct, txList, carry, totalIncome, totalExpense, net, shortName));
 }
@@ -6469,6 +6618,13 @@ function renderSettings() {
     ${USE_FIREBASE ? `
     <div class="settings-group">
       <div class="settings-group-title">☁️ 클라우드 동기화</div>
+      <div class="settings-row" id="rowCloudLogin">
+        <div>
+          <div class="settings-label" id="cloudLoginLabel">${fbIsLoggedIn() ? '클라우드 로그아웃' : '클라우드 로그인'}</div>
+          <div class="settings-sub" id="cloudLoginSub">${fbIsLoggedIn() ? (fbLoggedInEmail() + ' 로그인됨') : '회계 담당자 계정으로 로그인 (업로드에 필요)'}</div>
+        </div>
+        <span style="font-size:18px;">🔐</span>
+      </div>
       <div class="settings-row" id="rowSyncUp">
         <div>
           <div class="settings-label">지금 업로드</div>
@@ -6841,7 +6997,25 @@ function renderSettings() {
 
 
   if (USE_FIREBASE) {
+    const refreshCloudLoginRow = () => {
+      const l = page.querySelector('#cloudLoginLabel');
+      const sub = page.querySelector('#cloudLoginSub');
+      if (!l || !sub) return;
+      if (fbIsLoggedIn()) { l.textContent = '클라우드 로그아웃'; sub.textContent = fbLoggedInEmail() + ' 로그인됨'; }
+      else { l.textContent = '클라우드 로그인'; sub.textContent = '회계 담당자 계정으로 로그인 (업로드에 필요)'; }
+    };
+    page.querySelector('#rowCloudLogin').addEventListener('click', () => {
+      if (fbIsLoggedIn()) {
+        if (!confirm('클라우드에서 로그아웃할까요?\n(이 기기의 로컬 데이터는 그대로 남아요)')) return;
+        fbLogout();
+        refreshCloudLoginRow();
+        showToast('로그아웃했어요');
+      } else {
+        showFirebaseLoginPrompt(refreshCloudLoginRow);
+      }
+    });
     page.querySelector('#rowSyncUp').addEventListener('click', async () => { if (!getIsAdmin()) { showToast('🔒 입력 모드에서만 사용 가능합니다'); return; }
+      if (!fbIsLoggedIn()) { showFirebaseLoginPrompt(); return; }
       showToast('⬆️ 업로드 중...');
       const ok = await syncToFirebase();
       showToast(ok ? '☁️ 업로드 완료!' : '업로드 실패 — 네트워크 확인해주세요');
@@ -9041,6 +9215,7 @@ function closeAllSheets() {
   document.getElementById('sheetBackdrop').classList.remove('show');
   document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show'));
   State.dayDetailDate = null;
+  State.acctDetailId = null;
   State.catStatDetailId = null;
   State.subStatDetailKey = null;
   State.interestDetailKey = null;
@@ -9064,7 +9239,13 @@ function closeSheet(id) {
 
 // 거래입력 시트(txSheet)만 닫기: 일별상세/통계항목상세에서 열렸으면 그 화면으로 복귀, 아니면 전체 닫기
 function closeTxSheet() {
-  if (State.dayDetailDate) {
+  if (State.acctDetailId) {
+    // 계정 상세 리스트에서 열렸으면 최신 데이터로 계정 상세로 복귀
+    document.getElementById('txSheet').classList.remove('show');
+    const acct = (State.linkedAccounts || []).find(a => a.id === State.acctDetailId);
+    if (acct) openAcctDetail(acct);
+    else closeAllSheets();
+  } else if (State.dayDetailDate) {
     document.getElementById('txSheet').classList.remove('show');
     // selectedAccountId는 유지한 채로 복귀 (계정 선택 상태 보존)
     openDayDetail(State.dayDetailDate);
