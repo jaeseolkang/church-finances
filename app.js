@@ -1,7 +1,7 @@
-// v4.117 | 2026-10-14 16:35 KST | 수정: Firebase 이메일/비밀번호 로그인(회계 담당자 전용) 추가 — 클라우드 쓰기(PUT/PATCH)에 auth 토큰 적용, 조회는 기존대로 비로그인 허용, 설정에 클라우드 로그인/로그아웃 행 추가
+// v4.118 | 2026-10-14 16:44 KST | 수정: 방문 통계(Google Analytics 4) 추가 — GA_MEASUREMENT_ID를 넣으면 켜짐, 재정 데이터는 전송하지 않고 방문(page_view)과 30분 이상 경과 후 복귀(app_resume)만 기록
 
 'use strict';
-const APP_VERSION = 'v4.117 (cache v4119)';
+const APP_VERSION = 'v4.118 (cache v4120)';
 
 // ============================================================
 // 🔧 배포 설정 스위치
@@ -24,6 +24,14 @@ const CHURCH_ID = 'juwon-church';
 // 브라우저 탭 제목 / 홈 화면 앱 이름에 그대로 쓰이는 전체 이름.
 // (예: 실제 교회로 배포할 땐 'OO교회 회계부'처럼 통째로 넣으면 됨)
 const CHURCH_DISPLAY_NAME = '교회회계 프로그램';
+// ============================================================
+
+// ============================================================
+// 📊 방문 통계(Google Analytics 4) — 측정 ID('G-'로 시작)를 넣으면 켜지고,
+// 빈 문자열('')이면 통계를 전혀 보내지 않는다. 교회(저장소)마다 GA에서
+// 데이터 스트림을 따로 만들어 각자의 ID를 넣는다.
+// ============================================================
+const GA_MEASUREMENT_ID = '';
 // ============================================================
 
 
@@ -12790,6 +12798,42 @@ async function addSubOrPerson(sheet, categoryId, mode) {
    ========================================================= */
 
 /* =========================================================
+   방문 통계 (Google Analytics 4)
+   - 방문 기록(page_view)만 보낸다. 금액·이름·거래 내용 등 재정 데이터는 보내지 않는다.
+   - 광고용 신호/개인화는 끈다. (IP는 GA4에서 저장되지 않는다)
+   ========================================================= */
+let _gaLastHit = 0;
+function initAnalytics() {
+  if (!GA_MEASUREMENT_ID || !/^G-[A-Z0-9]+$/.test(GA_MEASUREMENT_ID)) return;
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
+  if (window.__gaInit) return;
+  window.__gaInit = true;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag('js', new Date());
+  // 입력 모드(회계 담당자) / 열람 구분 — GA에서 맞춤 측정기준으로 등록하면 보고서에서 나눠 볼 수 있다.
+  window.gtag('set', 'user_properties', { app_mode: getIsAdmin() ? 'admin' : 'viewer' });
+  window.gtag('config', GA_MEASUREMENT_ID, {
+    allow_google_signals: false,
+    allow_ad_personalization_signals: false,
+    page_location: location.origin + location.pathname   // 주소의 ?뒤 값은 보내지 않음
+  });
+  const sc = document.createElement('script');
+  sc.async = true;
+  sc.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(GA_MEASUREMENT_ID);
+  document.head.appendChild(sc);
+  _gaLastHit = Date.now();
+  // 홈 화면 앱(PWA)은 새로 열지 않고 백그라운드에서 되돌아오는 경우가 많아서,
+  // 마지막 기록 후 30분 넘게 지나 다시 화면에 나타나면 새 방문으로 기록한다.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - _gaLastHit < 30 * 60 * 1000) return;
+    _gaLastHit = Date.now();
+    window.gtag('event', 'app_resume');
+  });
+}
+
+/* =========================================================
    INIT
    ========================================================= */
 async function initApp() {
@@ -12802,6 +12846,7 @@ async function initApp() {
   switchTab('home');
   // Firebase 관련은 렌더링 후 백그라운드 실행 (초기 로딩 속도 영향 없도록)
   setTimeout(async () => { await restoreAdminState(); applyLockState(); renderTabbar(); }, 500);
+  setTimeout(initAnalytics, 1500); // 입력 모드 복원(500ms) 이후에 시작
   setTimeout(() => checkMaturityAndNotify(false), 5000);
   setTimeout(() => checkAndRunAutoBackup(), 6000);
   if (USE_FIREBASE) setTimeout(async () => { await syncFromFirebase(); }, 3000);
